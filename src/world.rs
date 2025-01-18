@@ -21,6 +21,7 @@ pub struct World {
     pub input: InputManager,
     delta_time: Duration,
     last_frame_time: Instant,
+    requested_shutdown: bool,
 }
 
 impl World {
@@ -35,6 +36,7 @@ impl World {
             physics: PhysicsSimulator::default(),
             delta_time: Duration::default(),
             input: InputManager::new(),
+            requested_shutdown: false,
         });
 
         // create a second mutable reference so G_WORLD can be used in (~un~)safe code
@@ -157,9 +159,7 @@ impl World {
     pub fn get_delta_time(&self) -> Duration {
         self.delta_time
     }
-}
 
-impl World {
     pub fn initialize_runtime(&mut self, renderer: &Renderer) {
         let world_ptr: *mut World = self;
         unsafe {
@@ -173,5 +173,13 @@ impl World {
                 }
             }
         }
+    }
+
+    pub fn shutdown(&mut self) {
+        self.requested_shutdown = true;
+    }
+
+    pub fn is_shutting_down(&self) -> bool {
+        self.requested_shutdown
     }
 }

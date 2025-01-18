@@ -4,9 +4,8 @@ use log::{error, info};
 use winit::application::ApplicationHandler;
 use winit::dpi::{PhysicalSize, Size};
 use winit::error::EventLoopError;
-use winit::event::{KeyEvent, WindowEvent};
+use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
-use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::{WindowAttributes, WindowId};
 
 use crate::components::CameraComp;
@@ -154,13 +153,20 @@ impl ApplicationHandler for App {
     ) {
         let renderer =  self.renderer.as_mut().unwrap();
         let world = self.world.as_mut();
+        if world.is_shutting_down() {
+            event_loop.exit();
+            return;
+        }
+
         if window_id != renderer.window().id() {
             return;
         }
+
         world.input.process_event(&mut renderer.window_mut(), &event);
         if renderer.state.input(&event) {
            return; 
         }
+
         match event {
             WindowEvent::RedrawRequested => {
                 if let Some(update_func) = self.hook_funcs.update {
@@ -175,15 +181,7 @@ impl ApplicationHandler for App {
                     event_loop.exit();
                 }
             }
-            WindowEvent::CloseRequested
-            | WindowEvent::KeyboardInput {
-                event:
-                KeyEvent {
-                    physical_key: PhysicalKey::Code(KeyCode::Escape),
-                    ..
-                },
-                ..
-            } => event_loop.exit(),
+            WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Resized(size) => {
                 renderer.resize(size);
 
