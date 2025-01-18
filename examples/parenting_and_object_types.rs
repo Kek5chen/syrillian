@@ -9,12 +9,7 @@ use nalgebra::Vector3;
 use winit::window::Window;
 
 use syrillian::app::App;
-use syrillian::asset_management::mesh::Mesh;
-use syrillian::buffer::{CUBE, CUBE_INDICES};
-use syrillian::components::freecam::FreecamController;
 use syrillian::components::RotateComponent;
-use syrillian::logichooks::LogicHooks;
-use syrillian::drawables::mesh_renderer::MeshRenderer;
 use syrillian::scene_loader::SceneLoader;
 use syrillian::world::World;
 
