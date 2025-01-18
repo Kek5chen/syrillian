@@ -19,6 +19,7 @@ pub struct InputManager {
     confined: bool,
     lock_on_next_frame: bool,
     unlock_on_next_frame: bool,
+    current_mouse_mode: CursorGrabMode,
 }
 
 #[allow(unused)]
@@ -35,6 +36,7 @@ impl InputManager {
             confined: false,
             lock_on_next_frame: true,
             unlock_on_next_frame: true,
+            current_mouse_mode: CursorGrabMode::None
         }
     }
 
@@ -93,23 +95,27 @@ impl InputManager {
         *self.key_states.get(&key_code).unwrap_or(&KeyState::Released)
     }
 
+    // Only is true if the key was JUST pressed
     pub fn is_key_down(&self, key_code: KeyCode) -> bool {
         self.get_key_state(key_code) == KeyState::Pressed && self.key_just_updated.contains(&key_code)
     }
 
+    // true if the key was JUST pressed or is being held
     pub fn is_key_pressed(&self, key_code: KeyCode) -> bool {
         self.get_key_state(key_code) == KeyState::Pressed
     }
-    
+
+    // true if the key was JUST released or is unpressed
     pub fn is_key_released(&self, key_code: KeyCode) -> bool {
         self.get_key_state(key_code) == KeyState::Released && self.key_just_updated.contains(&key_code)
     }
 
+    // Only is true if the key was JUST released
     pub fn is_key_up(&self, key_code: KeyCode) -> bool {
         self.get_key_state(key_code) == KeyState::Released
     }
     
-    pub fn set_mouse_state(&self) {
+    fn set_mouse_state(&self) {
         //World::instance().
     }
     
@@ -139,14 +145,18 @@ impl InputManager {
     
     fn _set_mouse_mode(&mut self, window: &mut Window, locked: bool) {
         if locked {
+            self.current_mouse_mode = CursorGrabMode::Locked;
             if window.set_cursor_grab(CursorGrabMode::Locked).is_err() {
                 window.set_cursor_grab(CursorGrabMode::Confined).unwrap();
                 self.confined = true;
-            } else {
-                window.set_cursor_grab(CursorGrabMode::None).unwrap();
-                self.confined = false;
+                self.current_mouse_mode = CursorGrabMode::Confined;
             }
-            window.set_cursor_visible(!locked);
+            //window.set_cursor_visible(!locked);
+        } else {
+            self.current_mouse_mode = CursorGrabMode::None;
+            window.set_cursor_grab(CursorGrabMode::None).unwrap();
+            window.set_cursor_visible(true);
+            self.confined = false;
         }
     }
     
@@ -156,6 +166,10 @@ impl InputManager {
         } else {
             self.unlock_on_next_frame = true;
         }
+    }
+
+    pub fn get_mouse_mode(&self) -> CursorGrabMode {
+        self.current_mouse_mode
     }
     
     pub fn next_frame(&mut self) {
