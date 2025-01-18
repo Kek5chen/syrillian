@@ -74,6 +74,7 @@ fn funnyinit(world: &mut World, _window: &Window) -> Result<(), Box<dyn Error>> 
     // Prepare camera
     let mut camera = world.new_camera();
     camera.add_component::<CameraController>();
+    camera.transform.set_position(Vector3::new(0.0, 1., 0.0));
 
     // Prepare character controller
     let mut char_controller = world.new_object("CharacterController");
