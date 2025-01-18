@@ -1,4 +1,5 @@
 use nalgebra::{UnitQuaternion, Vector3};
+use winit::window::CursorGrabMode;
 use syrillian::components::Component;
 use syrillian::object::GameObjectId;
 use syrillian::world::World;
@@ -24,9 +25,13 @@ impl Component for CameraController {
 	}
 
 	unsafe fn update(&mut self) {
-		let transform = &mut self.get_parent().transform;
-		
 		let input = &World::instance().input;
+
+		if input.get_mouse_mode() == CursorGrabMode::None {
+			return;
+		}
+
+		let transform = &mut self.get_parent().transform;
 
 		let mouse_delta = input.get_mouse_delta(); 
 		self.yaw += mouse_delta.x * self.look_sensitivity / 30.0;

@@ -5,6 +5,7 @@ use nalgebra::Vector3;
 use num_traits::Zero;
 use rapier3d::prelude::{vector, LockedAxes};
 use winit::keyboard::KeyCode;
+use winit::window::CursorGrabMode;
 use syrillian::components::{Component, RigidBodyComponent};
 use syrillian::object::GameObjectId;
 use syrillian::world::World;
@@ -66,7 +67,11 @@ impl Component for PlayerMovement {
 		};
 
 		let world= World::instance();
-		
+
+		if world.input.get_mouse_mode() == CursorGrabMode::None {
+			return;
+		}
+
 		self.velocity /= self.damping_factor;
 
 		if world.input.is_key_down(KeyCode::Space) {
