@@ -5,12 +5,13 @@ use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::error::Error;
 use std::sync::Mutex;
-
 use env_logger::Env;
 use log::{error, LevelFilter};
 use nalgebra::Vector3;
 use rapier3d::prelude::*;
-use winit::window::Window;
+use winit::event::MouseButton;
+use winit::keyboard::KeyCode;
+use winit::window::{CursorGrabMode, Window};
 
 use syrillian::app::App;
 use syrillian::components::{Collider3D, RigidBodyComponent};
@@ -89,7 +90,8 @@ fn funnyinit(world: &mut World, _window: &Window) -> Result<(), Box<dyn Error>> 
     char_controller.add_child(camera);
     world.add_child(char_controller);
 
-    
+    world.input.set_mouse_mode(true);
+
     world.print_objects();
 
     Ok(())
@@ -118,8 +120,18 @@ fn update(world: &mut World, window: &Window) -> Result<(), Box<dyn Error>> {
         (1.0 / mean_delta_time) as u32,
         env!("GIT_HASH"),
     ));
-    
-    world.input.set_mouse_mode(true);
+
+    if world.input.is_key_down(KeyCode::Escape) {
+        if world.input.get_mouse_mode() == CursorGrabMode::None {
+            world.shutdown();
+        } else {
+            world.input.set_mouse_mode(false);
+        }
+    }
+
+    if world.input.is_button_pressed(MouseButton::Left) || world.input.is_button_pressed(MouseButton::Right) {
+        world.input.set_mouse_mode(true);
+    }
 
     Ok(())
 }
