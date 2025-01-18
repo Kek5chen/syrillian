@@ -1,4 +1,4 @@
-use log::debug;
+use log::{debug, warn};
 use nalgebra::Vector3;
 use rapier3d::prelude::*;
 
@@ -104,7 +104,13 @@ impl MeshShapeExtra<SharedShape> for SharedShape {
         debug!("Loading collider mesh with {} vertices", mesh.data.vertices.len());
         let vertices = mesh.data.make_point_cloud();
         let indices = mesh.data.make_triangle_indices();
-        Some(SharedShape::trimesh(vertices, indices))
+        match SharedShape::trimesh(vertices, indices) {
+            Ok(shape) => Some(shape),
+            Err(e) => {
+                warn!("Mesh could not be processed as a trimesh: {e}");
+                None
+            }
+        }
     }
 
     fn mesh_convex_hull(mesh: MeshId) -> Option<SharedShape> {

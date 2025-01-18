@@ -166,6 +166,7 @@ impl Texture {
             mip_level_count: None,
             base_array_layer: 0,
             array_layer_count: None,
+            usage: None
         });
         let sampler = device.create_sampler(&SamplerDescriptor {
             label: None,
