@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use nalgebra::Vector2;
 use num_traits::Zero;
 use winit::dpi::PhysicalPosition;
-use winit::event::{ElementState, MouseButton, MouseScrollDelta, WindowEvent};
+use winit::event::{DeviceEvent, ElementState, MouseButton, MouseScrollDelta, WindowEvent};
 use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::{CursorGrabMode, Window};
 
@@ -37,6 +37,17 @@ impl InputManager {
             lock_on_next_frame: true,
             unlock_on_next_frame: true,
             current_mouse_mode: CursorGrabMode::None
+        }
+    }
+
+    pub(crate) fn process_mouse_event(&mut self, window: &Window, device_event: &DeviceEvent) {
+        match device_event {
+            DeviceEvent::MouseMotion { delta } => {
+                self.mouse_delta = Vector2::new(-delta.0 as f32, -delta.1 as f32);
+                self.mouse_pos.x += self.mouse_delta.x;
+                self.mouse_pos.y += self.mouse_delta.y;
+            },
+            _ => {}
         }
     }
 
@@ -145,19 +156,18 @@ impl InputManager {
     
     fn _set_mouse_mode(&mut self, window: &mut Window, locked: bool) {
         if locked {
-            self.current_mouse_mode = CursorGrabMode::Locked;
-            if window.set_cursor_grab(CursorGrabMode::Locked).is_err() {
-                window.set_cursor_grab(CursorGrabMode::Confined).unwrap();
-                self.confined = true;
-                self.current_mouse_mode = CursorGrabMode::Confined;
+            self.current_mouse_mode = CursorGrabMode::Confined;
+            self.confined = true;
+            if window.set_cursor_grab(CursorGrabMode::Confined).is_err() {
+                window.set_cursor_grab(CursorGrabMode::Locked).unwrap();
+                self.current_mouse_mode = CursorGrabMode::Locked;
             }
-            //window.set_cursor_visible(!locked);
         } else {
             self.current_mouse_mode = CursorGrabMode::None;
             window.set_cursor_grab(CursorGrabMode::None).unwrap();
-            window.set_cursor_visible(true);
             self.confined = false;
         }
+        window.set_cursor_visible(!locked);
     }
     
     pub fn set_mouse_mode(&mut self, locked: bool) {

@@ -8,9 +8,9 @@ version = "0.1.2"
 edition = "2021"
 
 [dependencies]
-wgpu = { version = "24.0.0", features = ["vulkan-portability"] }
+wgpu = { version = "24.0.1", features = ["vulkan-portability"] }
 tokio = { version = "1.40.0", features = ["rt", "rt-multi-thread", "macros"] }
-winit = { version = "0.30.5", features = ["x11"] }
+winit = { version = "0.30.9", features = ["x11"] }
 env_logger = { version = "0.11.5", features = ["auto-color"] }
 bytemuck = "1.18.0"
 log = "0.4.22"
@@ -18,7 +18,7 @@ nalgebra = { version = "0.33.0" }
 num-traits = "0.2.19"
 russimp = { version = "3.2.0", features = ["prebuilt"] }
 itertools = "0.14.0"
-rand = { version = "0.9.0-alpha.2", features = [] }
+rand = "0.9.0"
 image = "0.25.2"
 rapier3d = "0.23.0"
 futures = "0.3.30"

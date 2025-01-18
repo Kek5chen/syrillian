@@ -4,7 +4,7 @@ use log::{error, info};
 use winit::application::ApplicationHandler;
 use winit::dpi::{PhysicalSize, Size};
 use winit::error::EventLoopError;
-use winit::event::WindowEvent;
+use winit::event::{DeviceEvent, DeviceId, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{WindowAttributes, WindowId};
 
@@ -164,7 +164,7 @@ impl ApplicationHandler for App {
 
         world.input.process_event(&mut renderer.window_mut(), &event);
         if renderer.state.input(&event) {
-           return; 
+           return;
         }
 
         match event {
@@ -197,5 +197,11 @@ impl ApplicationHandler for App {
             }
             _ => {}
         }
+    }
+
+    fn device_event(&mut self, _: &ActiveEventLoop, _: DeviceId, event: DeviceEvent) {
+        let renderer =  self.renderer.as_mut().unwrap();
+        let world = self.world.as_mut();
+        world.input.process_mouse_event(&mut renderer.window_mut(), &event);
     }
 }
