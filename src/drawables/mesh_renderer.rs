@@ -1,7 +1,7 @@
 use nalgebra::Matrix4;
 use wgpu::{Device, IndexFormat, Queue, RenderPass};
 
-use crate::asset_management::materialmanager::RuntimeMaterial;
+use crate::asset_management::materialmanager::{RuntimeMaterial, FALLBACK_MATERIAL_ID};
 use crate::asset_management::mesh::RuntimeMesh;
 use crate::asset_management::meshmanager::MeshId;
 use crate::drawables::drawable::Drawable;
@@ -91,11 +91,13 @@ impl Drawable for MeshRenderer {
         rpass.set_bind_group(1, &(*runtime_mesh).data.model_bind_group, &[]);
         if let Some(i_buffer) = (*runtime_mesh).data.indices_buf.as_ref() {
             for (mat_id, range) in &(*mesh).material_ranges {
-                let material: *const RuntimeMaterial = world
+                let material: *const RuntimeMaterial = match world
                     .assets
                     .materials
-                    .get_runtime_material(*mat_id)
-                    .unwrap();
+                    .get_runtime_material(*mat_id) {
+                    None => world.assets.materials.get_runtime_material(FALLBACK_MATERIAL_ID).unwrap(),
+                    Some(mat) => mat,
+                };
 
                 rpass.set_bind_group(2, &(*material).bind_group, &[]);
                 rpass.set_index_buffer(i_buffer.slice(..), IndexFormat::Uint32);
@@ -103,11 +105,13 @@ impl Drawable for MeshRenderer {
             }
         } else {
             for (mat_id, range) in &(*mesh).material_ranges {
-                let material: *const RuntimeMaterial = world
+                let material: *const RuntimeMaterial = match world
                     .assets
                     .materials
-                    .get_runtime_material(*mat_id)
-                    .unwrap();
+                    .get_runtime_material(*mat_id) {
+                    None => world.assets.materials.get_runtime_material(FALLBACK_MATERIAL_ID).unwrap(),
+                    Some(mat) => mat,
+                };
 
                 rpass.set_bind_group(2, &(*material).bind_group, &[]);
                 rpass.draw(range.clone(), 0..1);
