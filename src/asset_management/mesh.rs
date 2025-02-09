@@ -12,13 +12,14 @@ use crate::object::ModelData;
 pub struct SimpleVertex3D {
     pub position: [f32; 3],
     pub normal: [f32; 3],
+    pub uv: [f32; 2],
 }
 
 impl SimpleVertex3D {
     pub const fn upgrade(self) -> Vertex3D {
         Vertex3D {
             position: Vector3::new(self.position[0], self.position[1], self.position[2]),
-            tex_coord: Vector2::new(0.0, 0.0),
+            tex_coord: Vector2::new(self.uv[0], self.uv[1]),
             normal: Vector3::new(self.normal[0], self.normal[1], self.normal[2]),
             tangent: Vector3::new(0.0, 0.0, 0.0),
             bitangent: Vector3::new(0.0, 0.0, 0.0),

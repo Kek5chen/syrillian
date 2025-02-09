@@ -1,26 +1,31 @@
 #![feature(trait_upcasting)]
 
+use env_logger::Env;
+use log::{error, LevelFilter};
+use nalgebra::Vector3;
+use rapier3d::prelude::*;
 use std::any::Any;
 use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::error::Error;
 use std::sync::Mutex;
-use env_logger::Env;
-use log::{error, LevelFilter};
-use nalgebra::Vector3;
-use rapier3d::prelude::*;
+use wgpu::TextureFormat;
 use winit::event::MouseButton;
 use winit::keyboard::KeyCode;
 use winit::window::{CursorGrabMode, Window};
 
+use crate::camera_controller::CameraController;
+use crate::player_movement::PlayerMovement;
 use syrillian::app::App;
-use syrillian::components::{Collider3D, RigidBodyComponent};
+use syrillian::asset_management::materialmanager::Material;
+use syrillian::asset_management::mesh::Mesh;
+use syrillian::asset_management::shadermanager::DIM3_SHADER_ID;
+use syrillian::buffer::{CUBE, CUBE_INDICES};
 use syrillian::components::collider::MeshShapeExtra;
+use syrillian::components::{Collider3D, RigidBodyComponent, RotateComponent};
 use syrillian::drawables::mesh_renderer::MeshRenderer;
 use syrillian::scene_loader::SceneLoader;
 use syrillian::world::World;
-use crate::camera_controller::CameraController;
-use crate::player_movement::PlayerMovement;
 
 mod camera_controller;
 mod player_movement;
@@ -37,7 +42,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mut app = App::create("SYRILLIAN", 800, 600);
     app.with_init(Some(funnyinit));
     app.with_update(Some(update));
-    
+
     if let Err(e) = app.run().await {
         error!("{e}");
     }
@@ -48,18 +53,17 @@ async fn main() -> Result<(), Box<dyn Error>> {
 fn funnyinit(world: &mut World, _window: &Window) -> Result<(), Box<dyn Error>> {
     // add city
     let mut city = SceneLoader::load(world, "./testmodels/testmap/testmap.fbx")?;
-    
+
     city.transform.set_uniform_scale(0.01);
 
     // add colliders to city
     for child in &mut city.children {
         let collider = child.add_component::<Collider3D>();
         let drawable = &child.drawable;
-        let renderer = match
-            match drawable {
-                None => continue,
-                Some(renderer) => (renderer.as_ref() as &dyn Any).downcast_ref::<MeshRenderer>(),
-            } {
+        let renderer = match match drawable {
+            None => continue,
+            Some(renderer) => (renderer.as_ref() as &dyn Any).downcast_ref::<MeshRenderer>(),
+        } {
             None => continue,
             Some(renderer) => renderer,
         };
@@ -70,7 +74,7 @@ fn funnyinit(world: &mut World, _window: &Window) -> Result<(), Box<dyn Error>> 
     }
 
     world.add_child(city);
-    
+
     // Prepare camera
     let mut camera = world.new_camera();
     camera.add_component::<CameraController>();
@@ -79,11 +83,14 @@ fn funnyinit(world: &mut World, _window: &Window) -> Result<(), Box<dyn Error>> 
     // Prepare character controller
     let mut char_controller = world.new_object("CharacterController");
     char_controller
-         .transform
-         .set_position(Vector3::new(0.0, 100.0, 0.0));
-    
+        .transform
+        .set_position(Vector3::new(0.0, 100.0, 0.0));
+
     let collider = char_controller.add_component::<Collider3D>();
-    collider.get_collider_mut().unwrap().set_shape(SharedShape::capsule_y(1.0, 0.25));
+    collider
+        .get_collider_mut()
+        .unwrap()
+        .set_shape(SharedShape::capsule_y(1.0, 0.25));
 
     let _rigid_body = char_controller.add_component::<RigidBodyComponent>();
     char_controller.add_component::<PlayerMovement>();
@@ -92,6 +99,49 @@ fn funnyinit(world: &mut World, _window: &Window) -> Result<(), Box<dyn Error>> 
     world.add_child(char_controller);
 
     world.input.set_mouse_mode(true);
+
+    const neco_arc_jpg: &[u8; 1293] = include_bytes!("neco.jpg");
+
+    let diffuse_image = image::load_from_memory(neco_arc_jpg)?;
+    let rgba = diffuse_image.into_rgba8();
+    let mut data = Vec::with_capacity((rgba.width() * rgba.height() * 4) as usize);
+    for pixel in rgba.pixels() {
+        data.push(pixel[2]); // B
+        data.push(pixel[1]); // G
+        data.push(pixel[0]); // R
+        data.push(pixel[3]); // A
+    }
+    let neco_arc_tex = world.assets.textures.add_texture(
+        23,
+        23,
+        TextureFormat::Bgra8UnormSrgb,
+        Some(data),
+    );
+
+    let neco_material = world.assets.materials.add_material(Material {
+        name: "necoarc".to_string(),
+        diffuse: Vector3::new(1.0, 1.0, 1.0),
+        diffuse_texture: Some(neco_arc_tex),
+        normal_texture: None,
+        shininess: 0.0,
+        shininess_texture: None,
+        opacity: 1.0,
+        shader: DIM3_SHADER_ID,
+    });
+
+    let cube_mesh = world.assets.meshes.add_mesh(Mesh::new(
+        CUBE.to_vec(),
+        Some(CUBE_INDICES.to_vec()),
+        Some(vec![(neco_material, 0..CUBE_INDICES.len() as u32)]),
+    ));
+
+    let mut cube = world.new_object("Cube");
+    let _ = cube.drawable.insert(MeshRenderer::new(cube_mesh));
+    cube.transform.set_position(Vector3::new(20.0, -3.9, -40.0));
+
+    cube.add_component::<RotateComponent>();
+
+    world.add_child(cube);
 
     world.print_objects();
 
@@ -130,7 +180,9 @@ fn update(world: &mut World, window: &Window) -> Result<(), Box<dyn Error>> {
         }
     }
 
-    if world.input.is_button_pressed(MouseButton::Left) || world.input.is_button_pressed(MouseButton::Right) {
+    if world.input.is_button_pressed(MouseButton::Left)
+        || world.input.is_button_pressed(MouseButton::Right)
+    {
         world.input.set_mouse_mode(true);
     }
 
