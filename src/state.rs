@@ -53,7 +53,7 @@ impl State {
             .request_device(
                 &DeviceDescriptor {
                     label: Some("Renderer Hardware"),
-                    required_features: Features::default(),
+                    required_features: Features::default() | Features::POLYGON_MODE_LINE,
                     required_limits: Default::default(),
                     memory_hints: Default::default(),
                 },

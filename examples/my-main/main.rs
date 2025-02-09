@@ -112,8 +112,8 @@ fn funnyinit(world: &mut World, _window: &Window) -> Result<(), Box<dyn Error>> 
         data.push(pixel[3]); // A
     }
     let neco_arc_tex = world.assets.textures.add_texture(
-        23,
-        23,
+        rgba.width(),
+        rgba.height(),
         TextureFormat::Bgra8UnormSrgb,
         Some(data),
     );

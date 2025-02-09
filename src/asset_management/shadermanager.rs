@@ -18,6 +18,8 @@ pub struct ShaderItem {
 pub struct Shader {
     pub name: String,
     pub code: String,
+    pub polygon_mode: PolygonMode,
+    pub draw_over: bool,
 }
 
 pub struct RuntimeShader {
@@ -25,6 +27,7 @@ pub struct RuntimeShader {
     pub module: ShaderModule,
     pub pipeline_layout: PipelineLayout,
     pub pipeline: RenderPipeline,
+    pub draw_over: bool
 }
 
 pub type ShaderId = usize;
@@ -34,6 +37,7 @@ pub const FALLBACK_SHADER_ID: ShaderId = 0;
 pub const DIM3_SHADER_ID: ShaderId = 1;
 
 pub const POST_PROCESS_SHADER_ID: ShaderId = 2;
+pub const DEBUG_EDGES_SHADER_ID: ShaderId = 3;
 
 pub struct ShaderManager {
     next_id: ShaderId,
@@ -77,7 +81,7 @@ impl Shader {
                 front_face: FrontFace::Ccw,
                 cull_mode: Some(Face::Back),
                 unclipped_depth: false,
-                polygon_mode: PolygonMode::Fill,
+                polygon_mode: self.polygon_mode,
                 conservative: false,
             },
             depth_stencil: Some(DepthStencilState {
@@ -106,6 +110,7 @@ impl Shader {
             module: shader,
             pipeline_layout,
             pipeline,
+            draw_over: self.draw_over,
         }
     }
 
@@ -157,6 +162,7 @@ impl Shader {
             module: shader,
             pipeline_layout,
             pipeline,
+            draw_over: self.draw_over,
         }
     }
 }
@@ -171,6 +177,7 @@ impl ShaderManager {
             shaders: HashMap::new(),
             device: None,
         };
+
         shader_manager.add_shader(
             "Fallback".to_string(),
             include_str!("../shaders/fallback_shader3d.wgsl").to_string(),
@@ -183,6 +190,14 @@ impl ShaderManager {
             "PostProcess".to_string(),
             include_str!("../shaders/fullscreen_passhthrough.wgsl").to_string(),
         );
+        shader_manager.add_shader(
+            "3D Debug Edges Shader".to_string(),
+            include_str!("../shaders/debug/edges.wgsl").to_string(),
+        );
+        let shader = shader_manager.shaders.get_mut(&DEBUG_EDGES_SHADER_ID).unwrap();
+        shader.raw.draw_over = true;
+        shader.raw.polygon_mode = PolygonMode::Line;
+
         shader_manager
     }
 
@@ -220,7 +235,7 @@ impl ShaderManager {
         self.shaders.insert(
             self.next_id,
             ShaderItem {
-                raw: Shader { name, code },
+                raw: Shader { name, code, polygon_mode: PolygonMode::Fill, draw_over: false },
                 runtime: None,
             },
         );
@@ -236,7 +251,7 @@ impl ShaderManager {
             let bgls = &world.assets.bind_group_layouts;
 
             let runtime_shader = match id {
-                FALLBACK_SHADER_ID | DIM3_SHADER_ID => {
+                FALLBACK_SHADER_ID | DIM3_SHADER_ID | DEBUG_EDGES_SHADER_ID => {
                     let camera_ubgl = bgls.get_bind_group_layout(CAMERA_UBGL_ID).unwrap();
                     let model_ubgl = bgls.get_bind_group_layout(MODEL_UBGL_ID).unwrap();
                     let material_ubgl = bgls.get_bind_group_layout(MATERIAL_UBGL_ID).unwrap();

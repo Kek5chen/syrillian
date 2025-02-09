@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::fmt::Debug;
 use std::rc::Rc;
 
 use log::{debug, error};
@@ -7,7 +8,7 @@ use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::*;
 use winit::window::Window;
 use crate::asset_management::bindgroup_layout_manager::{CAMERA_UBGL_ID, POST_PROCESS_BGL_ID};
-use crate::asset_management::shadermanager::{ShaderId, DIM3_SHADER_ID, FALLBACK_SHADER_ID, POST_PROCESS_SHADER_ID};
+use crate::asset_management::shadermanager::{ShaderId, DEBUG_EDGES_SHADER_ID, DIM3_SHADER_ID, FALLBACK_SHADER_ID, POST_PROCESS_SHADER_ID};
 use crate::components::camera::CameraData;
 use crate::components::CameraComp;
 use crate::object::GameObjectId;
@@ -63,6 +64,11 @@ pub struct CameraRenderData {
     camera_uniform_bind_group: BindGroup,
 }
 
+#[derive(Debug, Default)]
+pub struct DebugRenderer {
+    pub draw_edges: bool,
+}
+
 #[allow(dead_code)]
 pub struct Renderer {
     pub(crate) state: Box<State>,
@@ -75,6 +81,8 @@ pub struct Renderer {
     offscreen_view: TextureView,
 
     post_process_pass: Option<PostProcessPass>,
+
+    debug: DebugRenderer,
 }
 
 impl Renderer {
@@ -138,6 +146,7 @@ impl Renderer {
             offscreen_texture,
             offscreen_view,
             post_process_pass: None,
+            debug: DebugRenderer::default(),
         }
     }
 
@@ -180,6 +189,8 @@ impl Renderer {
             post_bgl,
             &self.offscreen_view
         ));
+
+        self.debug.draw_edges = true;
     }
 
     pub fn render_world(&mut self, world: &mut World) -> bool {
@@ -199,7 +210,11 @@ impl Renderer {
             }
         };
 
-        self.render(&mut ctx, world);
+        self.render(&mut ctx, world, None);
+
+        if self.debug.draw_edges {
+            self.render(&mut ctx, world, Some(DEBUG_EDGES_SHADER_ID));
+        }
 
         self.end_render(world, ctx);
 
@@ -263,7 +278,7 @@ impl Renderer {
         })
     }
 
-    fn render(&mut self, ctx: &mut RenderContext, world: &mut World) {
+    fn render(&mut self, ctx: &mut RenderContext, world: &mut World, shader_override: Option<ShaderId>) {
         if world.active_camera.is_none() {
             debug!("No camera active");
             return;
@@ -304,11 +319,18 @@ impl Renderer {
             bytemuck::cast_slice(&[*render_data.camera_uniform_data]),
         );
 
+        let shader_id = shader_override.unwrap_or(current_pipeline);
+
         let shader = world
-            .assets
-            .shaders
-            .get_shader(current_pipeline)
-            .expect("3D Pipeline should've been initialized previously");
+                .assets
+                .shaders
+                .get_shader(shader_id)
+                .expect("3D Pipeline should've been initialized previously");
+
+        let (load_op_color, load_op_depth) = match shader.draw_over {
+            true => (LoadOp::Load, LoadOp::Load),
+            false => (LoadOp::Clear(Color::BLACK), LoadOp::Clear(1.0)),
+        };
 
         let mut rpass = ctx.encoder.begin_render_pass(&RenderPassDescriptor {
             label: Some("Offscreen Render Pass"),
@@ -316,14 +338,14 @@ impl Renderer {
                 view: &self.offscreen_view,
                 resolve_target: None,
                 ops: Operations {
-                    load: LoadOp::Clear(Color::BLACK),
+                    load: load_op_color,
                     store: StoreOp::Store,
                 },
             })],
             depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
                 view: &ctx.depth_view,
                 depth_ops: Some(Operations {
-                    load: LoadOp::Clear(1.0),
+                    load: load_op_depth,
                     store: StoreOp::Store,
                 }),
                 stencil_ops: None,
