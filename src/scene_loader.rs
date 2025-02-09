@@ -254,7 +254,9 @@ impl SceneLoader {
                         warn!("Failed to load texture: {}. Using fallback texture.", e);
                         return FALLBACK_DIFFUSE_TEXTURE;
                     }
-                };                let rgba = decoded.into_rgba8();
+                };
+
+                let rgba = decoded.into_rgba8();
                 let mut data = Vec::with_capacity((rgba.width() * rgba.height() * 4) as usize);
                 for pixel in rgba.pixels() {
                     data.push(pixel[2]); // B
@@ -262,6 +264,7 @@ impl SceneLoader {
                     data.push(pixel[0]); // R
                     data.push(pixel[3]); // A
                 }
+
                 world.assets.textures.add_texture(
                     rgba.width(),
                     rgba.height(),
