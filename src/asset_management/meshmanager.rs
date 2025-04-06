@@ -24,9 +24,10 @@ pub struct MeshManager {
 #[allow(dead_code)]
 impl MeshManager {
     pub fn invalidate_runtime(&mut self) {
-        for (_, mesh) in &mut self.meshes {
-            mesh.runtime = None;
-        }
+        self.meshes
+            .values_mut()
+            .for_each(|m| m.runtime = None);
+
         self.device = None;
     }
 
