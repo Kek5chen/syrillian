@@ -103,14 +103,12 @@ impl PrematureApp {
     
     pub async fn run(mut self) -> Result<(), Box<dyn Error>> {
         let (event_loop, app) = self.init_state().await?;
-        unsafe {
-            app.run(event_loop).await
-        }
+        app.run(event_loop).await
     }
 }
 
 impl App {
-    pub async unsafe fn run(
+    pub async fn run(
         mut self,
         event_loop: EventLoop<()>,
     ) -> Result<(), Box<dyn Error>> {
