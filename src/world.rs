@@ -59,8 +59,8 @@ impl World {
         }
     }
 
-    pub fn get_object(&self, obj: &GameObjectId) -> Option<&Box<GameObject>> {
-        self.objects.get(obj)
+    pub fn get_object(&self, obj: &GameObjectId) -> Option<&GameObject> {
+        self.objects.get(obj).map(|o| o.as_ref())
     }
 
     pub fn get_object_mut(&mut self, obj: &GameObjectId) -> Option<&mut Box<GameObject>> {
