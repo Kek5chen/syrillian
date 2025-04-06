@@ -32,7 +32,7 @@ impl AddAssign<usize> for GameObjectId {
 }
 
 impl Deref for GameObjectId {
-    type Target = Box<GameObject>;
+    type Target = GameObject;
 
     fn deref(&self) -> &Self::Target {
         World::instance().get_object(self).unwrap()
@@ -101,7 +101,7 @@ impl GameObject {
             if type_id == TypeId::of::<C>() {
                 return Some(unsafe {
                     let rc_clone = Rc::clone(component);
-                    mem::transmute(rc_clone)
+                    mem::transmute::<Rc<RefCell<Box<dyn Component>>>, Rc<RefCell<Box<C>>>>(rc_clone)
                 });
             }
         }
