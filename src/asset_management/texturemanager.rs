@@ -8,6 +8,7 @@ pub const FALLBACK_DIFFUSE_TEXTURE: TextureId = 0;
 pub const FALLBACK_NORMAL_TEXTURE: TextureId = 1;
 pub const FALLBACK_SHININESS_TEXTURE: TextureId = 2;
 
+#[derive(Debug)]
 #[allow(dead_code)]
 pub struct RuntimeTexture {
     texture: wgpu::Texture,
@@ -15,6 +16,7 @@ pub struct RuntimeTexture {
     pub(crate) sampler: wgpu::Sampler,
 }
 
+#[derive(Debug, Clone)]
 pub struct RawTexture {
     pub width: u32,
     pub height: u32,
@@ -22,6 +24,7 @@ pub struct RawTexture {
     pub data: Option<Vec<u8>>,
 }
 
+#[derive(Debug)]
 pub struct Texture {
     pub raw: RawTexture,
     pub runtime: Option<RuntimeTexture>,
@@ -30,6 +33,7 @@ pub struct Texture {
 pub type TextureId = usize;
 
 #[allow(dead_code)]
+#[derive(Debug)]
 pub struct TextureManager {
     textures: HashMap<TextureId, Texture>,
     next_id: TextureId,
@@ -92,9 +96,9 @@ impl TextureManager {
     }
     
     pub fn invalidate_runtime(&mut self) {
-        for (_, tex) in &mut self.textures {
-            tex.runtime = None;
-        }
+        self.textures
+            .values_mut()
+            .for_each(|t| t.runtime = None);
         
         self.device = None;
         self.queue = None;
