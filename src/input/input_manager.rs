@@ -38,15 +38,15 @@ impl Default for InputManager {
             current_mouse_mode: CursorGrabMode::None
         }
     }
+}
 
+#[allow(unused)]
+impl InputManager {
     pub(crate) fn process_mouse_event(&mut self, window: &Window, device_event: &DeviceEvent) {
-        match device_event {
-            DeviceEvent::MouseMotion { delta } => {
-                self.mouse_delta = Vector2::new(-delta.0 as f32, -delta.1 as f32);
-                self.mouse_pos.x += self.mouse_delta.x;
-                self.mouse_pos.y += self.mouse_delta.y;
-            },
-            _ => {}
+        if let DeviceEvent::MouseMotion { delta } = device_event {
+            self.mouse_delta = Vector2::new(-delta.0 as f32, -delta.1 as f32);
+            self.mouse_pos.x += self.mouse_delta.x;
+            self.mouse_pos.y += self.mouse_delta.y;
         }
     }
 
@@ -60,15 +60,14 @@ impl Default for InputManager {
         }
         
         match window_event {
-            WindowEvent::KeyboardInput { event, .. } => match event.physical_key {
-                PhysicalKey::Code(code) => {
+            WindowEvent::KeyboardInput { event, .. } => {
+                if let PhysicalKey::Code(code) = event.physical_key {
                     if !event.state.is_pressed() || self.key_states.get(&code).is_some_and(|state| !state.is_pressed()) {
                         self.key_just_updated.push(code);
                     }
                     
-                    self.key_states.insert(code.clone(), event.state);
+                    self.key_states.insert(code, event.state);
                 }
-                _ => {}
             },
             WindowEvent::CursorMoved { position, .. } => {
                 self.mouse_delta += Vector2::new(self.mouse_pos.x - position.x as f32, self.mouse_pos.y - position.y as f32);
@@ -92,10 +91,10 @@ impl Default for InputManager {
                 self.mouse_wheel_delta += y as f32;
             }
             WindowEvent::MouseInput { button, state, .. } => {
-                if !state.is_pressed() || self.button_states.get(&button).is_some_and(|state| !state.is_pressed()) {
-                    self.button_just_updated.push(button.clone());
+                if !state.is_pressed() || self.button_states.get(button).is_some_and(|state| !state.is_pressed()) {
+                    self.button_just_updated.push(*button);
                 }
-                self.button_states.insert(button.clone(), state.clone());
+                self.button_states.insert(*button, *state);
             }
             _ => {}
         }
