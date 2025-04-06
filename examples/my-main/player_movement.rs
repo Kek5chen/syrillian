@@ -107,7 +107,7 @@ impl Component for PlayerMovement {
 		}
 		self.velocity += base_vel * factor;
 		
-		let mut linvel = body.linvel().clone();
+		let mut linvel = *body.linvel();
 		linvel.x = self.velocity.x;
 		linvel.z = self.velocity.z;
 		

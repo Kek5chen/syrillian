@@ -172,7 +172,7 @@ impl Renderer {
         let camera_data = Box::new(CameraData::empty());
         let camera_bgl = World::instance().assets.bind_group_layouts.get_bind_group_layout(CAMERA_UBGL_ID).unwrap();
         let (camera_uniform_buffer, camera_uniform_bind_group) = Self::create_uniform_init(
-            &camera_bgl,
+            camera_bgl,
             &self.state,
             bytemuck::cast_slice(&[*camera_data]),
         );

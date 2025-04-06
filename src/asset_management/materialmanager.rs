@@ -82,7 +82,7 @@ impl Material {
                 .get_runtime_texture_ensure_init(shininess_texture_id)
                 .unwrap();
 
-            let mat_bgl = (&mut *world).assets.bind_group_layouts.get_bind_group_layout(MATERIAL_UBGL_ID).unwrap();
+            let mat_bgl = (*world).assets.bind_group_layouts.get_bind_group_layout(MATERIAL_UBGL_ID).unwrap();
 
             let bind_group = device.create_bind_group(&BindGroupDescriptor {
                 label: Some("Material Bind Group"),
