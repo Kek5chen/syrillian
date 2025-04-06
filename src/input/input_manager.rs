@@ -22,9 +22,8 @@ pub struct InputManager {
     current_mouse_mode: CursorGrabMode,
 }
 
-#[allow(unused)]
-impl InputManager {
-    pub fn new() -> InputManager {
+impl Default for InputManager {
+    fn default() -> Self {
         InputManager {
             key_states: HashMap::default(),
             key_just_updated: Vec::new(),

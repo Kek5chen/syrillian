@@ -27,7 +27,7 @@ impl SimpleVertex3D {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 #[repr(C)]
 pub struct Vertex3D {
     pub position: Vector3<f32>,
@@ -41,6 +41,7 @@ unsafe impl Zeroable for Vertex3D {}
 unsafe impl Pod for Vertex3D {}
 
 #[allow(dead_code)]
+#[derive(Debug)]
 pub struct RuntimeMeshData {
     pub(crate) vertices_buf: wgpu::Buffer,
     pub(crate) vertices_num: usize,
@@ -51,17 +52,20 @@ pub struct RuntimeMeshData {
     pub(crate) model_bind_group: wgpu::BindGroup,
 }
 
+#[derive(Debug)]
 pub struct MeshVertexData<T> {
     pub(crate) vertices: Vec<T>,
     pub(crate) indices: Option<Vec<u32>>, // <--- put this
 }                                    //         |
                                      //         |
+#[derive(Debug)]                     //         |
 pub struct Mesh {                    //         |
     //         here <---------------------------- i forgor why tho :<
     pub(crate) data: MeshVertexData<Vertex3D>,
     pub material_ranges: Vec<(MaterialId, Range<u32>)>,
 }
 
+#[derive(Debug)]
 pub struct RuntimeMesh {
     pub data: RuntimeMeshData,
 }

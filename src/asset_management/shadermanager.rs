@@ -10,11 +10,13 @@ use crate::asset_management::bindgroup_layout_manager::{CAMERA_UBGL_ID, MATERIAL
 use crate::asset_management::mesh::Vertex3D;
 use crate::world::World;
 
+#[derive(Debug)]
 pub struct ShaderItem {
     raw: Shader,
     runtime: Option<RuntimeShader>,
 }
 
+#[derive(Debug)]
 pub struct Shader {
     pub name: String,
     pub code: String,
@@ -22,6 +24,7 @@ pub struct Shader {
     pub draw_over: bool,
 }
 
+#[derive(Debug)]
 pub struct RuntimeShader {
     pub name: String,
     pub module: ShaderModule,
@@ -39,6 +42,7 @@ pub const DIM3_SHADER_ID: ShaderId = 1;
 pub const POST_PROCESS_SHADER_ID: ShaderId = 2;
 pub const DEBUG_EDGES_SHADER_ID: ShaderId = 3;
 
+#[derive(Debug)]
 pub struct ShaderManager {
     next_id: ShaderId,
     shaders: HashMap<ShaderId, ShaderItem>,
@@ -167,38 +171,42 @@ impl Shader {
     }
 }
 
-#[allow(dead_code)]
-impl ShaderManager {
-    pub fn init(&mut self) {}
-
-    pub fn new() -> ShaderManager {
+impl Default for ShaderManager {
+    fn default() -> Self {
         let mut shader_manager = ShaderManager {
             next_id: 0,
             shaders: HashMap::new(),
             device: None,
         };
 
-        shader_manager.add_shader(
+        shader_manager.init();
+
+        shader_manager
+    }
+}
+
+#[allow(dead_code)]
+impl ShaderManager {
+    pub fn init(&mut self) {
+        self.add_shader(
             "Fallback".to_string(),
             include_str!("../shaders/fallback_shader3d.wgsl").to_string(),
         );
-        shader_manager.add_shader(
+        self.add_shader(
             "3D Default Pipeline".to_string(),
             include_str!("../shaders/shader3d.wgsl").to_string(),
         );
-        shader_manager.add_shader(
+        self.add_shader(
             "PostProcess".to_string(),
             include_str!("../shaders/fullscreen_passhthrough.wgsl").to_string(),
         );
-        shader_manager.add_shader(
+        self.add_shader(
             "3D Debug Edges Shader".to_string(),
             include_str!("../shaders/debug/edges.wgsl").to_string(),
         );
-        let shader = shader_manager.shaders.get_mut(&DEBUG_EDGES_SHADER_ID).unwrap();
+        let shader = self.shaders.get_mut(&DEBUG_EDGES_SHADER_ID).unwrap();
         shader.raw.draw_over = true;
         shader.raw.polygon_mode = PolygonMode::Line;
-
-        shader_manager
     }
 
     pub fn invalidate_runtime(&mut self) {

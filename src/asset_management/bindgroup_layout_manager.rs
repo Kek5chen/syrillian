@@ -4,11 +4,13 @@ use wgpu::{BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, Bin
 
 pub type BGLId = usize;
 
+#[derive(Debug)]
 pub struct BindGroupLayoutDefinition {
     label: Option<&'static str>,
     entries: Vec<BindGroupLayoutEntry>,
 }
 
+#[derive(Debug)]
 pub struct BindGroupLayoutItem {
     raw: BindGroupLayoutDefinition,
     runtime: Option<BindGroupLayout>,
@@ -29,6 +31,7 @@ impl BindGroupLayoutItem {
     }
 }
 
+#[derive(Debug)]
 pub struct BindGroupLayoutManager {
     layouts: HashMap<usize, BindGroupLayoutItem>,
     next_id: BGLId,
@@ -40,8 +43,8 @@ pub const MODEL_UBGL_ID: BGLId = 1;
 pub const MATERIAL_UBGL_ID: BGLId = 2;
 pub const POST_PROCESS_BGL_ID: BGLId = 3;
 
-impl BindGroupLayoutManager {
-    pub fn new() -> Self {
+impl Default for BindGroupLayoutManager {
+    fn default() -> Self {
         let mut manager = Self {
             layouts: HashMap::new(),
             next_id: 0,
@@ -144,7 +147,9 @@ impl BindGroupLayoutManager {
 
         manager
     }
+}
 
+impl BindGroupLayoutManager {
     pub fn init_runtime(&mut self, device: Rc<Device>) {
         self.device = Some(device);
         self.layouts.values_mut().for_each(|item| item.runtime = None );

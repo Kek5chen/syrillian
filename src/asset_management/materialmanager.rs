@@ -20,6 +20,7 @@ pub type MaterialId = usize;
 
 pub const FALLBACK_MATERIAL_ID: usize = 0;
 
+#[derive(Debug, Clone)]
 pub struct Material {
     pub name: String,
     pub diffuse: Vector3<f32>,
@@ -31,6 +32,7 @@ pub struct Material {
     pub shader: ShaderId,
 }
 
+#[derive(Debug)]
 pub struct MaterialItem {
     raw: Material,
     runtime: Option<RuntimeMaterial>,
@@ -121,7 +123,7 @@ impl Material {
 }
 
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct RuntimeMaterialData {
     diffuse: Vector3<f32>,
     _padding1: u32,
@@ -135,17 +137,11 @@ unsafe impl Zeroable for RuntimeMaterialData {}
 unsafe impl Pod for RuntimeMaterialData {}
 
 #[allow(dead_code)]
+#[derive(Debug)]
 pub struct RuntimeMaterial {
     pub(crate) data: RuntimeMaterialData,
     pub(crate) buffer: Buffer,
     pub(crate) bind_group: BindGroup,
-}
-
-pub struct MaterialManager {
-    materials: HashMap<usize, MaterialItem>,
-    next_id: MaterialId,
-    device: Option<Rc<Device>>,
-    queue: Option<Rc<Queue>>,
 }
 
 #[derive(Debug)]
@@ -155,9 +151,16 @@ pub enum MaterialError {
     QueueNotInitialized,
 }
 
-#[allow(dead_code)]
-impl MaterialManager {
-    pub fn new() -> MaterialManager {
+#[derive(Debug)]
+pub struct MaterialManager {
+    materials: HashMap<usize, MaterialItem>,
+    next_id: MaterialId,
+    device: Option<Rc<Device>>,
+    queue: Option<Rc<Queue>>,
+}
+
+impl Default for MaterialManager {
+    fn default() -> Self {
         let fallback = Material {
             name: "Fallback Material".to_string(),
             diffuse: Vector3::new(1.0, 1.0, 1.0),
@@ -177,7 +180,10 @@ impl MaterialManager {
         manager.add_material(fallback);
         manager
     }
+}
 
+#[allow(dead_code)]
+impl MaterialManager {
     pub fn invalidate_runtime(&mut self) {
         for mat in self.materials.values_mut() {
             mat.runtime = None;

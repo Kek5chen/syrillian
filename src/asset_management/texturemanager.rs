@@ -37,6 +37,21 @@ pub struct TextureManager {
     queue: Option<Rc<Queue>>,
 }
 
+impl Default for TextureManager {
+    fn default() -> Self {
+        let mut manager = TextureManager {
+            textures: HashMap::new(),
+            next_id: 0,
+            device: None,
+            queue: None,
+        };
+
+        manager.init();
+
+        manager
+    }
+}
+
 #[allow(dead_code)]
 impl TextureManager {
     pub fn generate_new_fallback_diffuse_texture(width: u32, height: u32) -> Vec<u8> {
@@ -53,17 +68,10 @@ impl TextureManager {
         diffuse
     }
 
-    pub fn new() -> TextureManager {
-        let mut manager = TextureManager {
-            textures: HashMap::new(),
-            next_id: 0,
-            device: None,
-            queue: None,
-        };
-
+    pub fn init(&mut self) {
         const FALLBACK_SIZE: u32 = 35;
 
-        let id = manager.add_texture(
+        let id = self.add_texture(
             FALLBACK_SIZE,
             FALLBACK_SIZE,
             TextureFormat::Bgra8UnormSrgb,
@@ -71,13 +79,11 @@ impl TextureManager {
         );
         assert_eq!(id, FALLBACK_DIFFUSE_TEXTURE);
 
-        let id = manager.add_texture(1, 1, TextureFormat::Bgra8UnormSrgb, Some(vec![0, 0, 0, 0]));
+        let id = self.add_texture(1, 1, TextureFormat::Bgra8UnormSrgb, Some(vec![0, 0, 0, 0]));
         assert_eq!(id, FALLBACK_NORMAL_TEXTURE);
 
-        let id = manager.add_texture(1, 1, TextureFormat::Bgra8UnormSrgb, Some(vec![0, 0, 0, 0]));
+        let id = self.add_texture(1, 1, TextureFormat::Bgra8UnormSrgb, Some(vec![0, 0, 0, 0]));
         assert_eq!(id, FALLBACK_SHININESS_TEXTURE);
-
-        manager
     }
 
     pub fn init_runtime(&mut self, device: Rc<Device>, queue: Rc<Queue>) {

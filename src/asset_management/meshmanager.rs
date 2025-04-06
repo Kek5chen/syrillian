@@ -8,11 +8,13 @@ use crate::world::World;
 
 pub type MeshId = usize;
 
+#[derive(Debug)]
 pub struct MeshItem {
     raw: Box<Mesh>,
     runtime: Option<RuntimeMesh>,
 }
 
+#[derive(Debug, Default)]
 pub struct MeshManager {
     meshes: HashMap<MeshId, MeshItem>,
     next_id: MeshId,
@@ -21,14 +23,6 @@ pub struct MeshManager {
 
 #[allow(dead_code)]
 impl MeshManager {
-    pub(crate) fn new() -> MeshManager {
-        MeshManager {
-            meshes: HashMap::new(),
-            next_id: 0,
-            device: None,
-        }
-    }
-
     pub fn invalidate_runtime(&mut self) {
         for (_, mesh) in &mut self.meshes {
             mesh.runtime = None;

@@ -7,6 +7,7 @@ use crate::asset_management::bindgroup_layout_manager::BindGroupLayoutManager;
 use crate::asset_management::meshmanager::MeshManager;
 use crate::asset_management::shadermanager::ShaderManager;
 
+#[derive(Default)]
 pub struct AssetManager {
     pub textures: TextureManager,
     pub shaders: ShaderManager,
@@ -16,16 +17,6 @@ pub struct AssetManager {
 }
 
 impl AssetManager {
-    pub fn new() -> AssetManager {
-        AssetManager {
-            textures: TextureManager::new(),
-            shaders: ShaderManager::new(),
-            materials: MaterialManager::new(),
-            meshes: MeshManager::new(),
-            bind_group_layouts: BindGroupLayoutManager::new(),
-        }
-    }
-
     pub fn invalidate(&mut self) {
         self.textures.invalidate_runtime();
         self.shaders.invalidate_runtime();

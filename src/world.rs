@@ -35,11 +35,11 @@ impl World {
             next_object_id: GameObjectId(0),
             children: vec![],
             active_camera: None,
-            assets: AssetManager::new(),
+            assets: AssetManager::default(),
             last_frame_time: Instant::now(),
             physics: PhysicsSimulator::default(),
             delta_time: Duration::default(),
-            input: InputManager::new(),
+            input: InputManager::default(),
             requested_shutdown: false,
         });
 
