@@ -1,5 +1,3 @@
-#![feature(trait_upcasting)]
-
 use env_logger::Env;
 use log::{error, LevelFilter};
 use nalgebra::Vector3;
