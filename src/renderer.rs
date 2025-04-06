@@ -376,12 +376,14 @@ impl Renderer {
         let world_ptr: *mut World = world;
         for child in children {
             if !child.children.is_empty() {
-                self.traverse_and_render(
-                    &mut *world_ptr,
-                    rpass,
-                    &mut child.clone().children,
-                    combined_matrix * child.transform.full_matrix().to_homogeneous(),
-                );
+                unsafe {
+                    self.traverse_and_render(
+                        &mut *world_ptr,
+                        rpass,
+                        &child.children,
+                        combined_matrix * child.transform.full_matrix().to_homogeneous(),
+                    );
+                }
             }
             if let Some(drawable) = &mut child.clone().drawable {
                 {
