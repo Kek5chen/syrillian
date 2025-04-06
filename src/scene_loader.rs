@@ -323,7 +323,7 @@ impl SceneLoader {
         match prop {
             None => default,
             Some(prop) => match &prop.data {
-                PropertyTypeInfo::FloatArray(f) => f.get(0).cloned().unwrap_or(default),
+                PropertyTypeInfo::FloatArray(f) => f.first().cloned().unwrap_or(default),
                 _ => default,
             },
         }
