@@ -69,13 +69,13 @@ impl World {
         self.objects.get_mut(obj)
     }
 
-    pub fn new_object(&mut self, name: &str) -> GameObjectId {
+    pub fn new_object<S: Into<String>>(&mut self, name: S) -> GameObjectId {
         let id = self.next_object_id;
         self.next_object_id += 1;
 
         let obj = Box::new(GameObject {
             id,
-            name: name.to_owned(),
+            name: name.into(),
             children: vec![],
             parent: None,
             transform: Transform::new(id),
