@@ -25,6 +25,10 @@ pub struct World {
 }
 
 impl World {
+    /// # Safety
+    /// This function should not be called more than once since it registers its created world
+    /// globally. Neither should the world be dropped before the App has exited and isn't used
+    /// anymore.
     pub unsafe fn new() -> Box<World> {
         let mut world = Box::new(World {
             objects: HashMap::new(),
