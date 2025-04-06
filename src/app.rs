@@ -160,7 +160,7 @@ impl ApplicationHandler for App {
             return;
         }
 
-        world.input.process_event(&mut renderer.window_mut(), &event);
+        world.input.process_event(renderer.window_mut(), &event);
         if renderer.state.input(&event) {
            return;
         }
@@ -200,6 +200,6 @@ impl ApplicationHandler for App {
     fn device_event(&mut self, _: &ActiveEventLoop, _: DeviceId, event: DeviceEvent) {
         let renderer =  self.renderer.as_mut().unwrap();
         let world = self.world.as_mut();
-        world.input.process_mouse_event(&mut renderer.window_mut(), &event);
+        world.input.process_mouse_event(renderer.window_mut(), &event);
     }
 }
