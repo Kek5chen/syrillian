@@ -29,7 +29,7 @@ impl Component for FreecamController {
 
 	unsafe fn update(&mut self) {
 		let delta_time = World::instance().get_delta_time().as_secs_f32();
-		let transform = &mut self.get_parent().transform;
+		let transform = unsafe { &mut self.get_parent().transform };
 		
 		let input = &World::instance().input;
 

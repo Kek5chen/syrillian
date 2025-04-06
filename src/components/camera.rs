@@ -26,7 +26,9 @@ impl Component for CameraComp {
     }
 
     unsafe fn init(&mut self) {
-        self.get_parent().transform.set_compound_pos_first(true);
+        unsafe {
+            self.get_parent().transform.set_compound_pos_first(true);
+        }
     }
 
     unsafe fn get_parent(&self) -> GameObjectId {

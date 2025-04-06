@@ -31,7 +31,7 @@ impl Component for CameraController {
 			return;
 		}
 
-		let transform = &mut self.get_parent().transform;
+		let transform = unsafe { &mut self.get_parent().transform };
 
 		let mouse_delta = input.get_mouse_delta(); 
 		self.yaw += mouse_delta.x * self.look_sensitivity / 30.0;
@@ -43,7 +43,7 @@ impl Component for CameraController {
 		let pitch_rotation = UnitQuaternion::from_axis_angle(&Vector3::x_axis(), self.pitch.to_radians());
 
 		transform.set_local_rotation(pitch_rotation);
-		if let Some(mut parent) = self.get_parent().parent {
+		if let Some(mut parent) = unsafe { self.get_parent().parent } {
 			parent.transform.set_local_rotation(yaw_rotation);
 		}
 	}

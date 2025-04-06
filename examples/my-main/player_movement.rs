@@ -37,7 +37,9 @@ impl Component for PlayerMovement {
 	}
 
 	unsafe fn init(&mut self) {
-		let rigid = self.get_parent().get_component::<RigidBodyComponent>();
+    let rigid = unsafe {
+        self.get_parent().get_component::<RigidBodyComponent>()
+    };
 		if let Some(rigid) = rigid.clone() {
 			if let Some(rigid) = rigid
 				.borrow_mut()

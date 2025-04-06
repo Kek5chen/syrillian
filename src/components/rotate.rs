@@ -26,7 +26,7 @@ impl Component for RotateComponent {
     }
 
     unsafe fn update(&mut self) {
-        let transform = &mut self.get_parent().transform;
+        let transform = unsafe { &mut self.get_parent().transform };
         let delta_time = World::instance().get_delta_time().as_secs_f32();
 
         let x_angle_radians = (self.iteration / 100.0).sin() * 45.0f32.to_radians();

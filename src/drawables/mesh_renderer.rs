@@ -87,34 +87,36 @@ impl Drawable for MeshRenderer {
             .get_raw_mesh(self.mesh)
             .expect("Normal mesh should be set");
 
-        rpass.set_vertex_buffer(0, (*runtime_mesh).data.vertices_buf.slice(..));
-        rpass.set_bind_group(1, &(*runtime_mesh).data.model_bind_group, &[]);
-        if let Some(i_buffer) = (*runtime_mesh).data.indices_buf.as_ref() {
-            for (mat_id, range) in &(*mesh).material_ranges {
-                let material: *const RuntimeMaterial = match world
-                    .assets
-                    .materials
-                    .get_runtime_material(*mat_id) {
-                    None => world.assets.materials.get_runtime_material(FALLBACK_MATERIAL_ID).unwrap(),
-                    Some(mat) => mat,
-                };
+        unsafe {
+            rpass.set_vertex_buffer(0, (*runtime_mesh).data.vertices_buf.slice(..));
+            rpass.set_bind_group(1, &(*runtime_mesh).data.model_bind_group, &[]);
+            if let Some(i_buffer) = (*runtime_mesh).data.indices_buf.as_ref() {
+                for (mat_id, range) in &mesh.material_ranges {
+                    let material: *const RuntimeMaterial = match world
+                        .assets
+                        .materials
+                        .get_runtime_material(*mat_id) {
+                        None => world.assets.materials.get_runtime_material(FALLBACK_MATERIAL_ID).unwrap(),
+                        Some(mat) => mat,
+                    };
 
-                rpass.set_bind_group(2, &(*material).bind_group, &[]);
-                rpass.set_index_buffer(i_buffer.slice(..), IndexFormat::Uint32);
-                rpass.draw_indexed(range.clone(), 0, 0..1);
-            }
-        } else {
-            for (mat_id, range) in &(*mesh).material_ranges {
-                let material: *const RuntimeMaterial = match world
-                    .assets
-                    .materials
-                    .get_runtime_material(*mat_id) {
-                    None => world.assets.materials.get_runtime_material(FALLBACK_MATERIAL_ID).unwrap(),
-                    Some(mat) => mat,
-                };
+                    rpass.set_bind_group(2, &(*material).bind_group, &[]);
+                    rpass.set_index_buffer(i_buffer.slice(..), IndexFormat::Uint32);
+                    rpass.draw_indexed(range.clone(), 0, 0..1);
+                }
+            } else {
+                for (mat_id, range) in &mesh.material_ranges {
+                    let material: *const RuntimeMaterial = match world
+                        .assets
+                        .materials
+                        .get_runtime_material(*mat_id) {
+                        None => world.assets.materials.get_runtime_material(FALLBACK_MATERIAL_ID).unwrap(),
+                        Some(mat) => mat,
+                    };
 
-                rpass.set_bind_group(2, &(*material).bind_group, &[]);
-                rpass.draw(range.clone(), 0..1);
+                    rpass.set_bind_group(2, &(*material).bind_group, &[]);
+                    rpass.draw(range.clone(), 0..1);
+                }
             }
         }
     }

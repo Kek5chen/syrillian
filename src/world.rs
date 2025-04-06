@@ -44,7 +44,9 @@ impl World {
         });
 
         // create a second mutable reference so G_WORLD can be used in (~un~)safe code
-        G_WORLD = world.as_mut();
+        unsafe {
+            G_WORLD = world.as_mut();
+        }
 
         world
     }
@@ -113,7 +115,9 @@ impl World {
             let object_ptr = object;
             for comp in &object_ptr.components {
                 let comp_ptr = comp.as_ptr();
-                func(&mut **comp_ptr)
+                unsafe {
+                    func(&mut **comp_ptr)
+                }
             }
         }
     }

@@ -26,7 +26,7 @@ impl Component for GravityComp {
 
         self.velocity = (self.velocity - self.acceleration_per_sec * delta_time)
             .clamp(-self.max_acceleration, self.max_acceleration);
-        let transform = &mut self.get_parent().transform;
+        let transform = unsafe { &mut self.get_parent().transform };
         transform.translate(Vector3::new(0.0, self.velocity, 0.0));
     }
 

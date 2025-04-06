@@ -366,7 +366,7 @@ impl Renderer {
         }
     }
 
-    unsafe fn traverse_and_render(
+    fn traverse_and_render(
         &self,
         world: &mut World,
         rpass: &mut RenderPass,
@@ -386,10 +386,10 @@ impl Renderer {
                 }
             }
             if let Some(drawable) = &mut child.clone().drawable {
-                {
+                unsafe {
                     drawable.update(&mut *world_ptr, *child, &self.state.queue, &combined_matrix);
                 }
-                {
+                unsafe {
                     let rpass_ptr: *mut RenderPass = rpass;
                     drawable.draw(&mut *world_ptr, &mut *rpass_ptr);
                 }
