@@ -5,7 +5,6 @@ use wgpu::{
     Texture, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages,
 };
 use winit::dpi::PhysicalSize;
-use winit::event::WindowEvent;
 use winit::window::Window;
 
 #[allow(unused)]
@@ -153,11 +152,5 @@ impl State {
 
     pub fn update(&mut self) {
         // TODO
-    }
-
-    pub fn input(&mut self, event: &WindowEvent) -> bool {
-        match event {
-            _ => false,
-        }
     }
 }

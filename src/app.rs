@@ -161,9 +161,6 @@ impl ApplicationHandler for App {
         }
 
         world.input.process_event(renderer.window_mut(), &event);
-        if renderer.state.input(&event) {
-           return;
-        }
 
         match event {
             WindowEvent::RedrawRequested => {
