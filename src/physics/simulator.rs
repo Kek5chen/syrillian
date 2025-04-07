@@ -60,8 +60,8 @@ impl PhysicsSimulator {
             &mut self.multibody_joint_set,
             &mut self.ccd_solver,
             Some(&mut self.query_pipeline),
-            &self.physics_hooks,
-            &self.event_handler
+            &(), // no hooks yet
+           &(), // no events yet
         );
         self.query_pipeline.update(&self.collider_set)
     }
