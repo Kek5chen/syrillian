@@ -28,7 +28,7 @@
 
             # Dependency of openssl-sys
             pkg-config
-            openssl
+            openssl.dev
 
             # WINIT_UNIX_BACKEND=wayland
             wayland
