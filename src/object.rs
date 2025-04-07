@@ -1,7 +1,7 @@
 use std::any::TypeId;
 use std::cell::RefCell;
 use std::mem;
-use std::ops::{AddAssign, Deref, DerefMut};
+use std::ops::{Deref, DerefMut};
 use std::rc::Rc;
 
 use bytemuck::{Pod, Zeroable};
@@ -25,12 +25,8 @@ impl GameObjectId {
     }
 }
 
-impl AddAssign<usize> for GameObjectId {
-    fn add_assign(&mut self, other: usize) {
-        self.0 += other;
-    }
-}
-
+// TODO: Get rid if this unwrap. Instead actually returning a Option would make more sense and
+// should be handled for additional safety
 impl Deref for GameObjectId {
     type Target = GameObject;
 

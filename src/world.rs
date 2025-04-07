@@ -13,7 +13,6 @@ static mut G_WORLD: *mut World = std::ptr::null_mut();
 
 pub struct World {
     pub objects: HashMap<GameObjectId, Box<GameObject>>,
-    pub next_object_id: GameObjectId,
     pub children: Vec<GameObjectId>,
     pub active_camera: Option<GameObjectId>,
     pub assets: AssetManager,
@@ -22,6 +21,7 @@ pub struct World {
     delta_time: Duration,
     last_frame_time: Instant,
     requested_shutdown: bool,
+    next_object_id: GameObjectId,
 }
 
 impl World {
@@ -32,7 +32,6 @@ impl World {
     pub unsafe fn new() -> Box<World> {
         let mut world = Box::new(World {
             objects: HashMap::new(),
-            next_object_id: GameObjectId(0),
             children: vec![],
             active_camera: None,
             assets: AssetManager::default(),
@@ -41,6 +40,7 @@ impl World {
             delta_time: Duration::default(),
             input: InputManager::default(),
             requested_shutdown: false,
+            next_object_id: GameObjectId(0),
         });
 
         // create a second mutable reference so G_WORLD can be used in (~un~)safe code
@@ -71,7 +71,7 @@ impl World {
 
     pub fn new_object<S: Into<String>>(&mut self, name: S) -> GameObjectId {
         let id = self.next_object_id;
-        self.next_object_id += 1;
+        self.next_object_id.0 += 1;
 
         let obj = Box::new(GameObject {
             id,
