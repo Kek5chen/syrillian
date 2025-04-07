@@ -11,12 +11,6 @@ use crate::asset_management::mesh::Vertex3D;
 use crate::world::World;
 
 #[derive(Debug)]
-pub struct ShaderEntry {
-    raw: Shader,
-    runtime: Option<RuntimeShader>,
-}
-
-#[derive(Debug)]
 pub struct Shader {
     pub name: String,
     pub code: String,
@@ -45,13 +39,14 @@ pub const DEBUG_EDGES_SHADER_ID: ShaderId = 3;
 #[derive(Debug)]
 pub struct ShaderManager {
     next_id: ShaderId,
-    shaders: HashMap<ShaderId, ShaderEntry>,
+    raw_shaders: HashMap<ShaderId, Shader>,
+    runtime_shaders: HashMap<ShaderId, RuntimeShader>,
     device: Option<Rc<Device>>,
 }
 
 impl Shader {
     pub fn initialize_combined_runtime(
-        &mut self,
+        &self,
         device: &Device,
         camera_uniform_bind_group_layout: &BindGroupLayout,
         model_uniform_bind_group_layout: &BindGroupLayout,
@@ -119,7 +114,7 @@ impl Shader {
     }
 
     pub fn initialize_post_process_runtime(
-        &mut self,
+        &self,
         device: &Device,
         post_process_bind_group_layout: &BindGroupLayout,
     ) -> RuntimeShader {
@@ -175,7 +170,8 @@ impl Default for ShaderManager {
     fn default() -> Self {
         let mut shader_manager = ShaderManager {
             next_id: 0,
-            shaders: HashMap::new(),
+            raw_shaders: HashMap::new(),
+            runtime_shaders: HashMap::new(),
             device: None,
         };
 
@@ -204,15 +200,14 @@ impl ShaderManager {
             "3D Debug Edges Shader".to_string(),
             include_str!("../shaders/debug/edges.wgsl").to_string(),
         );
-        let shader = self.shaders.get_mut(&DEBUG_EDGES_SHADER_ID).unwrap();
-        shader.raw.draw_over = true;
-        shader.raw.polygon_mode = PolygonMode::Line;
+
+        let shader = self.raw_shaders.get_mut(&DEBUG_EDGES_SHADER_ID).unwrap();
+        shader.draw_over = true;
+        shader.polygon_mode = PolygonMode::Line;
     }
 
     pub fn invalidate_runtime(&mut self) {
-        for shader in self.shaders.values_mut() {
-            shader.runtime = None;
-        }
+        self.runtime_shaders.clear();
         self.device = None;
     }
 
@@ -240,12 +235,9 @@ impl ShaderManager {
     pub fn add_shader(&mut self, name: String, code: String) -> ShaderId {
         let id = self.next_id;
 
-        self.shaders.insert(
+        self.raw_shaders.insert(
             self.next_id,
-            ShaderEntry {
-                raw: Shader { name, code, polygon_mode: PolygonMode::Fill, draw_over: false },
-                runtime: None,
-            },
+            Shader { name, code, polygon_mode: PolygonMode::Fill, draw_over: false },
         );
         self.next_id += 1;
 
@@ -253,42 +245,50 @@ impl ShaderManager {
     }
 
     pub(crate) fn get_shader(&mut self, id: ShaderId) -> Option<&RuntimeShader> {
-        let shader_item = self.shaders.get_mut(&id)?;
-        if shader_item.runtime.is_none() {
-            let world = World::instance();
-            let bgls = &world.assets.bind_group_layouts;
-
-            let runtime_shader = match id {
-                FALLBACK_SHADER_ID | DIM3_SHADER_ID | DEBUG_EDGES_SHADER_ID => {
-                    let camera_ubgl = bgls.get_bind_group_layout(CAMERA_UBGL_ID).unwrap();
-                    let model_ubgl = bgls.get_bind_group_layout(MODEL_UBGL_ID).unwrap();
-                    let material_ubgl = bgls.get_bind_group_layout(MATERIAL_UBGL_ID).unwrap();
-                    shader_item.raw.initialize_combined_runtime(
-                        self.device.clone().unwrap().as_ref(),
-                        camera_ubgl,
-                        model_ubgl,
-                        material_ubgl,
-                    )
-                },
-                POST_PROCESS_SHADER_ID => {
-                    let post_process_ubgl = bgls.get_bind_group_layout(POST_PROCESS_BGL_ID).unwrap();
-                    shader_item.raw.initialize_post_process_runtime(
-                        self.device.clone().unwrap().as_ref(),
-                        post_process_ubgl,
-                    )
-                },
-                _ => panic!("Shader ID not recognized"),
-            };
-
-            shader_item.runtime = Some(runtime_shader);
+        // ugly but the borrow checker sucks a bit here
+        if self.runtime_shaders.contains_key(&id) {
+            self.runtime_shaders.get(&id)
+        } else {
+            self.init_single_runtime(id)
         }
-        shader_item.runtime.as_ref()
+    }
+
+    fn init_single_runtime(&mut self, id: ShaderId) -> Option<&RuntimeShader> {
+        let raw_shader = self.raw_shaders.get(&id)?;
+        let world = World::instance();
+        let bgls = &world.assets.bind_group_layouts;
+
+        let runtime_shader = match id {
+            FALLBACK_SHADER_ID | DIM3_SHADER_ID | DEBUG_EDGES_SHADER_ID => {
+                let camera_ubgl = bgls.get_bind_group_layout(CAMERA_UBGL_ID).unwrap();
+                let model_ubgl = bgls.get_bind_group_layout(MODEL_UBGL_ID).unwrap();
+                let material_ubgl = bgls.get_bind_group_layout(MATERIAL_UBGL_ID).unwrap();
+                raw_shader.initialize_combined_runtime(
+                    self.device.clone().unwrap().as_ref(),
+                    camera_ubgl,
+                    model_ubgl,
+                    material_ubgl,
+                )
+            },
+            POST_PROCESS_SHADER_ID => {
+                let post_process_ubgl = bgls.get_bind_group_layout(POST_PROCESS_BGL_ID).unwrap();
+                raw_shader.initialize_post_process_runtime(
+                    self.device.clone().unwrap().as_ref(),
+                    post_process_ubgl,
+                )
+            },
+            _ => panic!("Shader ID not recognized"),
+        };
+
+        self.runtime_shaders.insert(id, runtime_shader);
+
+        self.runtime_shaders.get(&id)
     }
 
     pub(crate) fn find_shader_by_name(&self, name: &str) -> Option<ShaderId> {
-        self.shaders
+        self.raw_shaders
             .iter()
-            .find(|(_, v)| v.raw.name == name)
+            .find(|(_, v)| v.name == name)
             .map(|(k, _)| k)
             .cloned()
     }
