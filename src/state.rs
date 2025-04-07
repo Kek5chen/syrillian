@@ -1,8 +1,6 @@
 use std::rc::Rc;
 use wgpu::{
-    Adapter, CompositeAlphaMode, Device, DeviceDescriptor, Extent3d, Features, Instance,
-    PowerPreference, PresentMode, Queue, RequestAdapterOptions, Surface, SurfaceConfiguration,
-    Texture, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages,
+    Adapter, CompositeAlphaMode, Device, DeviceDescriptor, Extent3d, Features, Instance, Limits, MemoryHints, PowerPreference, PresentMode, Queue, RequestAdapterOptions, Surface, SurfaceConfiguration, Texture, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages
 };
 use winit::dpi::PhysicalSize;
 use winit::window::Window;
@@ -37,7 +35,7 @@ impl State {
             .request_adapter(&RequestAdapterOptions {
                 power_preference: PowerPreference::HighPerformance,
                 compatible_surface: Some(surface),
-                ..Default::default()
+                ..RequestAdapterOptions::default()
             })
             .await
             .expect(
@@ -51,8 +49,8 @@ impl State {
                 &DeviceDescriptor {
                     label: Some("Renderer Hardware"),
                     required_features: Features::default() | Features::POLYGON_MODE_LINE,
-                    required_limits: Default::default(),
-                    memory_hints: Default::default(),
+                    required_limits: Limits::default(),
+                    memory_hints: MemoryHints::default(),
                 },
                 None,
             )

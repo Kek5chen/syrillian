@@ -29,7 +29,7 @@ impl PostProcessPass {
             mag_filter: FilterMode::Linear,
             min_filter: FilterMode::Linear,
             mipmap_filter: FilterMode::Linear,
-            ..Default::default()
+            ..SamplerDescriptor::default()
         });
 
         let bind_group = device.create_bind_group(&BindGroupDescriptor {
@@ -350,7 +350,7 @@ impl Renderer {
                 }),
                 stencil_ops: None,
             }),
-            ..Default::default()
+            ..RenderPassDescriptor::default()
         });
 
         rpass.set_pipeline(&shader.pipeline);
@@ -409,7 +409,7 @@ impl Renderer {
                 },
             })],
             depth_stencil_attachment: None,
-            ..Default::default()
+            ..RenderPassDescriptor::default()
         });
 
         let post_shader = world

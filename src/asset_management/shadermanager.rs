@@ -133,19 +133,19 @@ impl Shader {
             vertex: VertexState {
                 module: &shader,
                 entry_point: Some("vs_main"),
-                compilation_options: Default::default(),
+                compilation_options: PipelineCompilationOptions::default(),
                 buffers: &[],
             },
             primitive: PrimitiveState {
                 topology: PrimitiveTopology::TriangleList,
-                ..Default::default()
+                ..PrimitiveState::default()
             },
             depth_stencil: None, // No depth for post-processing
             multisample: MultisampleState::default(),
             fragment: Some(FragmentState {
                 module: &shader,
                 entry_point: Some("fs_main"),
-                compilation_options: Default::default(),
+                compilation_options: PipelineCompilationOptions::default(),
                 targets: &[Some(ColorTargetState {
                     format: TextureFormat::Bgra8UnormSrgb,
                     blend: None,
