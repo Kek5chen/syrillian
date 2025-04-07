@@ -327,9 +327,10 @@ impl Renderer {
                 .get_shader(shader_id)
                 .expect("3D Pipeline should've been initialized previously");
 
-        let (load_op_color, load_op_depth) = match shader.draw_over {
-            true => (LoadOp::Load, LoadOp::Load),
-            false => (LoadOp::Clear(Color::BLACK), LoadOp::Clear(1.0)),
+        let (load_op_color, load_op_depth) = if shader.draw_over {
+            (LoadOp::Load, LoadOp::Load)
+        } else {
+            (LoadOp::Clear(Color::BLACK), LoadOp::Clear(1.0))
         };
 
         let mut rpass = ctx.encoder.begin_render_pass(&RenderPassDescriptor {

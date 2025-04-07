@@ -160,9 +160,10 @@ fn update(world: &mut World, window: &Window) -> Result<(), Box<dyn Error>> {
     last_times.push_back(frame_time);
 
     let mean_delta_time: f32 = last_times.iter().sum::<f32>() / last_times.len() as f32;
-    let debug_or_release = match cfg!(debug_assertions) {
-        true => "[DEBUG] ",
-        false => "",
+    let debug_or_release = if cfg!(debug_assertions) {
+        "[DEBUG] "
+    } else {
+        ""
     };
     window.set_title(&format!(
         "{}{} - v.{} - built on {} at {} - FPS: [ {} ] #{}",
