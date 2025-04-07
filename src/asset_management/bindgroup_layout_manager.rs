@@ -5,35 +5,25 @@ use wgpu::{BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, Bin
 pub type BGLId = usize;
 
 #[derive(Debug)]
-pub struct BindGroupLayoutDefinition {
+pub struct LayoutDescriptor {
     label: Option<&'static str>,
     entries: Vec<BindGroupLayoutEntry>,
 }
 
-#[derive(Debug)]
-pub struct BindGroupLayoutItem {
-    raw: BindGroupLayoutDefinition,
-    runtime: Option<BindGroupLayout>,
-}
-
-impl BindGroupLayoutItem {
-    pub fn init_runtime(&mut self, device: &Rc<Device>) {
-        if self.runtime.is_some() {
-            return;
-        }
-
-        let run_layout = device
+impl LayoutDescriptor {
+    pub fn init_runtime(&self, device: &Rc<Device>) -> BindGroupLayout {
+        device
             .create_bind_group_layout(&BindGroupLayoutDescriptor {
-                label: self.raw.label,
-                entries: self.raw.entries.as_slice(),
-            });
-        self.runtime = Some(run_layout);
+                label: self.label,
+                entries: self.entries.as_slice(),
+            })
     }
 }
 
 #[derive(Debug)]
 pub struct BindGroupLayoutManager {
-    layouts: HashMap<usize, BindGroupLayoutItem>,
+    raw_layouts: HashMap<usize, LayoutDescriptor>,
+    runtime_layouts: HashMap<usize, BindGroupLayout>,
     next_id: BGLId,
     device: Option<Rc<Device>>
 }
@@ -46,7 +36,8 @@ pub const POST_PROCESS_BGL_ID: BGLId = 3;
 impl Default for BindGroupLayoutManager {
     fn default() -> Self {
         let mut manager = Self {
-            layouts: HashMap::new(),
+            raw_layouts: HashMap::new(),
+            runtime_layouts: HashMap::new(),
             next_id: 0,
             device: None,
         };
@@ -152,7 +143,7 @@ impl Default for BindGroupLayoutManager {
 impl BindGroupLayoutManager {
     pub fn init_runtime(&mut self, device: Rc<Device>) {
         self.device = Some(device);
-        self.layouts.values_mut().for_each(|item| item.runtime = None );
+        self.runtime_layouts.clear();
 
 
         self.init_all_runtime();
@@ -160,32 +151,32 @@ impl BindGroupLayoutManager {
 
     pub fn init_all_runtime(&mut self) {
         let device = self.device.clone().unwrap();
-        for layout in self.layouts.values_mut() {
-            layout.init_runtime(&device);
+        for (id, layout) in self.raw_layouts.iter() {
+            let runtime_layout = layout.init_runtime(&device);
+            self.runtime_layouts.insert(*id, runtime_layout);
         }
     }
 
     pub fn get_bind_group_layout(&self, id: BGLId) -> Option<&BindGroupLayout> {
-        self.layouts.get(&id)?
-            .runtime.as_ref()
+        self.runtime_layouts.get(&id)
     }
 
     pub fn get_bind_group_layout_mut(&mut self, id: BGLId) -> Option<&mut BindGroupLayout> {
-        self.layouts.get_mut(&id)?
-            .runtime.as_mut()
+        self.runtime_layouts.get_mut(&id)
     }
 
     pub fn add_bind_group_layout(&mut self, label: Option<&'static str>, entries: Vec<BindGroupLayoutEntry>) -> BGLId {
-        self.layouts.insert(self.next_id, BindGroupLayoutItem {
-            raw: BindGroupLayoutDefinition {
-                label,
-                entries,
-            },
-            runtime: None,
-        });
+        let descriptor = LayoutDescriptor {
+            label,
+            entries,
+        };
+
+        // init right away if a device already exists 
         if let Some(device) = &self.device {
-            self.layouts.get_mut(&self.next_id).unwrap().init_runtime(device);
+            let runtime = descriptor.init_runtime(device);
+            self.runtime_layouts.insert(self.next_id, runtime);
         }
+        self.raw_layouts.insert(self.next_id, descriptor);
 
         let id = self.next_id;
         self.next_id += 1;

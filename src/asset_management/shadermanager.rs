@@ -11,7 +11,7 @@ use crate::asset_management::mesh::Vertex3D;
 use crate::world::World;
 
 #[derive(Debug)]
-pub struct ShaderItem {
+pub struct ShaderEntry {
     raw: Shader,
     runtime: Option<RuntimeShader>,
 }
@@ -45,7 +45,7 @@ pub const DEBUG_EDGES_SHADER_ID: ShaderId = 3;
 #[derive(Debug)]
 pub struct ShaderManager {
     next_id: ShaderId,
-    shaders: HashMap<ShaderId, ShaderItem>,
+    shaders: HashMap<ShaderId, ShaderEntry>,
     device: Option<Rc<Device>>,
 }
 
@@ -242,7 +242,7 @@ impl ShaderManager {
 
         self.shaders.insert(
             self.next_id,
-            ShaderItem {
+            ShaderEntry {
                 raw: Shader { name, code, polygon_mode: PolygonMode::Fill, draw_over: false },
                 runtime: None,
             },
