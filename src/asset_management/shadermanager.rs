@@ -10,6 +10,9 @@ use crate::asset_management::bindgroup_layout_manager::{CAMERA_UBGL_ID, MATERIAL
 use crate::asset_management::mesh::Vertex3D;
 use crate::world::World;
 
+const POST_PROCESS_SHADER_PRE_CONTEXT: &str = include_str!("../shaders/engine_reserved_groups/post_process.wgsl");
+const SHADER_PRE_CONTEXT: &str = include_str!("../shaders/engine_reserved_groups/basic.wgsl");
+
 #[derive(Debug)]
 pub struct Shader {
     pub name: String,
@@ -24,7 +27,7 @@ pub struct RuntimeShader {
     pub module: ShaderModule,
     pub pipeline_layout: PipelineLayout,
     pub pipeline: RenderPipeline,
-    pub draw_over: bool
+    pub draw_over: bool,
 }
 
 pub type ShaderId = usize;
@@ -45,6 +48,14 @@ pub struct ShaderManager {
 }
 
 impl Shader {
+    pub fn make_shader_code(&self) -> Cow<'static, str> {
+        Cow::Owned(format!("{}\n{}", &self.code, SHADER_PRE_CONTEXT))
+    }
+
+    pub fn make_post_process_shader_code(&self) -> Cow<'static, str> {
+        Cow::Owned(format!("{}\n{}", &self.code, POST_PROCESS_SHADER_PRE_CONTEXT))
+    }
+
     pub fn initialize_combined_runtime(
         &self,
         device: &Device,
@@ -54,7 +65,7 @@ impl Shader {
     ) -> RuntimeShader {
         let shader = device.create_shader_module(ShaderModuleDescriptor {
             label: Some(&self.name),
-            source: ShaderSource::Wgsl(Cow::Borrowed(&self.code)),
+            source: ShaderSource::Wgsl(self.make_shader_code()),
         });
         let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
             label: Some(&format!("{} Pipeline Layout", self.name)),
@@ -120,7 +131,7 @@ impl Shader {
     ) -> RuntimeShader {
         let shader = device.create_shader_module(ShaderModuleDescriptor {
             label: Some(&self.name),
-            source: ShaderSource::Wgsl(Cow::Borrowed(&self.code)),
+            source: ShaderSource::Wgsl(self.make_post_process_shader_code()),
         });
         let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
             label: Some(&format!("{} PostProcess Pipeline Layout", self.name)),
