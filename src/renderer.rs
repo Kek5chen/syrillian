@@ -8,12 +8,15 @@ use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::*;
 use winit::window::Window;
 use crate::asset_management::bindgroup_layout_manager::{CAMERA_UBGL_ID, POST_PROCESS_BGL_ID};
-use crate::asset_management::shadermanager::{ShaderId, DEBUG_EDGES_SHADER_ID, DIM3_SHADER_ID, FALLBACK_SHADER_ID, POST_PROCESS_SHADER_ID};
+use crate::asset_management::shadermanager::{ShaderId, DIM3_SHADER_ID, FALLBACK_SHADER_ID, POST_PROCESS_SHADER_ID};
 use crate::components::camera::CameraData;
 use crate::components::CameraComp;
 use crate::object::GameObjectId;
 use crate::state::State;
 use crate::world::World;
+
+#[cfg(debug_assertions)]
+use crate::asset_management::shadermanager::DEBUG_EDGES_SHADER_ID;
 
 struct PostProcessPass {
     bind_group: BindGroup,
@@ -82,6 +85,7 @@ pub struct Renderer {
 
     post_process_pass: Option<PostProcessPass>,
 
+    #[cfg(debug_assertions)]
     debug: DebugRenderer,
 }
 
@@ -146,6 +150,7 @@ impl Renderer {
             offscreen_texture,
             offscreen_view,
             post_process_pass: None,
+            #[cfg(debug_assertions)]
             debug: DebugRenderer::default(),
         }
     }
@@ -190,6 +195,12 @@ impl Renderer {
             &self.offscreen_view
         ));
 
+        #[cfg(debug_assertions)]
+        self.init_debug();
+    }
+
+    #[cfg(debug_assertions)]
+    fn init_debug(&mut self) {
         self.debug.draw_edges = true;
     }
 
@@ -212,13 +223,19 @@ impl Renderer {
 
         self.render(&mut ctx, world, None);
 
-        if self.debug.draw_edges {
-            self.render(&mut ctx, world, Some(DEBUG_EDGES_SHADER_ID));
-        }
+        #[cfg(debug_assertions)]
+        self.render_debug(&mut ctx, world);
 
         self.end_render(world, ctx);
 
         true
+    }
+
+    #[cfg(debug_assertions)]
+    pub fn render_debug(&mut self, ctx: &mut RenderContext, world: &mut World) {
+        if self.debug.draw_edges {
+            self.render(ctx, world, Some(DEBUG_EDGES_SHADER_ID));
+        }
     }
 
     pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
