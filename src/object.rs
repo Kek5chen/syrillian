@@ -14,6 +14,8 @@ use crate::hacks;
 use crate::transform::Transform;
 use crate::world::World;
 
+use crate::components::InternalComponentDeletion;
+
 #[derive(Debug, Copy, Clone, Eq, Ord, PartialOrd, PartialEq, Hash)]
 #[repr(transparent)]
 pub struct GameObjectId(pub usize);
@@ -52,14 +54,18 @@ pub struct GameObject {
 }
 
 impl GameObject {
-    pub fn add_child(&mut self, mut child: GameObjectId) {
-        // if child had a parent, remove it from there
-        if let Some(mut parent) = child.parent {
-            let pos_opt = parent.children.iter().find_position(|other| child.0 == other.0).map(|(id, _)| id);
+    pub fn unlink(&mut self) {
+        if let Some(mut parent) = self.parent.take() {
+            let pos_opt = parent.children.iter().find_position(|other| self.id.0 == other.0).map(|(id, _)| id);
             if let Some(pos) = pos_opt {
                 parent.children.remove(pos);
             }
         }
+    }
+
+    pub fn add_child(&mut self, mut child: GameObjectId) {
+        // if child had a parent, remove it from there
+        child.unlink();
 
         self.children.push(child);
         child.parent = Some(self.id);
@@ -102,6 +108,23 @@ impl GameObject {
             }
         }
         None
+    }
+
+    pub fn delete(&mut self) {
+        for child in &mut self.children {
+            child.delete();
+        }
+
+        for comp in self.components.drain(..) {
+            let mut comp = comp.borrow_mut();
+            unsafe {
+                comp.delete_internal();
+            }
+        }
+
+        self.children.clear();
+
+        World::instance().unlink_internal(self.id);
     }
 }
 

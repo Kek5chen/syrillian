@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
+use itertools::Itertools;
 use log::info;
 use crate::asset_management::AssetManager;
 use crate::components::{CameraComp, Component};
@@ -181,6 +182,21 @@ impl World {
                 }
             }
         }
+    }
+
+    pub fn delete_object(&mut self, mut object: GameObjectId) {
+        object.delete();
+    }
+
+    pub(crate) fn unlink_internal(&mut self, mut caller: GameObjectId) {
+        if let Some((id, _)) = self.children
+            .iter()
+            .find_position(|c| c.0 == caller.0) {
+            self.children.remove(id);
+        }
+
+        caller.unlink();
+        self.objects.remove(&caller);
     }
 
     pub fn shutdown(&mut self) {

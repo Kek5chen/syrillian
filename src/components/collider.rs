@@ -56,6 +56,17 @@ impl Component for Collider3D {
         }
     }
 
+    unsafe fn delete(&mut self) {
+        let world = World::instance();
+
+        world.physics.collider_set.remove(
+            self.phys_handle, 
+            &mut world.physics.island_manager, 
+            &mut world.physics.rigid_body_set, 
+            true
+        );
+    }
+
     unsafe fn get_parent(&self) -> GameObjectId {
         self.parent
     }

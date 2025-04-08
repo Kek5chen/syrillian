@@ -55,6 +55,19 @@ impl Component for RigidBodyComponent {
         }
     }
 
+    unsafe fn delete(&mut self) {
+        let world = World::instance();
+
+        world.physics.rigid_body_set.remove(
+            self.body_handle, 
+            &mut world.physics.island_manager, 
+            &mut world.physics.collider_set, 
+            &mut world.physics.impulse_joint_set, 
+            &mut world.physics.multibody_joint_set,
+            true
+        );
+    }
+
     unsafe fn get_parent(&self) -> GameObjectId {
         self.parent
     }

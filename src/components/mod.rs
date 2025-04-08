@@ -40,6 +40,21 @@ pub trait Component: Any {
     // Gets called after physics have evolved
     unsafe fn post_update(&mut self) {}
 
+    // Gets called when the component is about to be deleted
+    unsafe fn delete(&mut self) {}
+
     #[allow(clippy::mut_from_ref)]
     unsafe fn get_parent(&self) -> GameObjectId;
+}
+
+pub(crate) trait InternalComponentDeletion {
+    unsafe fn delete_internal(&mut self);
+}
+
+impl InternalComponentDeletion for dyn Component {
+    unsafe fn delete_internal(&mut self) {
+        unsafe {
+            self.delete();
+        }
+    }
 }
