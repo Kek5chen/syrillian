@@ -5,7 +5,6 @@
   };
 
   outputs = {
-    self,
     nixpkgs,
     flake-utils,
     ...
@@ -16,7 +15,7 @@
     
         pkgs = import nixpkgs { inherit system; };
         lib = pkgs.lib;
-      in with pkgs; rec {
+      in with pkgs; {
         devShell = mkShell rec {
           buildInputs = [
             libxkbcommon
