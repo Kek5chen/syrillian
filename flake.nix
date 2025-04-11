@@ -38,13 +38,13 @@
             # WINIT_UNIX_BACKEND=wayland
             wayland
 
-            ## WINIT_UNIX_BACKEND=x11
+            # WINIT_UNIX_BACKEND=x11
             xorg.libXcursor
             xorg.libXrandr
             xorg.libXi
             xorg.libX11
 
-            ## To make Vulkan available
+            # To make Vulkan available
             vulkan-headers
             vulkan-loader
             vulkan-validation-layers
