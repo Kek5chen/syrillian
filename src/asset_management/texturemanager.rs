@@ -1,4 +1,6 @@
 use std::collections::HashMap;
+use std::error::Error;
+use std::fs;
 use std::rc::Rc;
 
 use wgpu::{AddressMode, Device, Extent3d, FilterMode, Queue, SamplerDescriptor, TextureAspect, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages, TextureViewDescriptor, TextureViewDimension};
@@ -125,6 +127,33 @@ impl TextureManager {
         self.next_id += 1;
 
         id
+    }
+
+    pub fn load_image_from_memory(&mut self, bytes: &[u8]) -> Result<TextureId, Box<dyn Error>> {
+        let diffuse_image = image::load_from_memory(bytes)?;
+        let rgba = diffuse_image.into_rgba8();
+
+        let mut data = Vec::with_capacity((rgba.width() * rgba.height() * 4) as usize);
+        for pixel in rgba.pixels() {
+            data.push(pixel[2]); // B
+            data.push(pixel[1]); // G
+            data.push(pixel[0]); // R
+            data.push(pixel[3]); // A
+        }
+
+        let tex = self.add_texture(
+            rgba.width(),
+            rgba.height(),
+            TextureFormat::Bgra8UnormSrgb,
+            Some(data),
+        );
+
+        Ok(tex)
+    }
+
+    pub fn load_image(&mut self, path: &str) -> Result<TextureId, Box<dyn Error>> {
+        let bytes = fs::read(path)?;
+        self.load_image_from_memory(&bytes)
     }
 
     fn get_internal_texture_mut(&mut self, texture: TextureId) -> Option<&mut Texture> {

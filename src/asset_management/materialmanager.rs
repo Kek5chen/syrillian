@@ -29,6 +29,7 @@ pub struct Material {
     pub shininess: f32,
     pub shininess_texture: Option<TextureId>,
     pub opacity: f32,
+    // Not honored yet
     pub shader: ShaderId,
 }
 

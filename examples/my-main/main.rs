@@ -98,23 +98,9 @@ fn funnyinit(world: &mut World, _window: &Window) -> Result<(), Box<dyn Error>> 
 
     world.input.set_mouse_mode(true);
 
-    const NECO_ARC_JPG: &[u8; 1293] = include_bytes!("neco.jpg");
+    const NECO_ARC_JPG: &[u8; 1293] = include_bytes!("../neco.jpg");
 
-    let diffuse_image = image::load_from_memory(NECO_ARC_JPG)?;
-    let rgba = diffuse_image.into_rgba8();
-    let mut data = Vec::with_capacity((rgba.width() * rgba.height() * 4) as usize);
-    for pixel in rgba.pixels() {
-        data.push(pixel[2]); // B
-        data.push(pixel[1]); // G
-        data.push(pixel[0]); // R
-        data.push(pixel[3]); // A
-    }
-    let neco_arc_tex = world.assets.textures.add_texture(
-        rgba.width(),
-        rgba.height(),
-        TextureFormat::Bgra8UnormSrgb,
-        Some(data),
-    );
+    let neco_arc_tex = world.assets.textures.load_image_from_memory(NECO_ARC_JPG)?;
 
     let neco_material = world.assets.materials.add_material(Material {
         name: "necoarc".to_string(),
