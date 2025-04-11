@@ -75,9 +75,13 @@ impl State {
             caps.present_modes.first().cloned().unwrap_or(PresentMode::Fifo)
         };
 
+        if !caps.formats.contains(&TextureFormat::Bgra8UnormSrgb) {
+            panic!("Can only run on Bgra8UnormSrgb currently, but it's not supported by your GPU. Available: {:?}", caps.formats);
+        }
+
         let config = SurfaceConfiguration {
             usage: TextureUsages::RENDER_ATTACHMENT,
-            format: *caps.formats.first().unwrap(),
+            format: TextureFormat::Bgra8UnormSrgb,
             width: size.width,
             height: size.height,
             desired_maximum_frame_latency: 2,
