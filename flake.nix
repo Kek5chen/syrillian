@@ -53,6 +53,7 @@
           LD_LIBRARY_PATH = "${lib.makeLibraryPath buildInputs}";
         };
 
+        # I give up. I abandon this for now.
         packages."windows-cross" = let
           winPkgs = import nixpkgs {
             system = system;
@@ -60,6 +61,18 @@
               config = "x86_64-w64-mingw32";
             };
           };
+          assimpCross = winPkgs.assimp.overrideAttrs (old: {
+              outputs = [ "out" ];
+            
+              cmakeFlags = [ # This also disregards the built of assimp tools
+                "-DCMAKE_INSTALL_PREFIX=${placeholder "out"}"
+                "-DASSIMP_BUILD_TESTS=OFF"
+                "-DASSIMP_WARNINGS_AS_ERRORS=OFF"
+                "-DBUILD_SHARED_LIBS=OFF"
+              ];
+
+              buildInputs = [ winPkgs.zlib ]; 
+            });
         in 
         winPkgs.rustPlatform.buildRustPackage rec {
           pname = "syrillian";
@@ -74,25 +87,39 @@
           #  pkgs.pkg-config
           #];
 
-          buildInputs = with winPkgs; [
-            openssl
-            (assimp.overrideAttrs (old: {
-              outputs = [ "out" ];
-            
-              cmakeFlags = old.cmakeFlags ++ [
-                "-DCMAKE_INSTALL_PREFIX=${placeholder "out"}"
-                "-DASSIMP_BUILD_TESTS=OFF"
-                "-DASSIMP_WARNINGS_AS_ERRORS=OFF"
-                "-DBUILD_SHARED_LIBS=OFF"
-              ];
-
-              buildInputs = [ zlib ]; 
-            }))
-            windows.mingw_w64_pthreads
+          nativeBuildInputs = [
+            pkgs.pkg-config
           ];
 
-          LD_LIBRARY_PATH = "${lib.makeLibraryPath buildInputs}";
-          #CARGO_TARGET_X86_64_PC_WINDOWS_GNU_RUSTFLAGS = "-L native=${winPkgs.assimp}/lib";
+          buildInputs = with winPkgs; [
+            winPkgs.openssl.dev
+            pkgs.rustPlatform.bindgenHook
+
+            zlib
+            assimpCross
+          ];
+
+          cargoBuildFlags = [
+            "--example necoarc"
+          ];
+
+          #LD_LIBRARY_PATH = "${lib.makeLibraryPath buildInputs}";
+          CARGO_BUILD_TARGET = "x86_64-pc-windows-gnu";
+          CARGO_TARGET_X86_64_PC_WINDOWS_GNU_RUSTFLAGS = [
+            #"-L" "native=${winPkgs.windows.mcfgthreads}/lib"
+            #"-L" "native=${(pkgs.pkgsCross.mingwW64.zstd.override {
+            #    enableStatic = true;
+            #  }).out}/lib"
+
+            #"-L" "native=${(winPkgs.zstd.override {
+            #  enableStatic = true;
+            #}).out}/lib"
+            #"-l" "static=zstd"
+
+            "-C" "target-feature=+crt-static"
+          ];
+          #PKG_CONFIG_PATH = "${pkgs.openssl.dev}/lib/pkgconfig";
+
         };
       }
     );
