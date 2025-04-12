@@ -74,7 +74,7 @@ impl Drawable for MeshRenderer {
         )
     }
 
-    unsafe fn draw(&self, world: &mut World, rpass: &mut RenderPass) {
+    fn draw(&self, world: &mut World, rpass: &mut RenderPass) {
         let runtime_mesh: *const RuntimeMesh = world
             .assets
             .meshes

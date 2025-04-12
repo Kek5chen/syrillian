@@ -13,7 +13,7 @@ pub struct RotateComponent {
 }
 
 impl Component for RotateComponent {
-    unsafe fn new(parent: GameObjectId) -> Self
+    fn new(parent: GameObjectId) -> Self
     where
         Self: Sized,
     {
@@ -25,8 +25,8 @@ impl Component for RotateComponent {
         }
     }
 
-    unsafe fn update(&mut self) {
-        let transform = unsafe { &mut self.get_parent().transform };
+    fn update(&mut self) {
+        let transform = &mut self.get_parent().transform;
         let delta_time = World::instance().get_delta_time().as_secs_f32();
 
         let x_angle_radians = (self.iteration / 100.0).sin() * 45.0f32.to_radians();
@@ -41,7 +41,7 @@ impl Component for RotateComponent {
         self.iteration += delta_time;
     }
 
-    unsafe fn get_parent(&self) -> GameObjectId {
+    fn get_parent(&self) -> GameObjectId {
         self.parent
     }
 }

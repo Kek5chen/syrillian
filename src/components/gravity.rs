@@ -12,7 +12,7 @@ pub struct GravityComp {
 }
 
 impl Component for GravityComp {
-    unsafe fn new(parent: GameObjectId) -> Self {
+    fn new(parent: GameObjectId) -> Self {
         GravityComp {
             acceleration_per_sec: 9.80665,
             velocity: 0.0,
@@ -21,16 +21,16 @@ impl Component for GravityComp {
         }
     }
 
-    unsafe fn update(&mut self) {
+    fn update(&mut self) {
         let delta_time = World::instance().get_delta_time().as_secs_f32();
 
         self.velocity = (self.velocity - self.acceleration_per_sec * delta_time)
             .clamp(-self.max_acceleration, self.max_acceleration);
-        let transform = unsafe { &mut self.get_parent().transform };
+        let transform = &mut self.get_parent().transform;
         transform.translate(Vector3::new(0.0, self.velocity, 0.0));
     }
 
-    unsafe fn get_parent(&self) -> GameObjectId {
+    fn get_parent(&self) -> GameObjectId {
         self.parent
     }
 }

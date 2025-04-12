@@ -1,4 +1,6 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
+use std::rc::Rc;
 use std::time::{Duration, Instant};
 use itertools::Itertools;
 use log::info;
@@ -146,6 +148,24 @@ impl World {
             .find(|(_, o)| o.name == name)
             .map(|o| o.0)
             .cloned()
+    }
+
+    pub fn get_all_components_of_type<C: Component + 'static>(&self) -> Vec<Rc<RefCell<Box<C>>>> {
+        let mut collection = Vec::new();
+
+        for child in &self.children {
+            Self::get_components_of_children(&mut collection, *child);
+        }
+
+        collection
+    }
+
+    fn get_components_of_children<C: Component + 'static>(collection: &mut Vec<Rc<RefCell<Box<C>>>>, obj: GameObjectId) {
+        for child in &obj.children {
+            Self::get_components_of_children(collection, *child);
+        }
+        
+        collection.extend(obj.get_components::<C>());
     }
 
     pub fn print_objects(&self) {

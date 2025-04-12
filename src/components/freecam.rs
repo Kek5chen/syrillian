@@ -14,7 +14,7 @@ pub struct FreecamController {
 }
 
 impl Component for FreecamController {
-	unsafe fn new(parent: GameObjectId) -> Self
+	fn new(parent: GameObjectId) -> Self
 	where
 		Self: Sized,
 	{
@@ -27,9 +27,9 @@ impl Component for FreecamController {
 		}
 	}
 
-	unsafe fn update(&mut self) {
+	fn update(&mut self) {
 		let delta_time = World::instance().get_delta_time().as_secs_f32();
-		let transform = unsafe { &mut self.get_parent().transform };
+		let transform = &mut self.get_parent().transform;
 		
 		let input = &World::instance().input;
 
@@ -77,7 +77,7 @@ impl Component for FreecamController {
 		}
 	}
 
-	unsafe fn get_parent(&self) -> GameObjectId {
+	fn get_parent(&self) -> GameObjectId {
 		self.parent
 	}
 }

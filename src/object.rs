@@ -22,17 +22,17 @@ pub struct GameObjectId(pub usize);
 
 #[allow(dead_code)]
 impl GameObjectId {
-    pub(crate) fn exists(&self) -> bool {
+    pub fn exists(&self) -> bool {
         World::instance().objects.contains_key(self)
     }
 }
 
-// TODO: Get rid if this unwrap. Instead actually returning a Option would make more sense and
-// should be handled for additional safety
+// USING and STORING a GameObjectId is like a contract. It defines that you will recheck the
+// existance of this game object every time you re-use it. Otherwise you will crash.
 impl Deref for GameObjectId {
     type Target = GameObject;
 
-    fn deref(&self) -> &Self::Target {
+    fn deref(&self) -> &GameObject {
         World::instance().get_object(self).unwrap()
     }
 }
@@ -110,6 +110,24 @@ impl GameObject {
         None
     }
 
+    // FIXME: The thing above also counts here
+    pub fn get_components<C: Component + 'static>(&self) -> Vec<Rc<RefCell<Box<C>>>> {
+        let mut components = Vec::new();
+        for component in &self.components {
+            let raw_ptr: *const Box<dyn Component> = component.as_ptr();
+            let type_id = unsafe { (**raw_ptr).type_id() };
+
+            if type_id == TypeId::of::<C>() {
+                unsafe {
+                    let rc_clone = Rc::clone(component);
+                    let component = mem::transmute::<Rc<RefCell<Box<dyn Component>>>, Rc<RefCell<Box<C>>>>(rc_clone);
+                    components.push(component);
+                }
+            }
+        }
+        components
+    }
+
     pub fn delete(&mut self) {
         for child in &mut self.children {
             child.delete();
@@ -117,9 +135,7 @@ impl GameObject {
 
         for comp in self.components.drain(..) {
             let mut comp = comp.borrow_mut();
-            unsafe {
-                comp.delete_internal();
-            }
+            comp.delete_internal();
         }
 
         self.children.clear();

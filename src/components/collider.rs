@@ -14,7 +14,7 @@ pub struct Collider3D {
 }
 
 impl Component for Collider3D {
-    unsafe fn new(parent: GameObjectId) -> Self
+    fn new(parent: GameObjectId) -> Self
     where
         Self: Sized,
     {
@@ -33,7 +33,7 @@ impl Component for Collider3D {
         }
     }
 
-    unsafe fn update(&mut self) {
+    fn update(&mut self) {
         let body_comp = (*self.parent).get_component::<RigidBodyComponent>();
         if let Some(body_comp) = body_comp {
             if self.linked_to_body.is_none() {
@@ -56,7 +56,7 @@ impl Component for Collider3D {
         }
     }
 
-    unsafe fn delete(&mut self) {
+    fn delete(&mut self) {
         let world = World::instance();
 
         world.physics.collider_set.remove(
@@ -67,7 +67,7 @@ impl Component for Collider3D {
         );
     }
 
-    unsafe fn get_parent(&self) -> GameObjectId {
+    fn get_parent(&self) -> GameObjectId {
         self.parent
     }
 }

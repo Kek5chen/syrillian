@@ -11,7 +11,7 @@ pub struct RigidBodyComponent {
 }
 
 impl Component for RigidBodyComponent {
-    unsafe fn new(parent: GameObjectId) -> Self {
+    fn new(parent: GameObjectId) -> Self {
         let initial_translation = parent.transform.position();
         let initial_rotation = parent.transform.rotation().euler_vector();
         let rigid_body = RigidBodyBuilder::dynamic()
@@ -27,7 +27,7 @@ impl Component for RigidBodyComponent {
         }
     }
 
-    unsafe fn late_update(&mut self) {
+    fn late_update(&mut self) {
         let rb = World::instance()
             .physics
             .rigid_body_set
@@ -40,22 +40,20 @@ impl Component for RigidBodyComponent {
         }
     }
 
-    unsafe fn post_update(&mut self) {
+    fn post_update(&mut self) {
         let rb = World::instance()
             .physics
             .rigid_body_set
             .get_mut(self.body_handle);
         if let Some(rb) = rb {
             if rb.is_dynamic() {
-                unsafe {
-                    self.get_parent().transform.set_position(*rb.translation());
-                    self.get_parent().transform.set_rotation(*rb.rotation());
-                }
+                self.get_parent().transform.set_position(*rb.translation());
+                self.get_parent().transform.set_rotation(*rb.rotation());
             }
         }
     }
 
-    unsafe fn delete(&mut self) {
+    fn delete(&mut self) {
         let world = World::instance();
 
         world.physics.rigid_body_set.remove(
@@ -68,7 +66,7 @@ impl Component for RigidBodyComponent {
         );
     }
 
-    unsafe fn get_parent(&self) -> GameObjectId {
+    fn get_parent(&self) -> GameObjectId {
         self.parent
     }
 }

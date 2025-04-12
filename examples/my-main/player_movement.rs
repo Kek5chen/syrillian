@@ -21,7 +21,7 @@ pub struct PlayerMovement {
 }
 
 impl Component for PlayerMovement {
-	unsafe fn new(parent: GameObjectId) -> Self
+	fn new(parent: GameObjectId) -> Self
 	where
 		Self: Sized
 	{
@@ -36,10 +36,8 @@ impl Component for PlayerMovement {
 		}
 	}
 
-	unsafe fn init(&mut self) {
-    let rigid = unsafe {
-        self.get_parent().get_component::<RigidBodyComponent>()
-    };
+	fn init(&mut self) {
+    let rigid = self.get_parent().get_component::<RigidBodyComponent>();
 		if let Some(rigid) = rigid.clone() {
 			if let Some(rigid) = rigid
 				.borrow_mut()
@@ -51,7 +49,7 @@ impl Component for PlayerMovement {
 		self.rigid_body = rigid;
 	}
 
-	unsafe fn update(&mut self) {
+	fn update(&mut self) {
 		let mut rigid = match &self.rigid_body {
 			None => {
 				warn!("Rigid body not set!");
@@ -116,7 +114,7 @@ impl Component for PlayerMovement {
 		body.set_linvel(linvel, true);
 	}
 
-	unsafe fn get_parent(&self) -> GameObjectId {
+	fn get_parent(&self) -> GameObjectId {
 		self.parent
 	}
 }

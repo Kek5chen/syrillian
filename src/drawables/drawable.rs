@@ -20,5 +20,5 @@ pub trait Drawable: Any {
         queue: &Queue,
         outer_transform: &Matrix4<f32>,
     );
-    unsafe fn draw(&self, world: &mut World, rpass: &mut RenderPass);
+    fn draw(&self, world: &mut World, rpass: &mut RenderPass);
 }

@@ -13,25 +13,23 @@ pub struct CameraComp {
 
 impl CameraComp {
     pub fn resize(&mut self, width: f32, height: f32) {
-        self.projection = Perspective3::new(width / height, 60f32.to_radians(), 0.01, 1000.0);
+        self.projection = Perspective3::new(width / height, 125f32.to_radians(), 0.01, 1000.0);
     }
 }
 
 impl Component for CameraComp {
-    unsafe fn new(parent: GameObjectId) -> Self {
+    fn new(parent: GameObjectId) -> Self {
         CameraComp {
             projection: Perspective3::new(800.0 / 600.0, 60f32.to_radians(), 0.01, 1000.0),
             parent,
         }
     }
 
-    unsafe fn init(&mut self) {
-        unsafe {
-            self.get_parent().transform.set_compound_pos_first(true);
-        }
+    fn init(&mut self) {
+        self.get_parent().transform.set_compound_pos_first(true);
     }
 
-    unsafe fn get_parent(&self) -> GameObjectId {
+    fn get_parent(&self) -> GameObjectId {
         self.parent
     }
 }

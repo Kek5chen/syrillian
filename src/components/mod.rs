@@ -24,37 +24,35 @@ pub mod freecam;
 
 // TODO: resolve unsafe hell
 pub trait Component: Any {
-    unsafe fn new(parent: GameObjectId) -> Self
+    fn new(parent: GameObjectId) -> Self
     where
         Self: Sized;
     
     // Gets called when the game object is created directly after new
-    unsafe fn init(&mut self) {}
+    fn init(&mut self) {}
     
     // Gets called when the component should update anything state related
-    unsafe fn update(&mut self) {}
+    fn update(&mut self) {}
     
     // Gets called when the component should update any state that's necessary for physics
-    unsafe fn late_update(&mut self) {}
+    fn late_update(&mut self) {}
 
     // Gets called after physics have evolved
-    unsafe fn post_update(&mut self) {}
+    fn post_update(&mut self) {}
 
     // Gets called when the component is about to be deleted
-    unsafe fn delete(&mut self) {}
+    fn delete(&mut self) {}
 
     #[allow(clippy::mut_from_ref)]
-    unsafe fn get_parent(&self) -> GameObjectId;
+    fn get_parent(&self) -> GameObjectId;
 }
 
 pub(crate) trait InternalComponentDeletion {
-    unsafe fn delete_internal(&mut self);
+    fn delete_internal(&mut self);
 }
 
 impl InternalComponentDeletion for dyn Component {
-    unsafe fn delete_internal(&mut self) {
-        unsafe {
-            self.delete();
-        }
+    fn delete_internal(&mut self) {
+        self.delete();
     }
 }
