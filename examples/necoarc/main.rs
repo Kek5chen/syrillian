@@ -2,7 +2,7 @@ use std::error::Error;
 
 use log::error;
 use nalgebra::Vector3;
-use syrillian::{asset_management::{materialmanager::Material, Mesh, DIM3_SHADER_ID, FALLBACK_SHADER_ID}, buffer::{CUBE, CUBE_INDICES}, components::RotateComponent, drawables::MeshRenderer, scene_loader::SceneLoader, App, World};
+use syrillian::{asset_management::{materialmanager::Material, Mesh, FALLBACK_SHADER_ID}, buffer::{CUBE, CUBE_INDICES}, components::RotateComponent, drawables::MeshRenderer, App, World};
 use winit::window::Window;
 
 #[tokio::main]
