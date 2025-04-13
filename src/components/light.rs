@@ -7,6 +7,7 @@ use super::Component;
 
 #[repr(C)]
 #[derive(Copy, Clone, Default)]
+// Need padding for 16-bytes GPU Uniform alignment
 pub(crate) struct ShaderPointlight {
     pub(crate) pos: Vector3<f32>,
     pub(crate) radius: f32,
@@ -60,10 +61,12 @@ impl PointLightComponent {
     }
 
     pub fn set_radius(&mut self, radius: f32) {
+        let radius = radius.max(0.0);
         self.inner.radius = radius;
     }
 
     pub fn set_intensity(&mut self, intensity: f32) {
+        let intensity = intensity.max(0.0);
         self.inner.intensity = intensity;
     }
 
