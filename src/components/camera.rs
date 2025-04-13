@@ -6,20 +6,20 @@ use crate::object::GameObjectId;
 use crate::transform::Transform;
 use crate::utils::math::QuaternionEuler;
 
-pub struct CameraComp {
+pub struct CameraComponent {
     pub projection: Perspective3<f32>,
     parent: GameObjectId,
 }
 
-impl CameraComp {
+impl CameraComponent {
     pub fn resize(&mut self, width: f32, height: f32) {
         self.projection = Perspective3::new(width / height, 125f32.to_radians(), 0.01, 1000.0);
     }
 }
 
-impl Component for CameraComp {
+impl Component for CameraComponent {
     fn new(parent: GameObjectId) -> Self {
-        CameraComp {
+        CameraComponent {
             projection: Perspective3::new(800.0 / 600.0, 60f32.to_radians(), 0.01, 1000.0),
             parent,
         }

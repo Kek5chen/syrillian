@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 use itertools::Itertools;
 use log::info;
 use crate::asset_management::AssetManager;
-use crate::components::{CameraComp, Component};
+use crate::components::{CameraComponent, Component};
 use crate::input::input_manager::InputManager;
 use crate::object::{GameObject, GameObjectId};
 use crate::physics::simulator::PhysicsSimulator;
@@ -95,7 +95,7 @@ impl World {
         let mut obj = self.new_object("Camera");
         obj.transform.set_compound_pos_first(true);
 
-        obj.add_component::<CameraComp>();
+        obj.add_component::<CameraComponent>();
 
         if self.active_camera.is_none() {
             self.active_camera = Some(obj);

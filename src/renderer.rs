@@ -10,7 +10,7 @@ use winit::window::Window;
 use crate::asset_management::bindgroup_layout_manager::{CAMERA_UBGL_ID, POST_PROCESS_BGL_ID};
 use crate::asset_management::shadermanager::{ShaderId, DIM3_SHADER_ID, FALLBACK_SHADER_ID, POST_PROCESS_SHADER_ID};
 use crate::components::camera::CameraData;
-use crate::components::CameraComp;
+use crate::components::CameraComponent;
 use crate::object::GameObjectId;
 use crate::state::State;
 use crate::world::World;
@@ -317,8 +317,8 @@ impl Renderer {
         let camera_rc = unsafe { (*world_ptr).active_camera.as_ref().unwrap() };
 
         let camera = camera_rc;
-        let camera_comp: Option<Rc<RefCell<Box<CameraComp>>>> =
-            camera.get_component::<CameraComp>();
+        let camera_comp: Option<Rc<RefCell<Box<CameraComponent>>>> =
+            camera.get_component::<CameraComponent>();
         if camera_comp.is_none() {
             debug!("Camera didn't have a camera component");
             return;

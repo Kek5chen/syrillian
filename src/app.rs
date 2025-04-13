@@ -8,7 +8,7 @@ use winit::event::{DeviceEvent, DeviceId, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{WindowAttributes, WindowId};
 
-use crate::components::CameraComp;
+use crate::components::CameraComponent;
 use crate::logichooks::{HookFunc, LogicHooks};
 use crate::renderer::Renderer;
 use crate::world::World;
@@ -183,7 +183,7 @@ impl ApplicationHandler for App {
                 // For I have sinned, this now becomes my recovery.
                 // I was forgiven, shall it come haunt me later.
                 if let Some(cam) = world.active_camera {
-                    if let Some(cam_comp) = cam.get_component::<CameraComp>() {
+                    if let Some(cam_comp) = cam.get_component::<CameraComponent>() {
                         if let Ok(mut comp) = cam_comp.try_borrow_mut() {
                             comp.resize(size.width as f32, size.height as f32);
                         }

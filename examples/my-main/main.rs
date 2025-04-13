@@ -7,7 +7,6 @@ use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::error::Error;
 use std::sync::Mutex;
-use wgpu::TextureFormat;
 use winit::event::MouseButton;
 use winit::keyboard::KeyCode;
 use winit::window::{CursorGrabMode, Window};

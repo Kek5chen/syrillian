@@ -1,7 +1,7 @@
 use std::any::Any;
 
 #[allow(unused_imports)]
-pub use camera::CameraComp;
+pub use camera::CameraComponent;
 #[allow(unused_imports)]
 pub use collider::Collider3D;
 #[allow(unused_imports)]
