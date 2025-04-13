@@ -6,12 +6,14 @@ use crate::object::GameObjectId;
 use super::Component;
 
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Default)]
 pub(crate) struct ShaderPointlight {
     pub(crate) pos: Vector3<f32>,
     pub(crate) radius: f32,
     pub(crate) intensity: f32,
+    pub(crate) _pad1: [u32; 3],
     pub(crate) color: Vector3<f32>,
+    pub(crate) _pad2: u32,
 }
 
 unsafe impl Zeroable for ShaderPointlight {}
@@ -30,9 +32,11 @@ impl Component for PointLightComponent {
                 parent,
                 inner: ShaderPointlight {
                     pos: parent.transform.position(),
-                    radius: 1.0,
+                    radius: 100.0,
                     intensity: 1.0,
-                    color: Vector3::new(255.0, 255.0, 255.0),
+                    _pad1: [0, 0, 0],
+                    color: Vector3::new(1.0, 1.0, 1.0),
+                    _pad2: 0,
                 }
             }
     }
@@ -51,12 +55,20 @@ impl PointLightComponent {
         self.inner.intensity
     }
 
+    pub fn color(&self) -> &Vector3<f32> {
+        &self.inner.color
+    }
+
     pub fn set_radius(&mut self, radius: f32) {
         self.inner.radius = radius;
     }
 
     pub fn set_intensity(&mut self, intensity: f32) {
         self.inner.intensity = intensity;
+    }
+
+    pub fn set_color(&mut self, color: Vector3<f32>) {
+        self.inner.color = color;
     }
 
     pub(crate) fn update_inner_pos(&mut self) {

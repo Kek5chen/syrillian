@@ -7,18 +7,18 @@ struct VInput {
 }
 
 struct VOutput {
-    @builtin(position) position: vec4<f32>,
+    @builtin(position) clip_pos: vec4<f32>,
     @location(0) tex_coords: vec2<f32>,
-    @location(1) frag_pos: vec3<f32>,
-    @location(2) vnorm: vec3<f32>,
-    @location(3) tangent: vec3<f32>,
-    @location(4) bitangent: vec3<f32>,
+    @location(1) world_pos: vec3<f32>,
+    @location(2) world_normal: vec3<f32>,
+    @location(3) world_tangent: vec3<f32>,
+    @location(4) world_bitangent: vec3<f32>,
 }
 
 struct CameraData {
     pos: vec3<f32>,
-    rot: vec3<f32>,
-    scale: vec3<f32>,
+    rot: vec3<f32>, // redundant?
+    scale: vec3<f32>, // redundant?
     view_mat: mat4x4<f32>,
     projection_mat: mat4x4<f32>,
     view_proj_mat: mat4x4<f32>,
@@ -26,6 +26,9 @@ struct CameraData {
 
 struct ModelData {
     model_mat: mat4x4<f32>,
+    // For correct normal transformation with non-uniform scaling,
+    // add the inverse transpose of the upper 3x3 model matrix:
+    // normal_mat: mat3x3<f32>,
 }
 
 struct Material {
