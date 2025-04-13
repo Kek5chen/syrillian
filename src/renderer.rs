@@ -208,14 +208,14 @@ impl Renderer {
             Ok(ctx) => ctx,
             Err(SurfaceError::Lost) => {
                 self.state.resize(self.state.size);
-                return false;
+                return true; // drop frame but don't cancel
             }
             Err(SurfaceError::OutOfMemory) => {
                 error!("The application ran out of GPU memory!");
                 return false;
             }
             Err(e) => {
-                error!("Surface error: {:?}", e);
+                error!("Surface error: {}", e);
                 return false;
             }
         };
