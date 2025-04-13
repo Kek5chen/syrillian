@@ -1,3 +1,4 @@
+use std::num::NonZeroU32;
 use std::collections::HashMap;
 use std::rc::Rc;
 use wgpu::{BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType, BufferBindingType, Device, SamplerBindingType, ShaderStages, TextureSampleType, TextureViewDimension};
@@ -31,7 +32,8 @@ pub struct BindGroupLayoutManager {
 pub const CAMERA_UBGL_ID: BGLId = 0;
 pub const MODEL_UBGL_ID: BGLId = 1;
 pub const MATERIAL_UBGL_ID: BGLId = 2;
-pub const POST_PROCESS_BGL_ID: BGLId = 3;
+pub const LIGHT_UBGL_ID: BGLId = 3;
+pub const POST_PROCESS_BGL_ID: BGLId = 4;
 
 impl Default for BindGroupLayoutManager {
     fn default() -> Self {
@@ -115,6 +117,35 @@ impl Default for BindGroupLayoutManager {
             },
         ]);
         assert_eq!(id, MATERIAL_UBGL_ID);
+
+        let id = manager.add_bind_group_layout(
+            Some("Light Bind Group Layout"),
+            vec![
+                BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: ShaderStages::FRAGMENT,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None
+                },
+                BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: ShaderStages::FRAGMENT,
+                    ty: BindingType::Buffer { 
+                        ty: BufferBindingType::Storage { 
+                            read_only: true,
+                        },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: Some(NonZeroU32::new(8).unwrap()),
+                },
+            ]
+        );
+        assert_eq!(id, LIGHT_UBGL_ID);
 
         let id = manager.add_bind_group_layout(Some("Post-Processing Bind Group Layout"), vec![
             BindGroupLayoutEntry {

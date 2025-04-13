@@ -37,11 +37,20 @@ struct Material {
     opacity: f32,
 }
 
+struct PointLight {
+    pos: vec3<f32>,
+    radius: f32,
+    intensity: f32,
+    color: vec3<f32>,
+}
+
 @group(0) @binding(0)
 var<uniform> camera: CameraData;
 
+
 @group(1) @binding(0)
 var<uniform> model: ModelData;
+
 
 @group(2) @binding(0)
 var<uniform> material: Material;
@@ -57,3 +66,10 @@ var t_normal: texture_2d<f32>;
 
 @group(2) @binding(4)
 var s_normal: sampler;
+
+
+@group(3) @binding(0)
+var<uniform> point_light_count: u32;
+
+@group(3) @binding(1)
+var<storage, read> point_lights: array<PointLight>;
