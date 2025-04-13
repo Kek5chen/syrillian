@@ -141,7 +141,7 @@ impl Default for BindGroupLayoutManager {
                         has_dynamic_offset: false,
                         min_binding_size: None,
                     },
-                    count: Some(NonZeroU32::new(8).unwrap()),
+                    count: None,
                 },
             ]
         );
