@@ -86,8 +86,7 @@ pub struct Renderer {
 
     post_process_pass: Option<PostProcessPass>,
 
-    #[cfg(debug_assertions)]
-    debug: DebugRenderer,
+    pub debug: DebugRenderer,
 }
 
 impl Renderer {
@@ -151,7 +150,6 @@ impl Renderer {
             offscreen_texture,
             offscreen_view,
             post_process_pass: None,
-            #[cfg(debug_assertions)]
             debug: DebugRenderer::default(),
         }
     }
