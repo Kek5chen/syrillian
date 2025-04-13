@@ -19,7 +19,7 @@ use syrillian::asset_management::mesh::Mesh;
 use syrillian::asset_management::shadermanager::DIM3_SHADER_ID;
 use syrillian::buffer::{CUBE, CUBE_INDICES};
 use syrillian::components::collider::MeshShapeExtra;
-use syrillian::components::{Collider3D, RigidBodyComponent, RotateComponent};
+use syrillian::components::{Collider3D, PointLightComponent, RigidBodyComponent, RotateComponent};
 use syrillian::drawables::mesh_renderer::MeshRenderer;
 use syrillian::scene_loader::SceneLoader;
 use syrillian::world::World;
@@ -123,6 +123,8 @@ fn funnyinit(world: &mut World, _window: &Window) -> Result<(), Box<dyn Error>> 
     cube.transform.set_position(Vector3::new(20.0, -3.9, -40.0));
 
     cube.add_component::<RotateComponent>();
+
+    let point_light = cube.add_component::<PointLightComponent>();
 
     world.add_child(cube);
 

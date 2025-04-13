@@ -376,12 +376,7 @@ impl Renderer {
 
         let light_bgl = world.assets.bind_group_layouts.get_bind_group_layout(LIGHT_UBGL_ID).unwrap();
         let point_light_buffer = if point_light_count == 0 {
-            let dummy_point_light: ShaderPointlight = ShaderPointlight {
-                pos: Vector3::new(f32::MAX, f32::MAX, f32::MAX),
-                radius: 0.0,
-                intensity: 0.0,
-                color: Vector3::zeros(),
-            };
+            let dummy_point_light: ShaderPointlight = ShaderPointlight::default();
             self.state.device.create_buffer_init(&BufferInitDescriptor {
                 label: Some("Empty Point Light Buffer"),
                 usage: BufferUsages::STORAGE,
