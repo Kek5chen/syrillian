@@ -49,9 +49,7 @@ impl State {
                 &DeviceDescriptor {
                     label: Some("Renderer Hardware"),
                     required_features: Features::default() 
-                        | Features::POLYGON_MODE_LINE 
-                        | Features::BUFFER_BINDING_ARRAY 
-                        | Features::STORAGE_RESOURCE_BINDING_ARRAY,
+                        | Features::POLYGON_MODE_LINE,
                     required_limits: Limits::default(),
                     memory_hints: MemoryHints::default(),
                 },
