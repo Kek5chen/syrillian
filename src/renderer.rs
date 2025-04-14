@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use std::rc::Rc;
 
 use log::{debug, error};
-use nalgebra::{Matrix4, Perspective3, Vector3};
+use nalgebra::{Matrix4, Perspective3};
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::*;
 use winit::window::Window;
@@ -137,12 +137,12 @@ impl Renderer {
         (uniform_buffer, uniform_bind_group)
     }
 
-    pub(crate) async fn new(window: Window) -> Self {
-        let state = Box::new(State::new(&window).await);
+    pub(crate) async fn new(window: Window) -> Result<Self, Box<dyn std::error::Error>> {
+        let state = Box::new(State::new(&window).await?);
 
         let (offscreen_texture, offscreen_view) = Self::create_offscreen_texture(&state.device, state.config.width, state.config.height, state.config.format);
 
-        Renderer {
+        Ok(Renderer {
             state,
             window,
             current_pipeline: None,
@@ -151,7 +151,7 @@ impl Renderer {
             offscreen_view,
             post_process_pass: None,
             debug: DebugRenderer::default(),
-        }
+        })
     }
 
     fn create_offscreen_texture(device: &Device, width: u32, height: u32, format: TextureFormat) -> (Texture, TextureView) {
