@@ -123,8 +123,7 @@ fn funnyinit(world: &mut World, _window: &Window) -> Result<(), Box<dyn Error>> 
     cube.transform.set_position(Vector3::new(20.0, -3.9, -40.0));
 
     cube.add_component::<RotateComponent>();
-
-    let point_light = cube.add_component::<PointLightComponent>();
+    cube.add_component::<PointLightComponent>();
 
     world.add_child(cube);
 
