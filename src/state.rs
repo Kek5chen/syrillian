@@ -1,3 +1,4 @@
+use std::error::Error;
 use std::rc::Rc;
 use wgpu::{
     Adapter, CompositeAlphaMode, Device, DeviceDescriptor, Extent3d, Features, Instance, Limits, MemoryHints, PowerPreference, PresentMode, Queue, RequestAdapterOptions, Surface, SurfaceConfiguration, Texture, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages
@@ -21,12 +22,12 @@ impl State {
         Instance::default()
     }
 
-    fn setup_surface(instance: &Instance, window: &Window) -> Surface<'static> {
+    fn setup_surface(instance: &Instance, window: &Window) -> Result<Surface<'static>, Box<dyn Error>> {
         unsafe {
             // We are creating a 'static lifetime out of a local reference
             // VERY UNSAFE: Make absolutely sure `window` lives as long as `surface`
-            let surface = instance.create_surface(window).unwrap();
-            std::mem::transmute::<Surface, Surface<'static>>(surface)
+            let surface = instance.create_surface(window)?;
+            Ok(std::mem::transmute::<Surface, Surface<'static>>(surface))
         }
     }
 
@@ -43,21 +44,21 @@ impl State {
             )
     }
 
-    async fn get_device_and_queue(adapter: &Adapter) -> (Rc<Device>, Rc<Queue>) {
+    async fn get_device_and_queue(adapter: &Adapter) -> Result<(Rc<Device>, Rc<Queue>), Box<dyn Error>> {
         let (device, queue) = adapter
             .request_device(
                 &DeviceDescriptor {
                     label: Some("Renderer Hardware"),
                     required_features: Features::default() 
-                        | Features::POLYGON_MODE_LINE,
+                        | Features::POLYGON_MODE_LINE
+                        | Features::BUFFER_BINDING_ARRAY,
                     required_limits: Limits::default(),
                     memory_hints: MemoryHints::default(),
                 },
                 None,
             )
-            .await
-            .unwrap();
-        (Rc::new(device), Rc::new(queue))
+            .await?;
+        Ok((Rc::new(device), Rc::new(queue)))
     }
 
     fn configure_surface(
@@ -65,7 +66,7 @@ impl State {
         surface: &Surface,
         adapter: &Adapter,
         device: &Device,
-    ) -> SurfaceConfiguration {
+    ) -> Result<SurfaceConfiguration, Box<dyn Error>> {
         let caps = surface.get_capabilities(adapter);
 
         let present_mode = if caps.present_modes.contains(&PresentMode::Mailbox) {
@@ -77,7 +78,7 @@ impl State {
         };
 
         if !caps.formats.contains(&TextureFormat::Bgra8UnormSrgb) {
-            panic!("Can only run on Bgra8UnormSrgb currently, but it's not supported by your GPU. Available: {:?}", caps.formats);
+            return Err(format!("Can only run on Bgra8UnormSrgb currently, but it's not supported by your GPU. Available: {:?}", caps.formats).into());
         }
 
         let config = SurfaceConfiguration {
@@ -91,7 +92,7 @@ impl State {
             view_formats: vec![],
         };
         surface.configure(device, &config);
-        config
+        Ok(config)
     }
 
     fn setup_depth_texture(size: &PhysicalSize<u32>, device: &Device) -> Texture {
@@ -111,7 +112,7 @@ impl State {
         })
     }
 
-    pub async fn new(window: &Window) -> Self {
+    pub async fn new(window: &Window) -> Result<Self, Box<dyn Error>> {
         let size = window.inner_size();
         let size = PhysicalSize {
             height: size.height.max(1),
@@ -119,14 +120,14 @@ impl State {
         };
 
         let instance = Self::setup_instance();
-        let surface = Self::setup_surface(&instance, window);
+        let surface = Self::setup_surface(&instance, window)?;
         let adapter = Self::setup_adapter(&instance, &surface).await;
-        let (device, queue) = Self::get_device_and_queue(&adapter).await;
-        let config = Self::configure_surface(&size, &surface, &adapter, &device);
+        let (device, queue) = Self::get_device_and_queue(&adapter).await?;
+        let config = Self::configure_surface(&size, &surface, &adapter, &device)?;
 
         let depth_texture = Self::setup_depth_texture(&size, &device);
 
-        State {
+        Ok(State {
             instance,
             surface,
             device,
@@ -134,7 +135,7 @@ impl State {
             config,
             size,
             depth_texture,
-        }
+        })
     }
 
     pub fn resize(&mut self, mut new_size: PhysicalSize<u32>) {

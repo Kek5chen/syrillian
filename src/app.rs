@@ -120,14 +120,22 @@ impl App {
 
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        info!("RESUMED!");
+        info!("(Re)initializing render state!");
         let window = event_loop
             .create_window(self.window_attributes.clone())
             .unwrap();
 
         self.world.assets.invalidate();
 
-        let mut renderer = block_on(Renderer::new(window));
+        let mut renderer = match block_on(Renderer::new(window)) {
+            Ok(r) => r,
+            Err(e) => {
+                error!("Error when creating renderer: {e}");
+                event_loop.exit();
+                return;
+            }
+        };
+
         let state = &renderer.state;
 
         self.world.assets.init_runtime(state.device.clone(), state.queue.clone());
@@ -149,7 +157,14 @@ impl ApplicationHandler for App {
         window_id: WindowId,
         event: WindowEvent,
     ) {
-        let renderer =  self.renderer.as_mut().unwrap();
+        if event_loop.exiting() {
+            return;
+        }
+
+        let Some(renderer) =  self.renderer.as_mut() else {
+            error!("No renderer.");
+            return;
+        };
         let world = self.world.as_mut();
         if world.is_shutting_down() {
             event_loop.exit();
