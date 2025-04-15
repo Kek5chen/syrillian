@@ -53,7 +53,6 @@
           LD_LIBRARY_PATH = "${lib.makeLibraryPath buildInputs}";
         };
 
-        # I give up. I abandon this for now.
         packages."windows-cross" = let
           winPkgs = import nixpkgs {
             system = system;
@@ -92,8 +91,10 @@
           ];
 
           buildInputs = with winPkgs; [
-            winPkgs.openssl.dev
             pkgs.rustPlatform.bindgenHook
+
+            pkgs.openssl.dev
+            #windows.mcfgthreads
 
             zlib
             assimpCross
@@ -116,10 +117,9 @@
             #}).out}/lib"
             #"-l" "static=zstd"
 
-            "-C" "target-feature=+crt-static"
+            #"-C" "target-feature=+crt-static"
           ];
           #PKG_CONFIG_PATH = "${pkgs.openssl.dev}/lib/pkgconfig";
-
         };
       }
     );
