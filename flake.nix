@@ -55,71 +55,60 @@
 
         packages."windows-cross" = let
           winPkgs = import nixpkgs {
-            system = system;
-            crossSystem = {
-              config = "x86_64-w64-mingw32";
-            };
+            inherit system;
+            crossSystem = { config = "x86_64-w64-mingw32"; };
           };
-          assimpCross = winPkgs.assimp.overrideAttrs (old: {
-              outputs = [ "out" ];
-            
-              cmakeFlags = [ # This also disregards the built of assimp tools
-                "-DCMAKE_INSTALL_PREFIX=${placeholder "out"}"
-                "-DASSIMP_BUILD_TESTS=OFF"
-                "-DASSIMP_WARNINGS_AS_ERRORS=OFF"
-                "-DBUILD_SHARED_LIBS=OFF"
-              ];
 
-              buildInputs = [ winPkgs.zlib ]; 
-            });
+          mcfgStatic = winPkgs.windows.mcfgthreads.overrideAttrs (_: {
+            dontDisableStatic = true;
+          });
+
+          assimpCross = winPkgs.assimp.overrideAttrs (_: {
+            outputs    = [ "out" ];
+            cmakeFlags = [
+              "-DCMAKE_INSTALL_PREFIX=${placeholder "out"}"
+              "-DASSIMP_BUILD_TESTS=OFF"
+              "-DASSIMP_BUILD_ASSIMP_TOOLS=OFF"
+              "-DASSIMP_WARNINGS_AS_ERRORS=OFF"
+              "-DBUILD_SHARED_LIBS=OFF"
+            ];
+            buildInputs = [ winPkgs.zlib ];
+          });
+
+          exampleName = "my-main";
         in 
         winPkgs.rustPlatform.buildRustPackage rec {
           pname = "syrillian";
           version = "0.1.2";
-
           src = ./.;
 
           useCargoFetchVendor = true;
           cargoHash = "sha256-NIhNXbueWXrYmPUrPOZqmyaZONalzJqfhraxmDcOOOc=";
+          dontCargoInstall = true;
 
-          #nativeBuildInputs = [
-          #  pkgs.pkg-config
-          #];
-
-          nativeBuildInputs = [
-            pkgs.pkg-config
-          ];
+          nativeBuildInputs = [ pkgs.pkg-config pkgs.rustPlatform.bindgenHook ];
 
           buildInputs = with winPkgs; [
-            pkgs.rustPlatform.bindgenHook
-
             pkgs.openssl.dev
-            #windows.mcfgthreads
-
             zlib
             assimpCross
+            mcfgStatic
           ];
 
-          cargoBuildFlags = [
-            "--example necoarc"
-          ];
+          installPhase = ''
+            runHook preInstall
+            mkdir -p $out/bin
+            cp target/${CARGO_BUILD_TARGET}/release/examples/*.exe $out/bin/
+            runHook postInstall
+          '';
 
-          #LD_LIBRARY_PATH = "${lib.makeLibraryPath buildInputs}";
+          cargoBuildFlags = [ "--example ${exampleName}" ];
+
           CARGO_BUILD_TARGET = "x86_64-pc-windows-gnu";
           CARGO_TARGET_X86_64_PC_WINDOWS_GNU_RUSTFLAGS = [
-            #"-L" "native=${winPkgs.windows.mcfgthreads}/lib"
-            #"-L" "native=${(pkgs.pkgsCross.mingwW64.zstd.override {
-            #    enableStatic = true;
-            #  }).out}/lib"
-
-            #"-L" "native=${(winPkgs.zstd.override {
-            #  enableStatic = true;
-            #}).out}/lib"
-            #"-l" "static=zstd"
-
-            #"-C" "target-feature=+crt-static"
+            "-C" "target-feature=+crt-static"
+            "-C" "link-arg=-lmcfgthread"
           ];
-          #PKG_CONFIG_PATH = "${pkgs.openssl.dev}/lib/pkgconfig";
         };
       }
     );
