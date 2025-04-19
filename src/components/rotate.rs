@@ -1,5 +1,4 @@
 use nalgebra::{UnitQuaternion, Vector3};
-use rand::random;
 
 use crate::components::Component;
 use crate::object::GameObjectId;
@@ -19,7 +18,7 @@ impl Component for RotateComponent {
     {
         RotateComponent {
             rotate_speed: 50.0f32,
-            iteration: random(), // TODO: is cool but might lead to odd behavior
+            iteration: 0,
             parent,
             y_rot: 0.0,
         }

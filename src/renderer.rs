@@ -7,10 +7,11 @@ use nalgebra::{Matrix4, Perspective3};
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::*;
 use winit::window::Window;
-use crate::asset_management::bindgroup_layout_manager::{CAMERA_UBGL_ID, POST_PROCESS_BGL_ID};
+use crate::asset_management::bindgroup_layout_manager::{CAMERA_UBGL_ID, LIGHT_UBGL_ID, POST_PROCESS_BGL_ID};
 use crate::asset_management::shadermanager::{ShaderId, DIM3_SHADER_ID, FALLBACK_SHADER_ID, POST_PROCESS_SHADER_ID};
 use crate::components::camera::CameraData;
-use crate::components::CameraComponent;
+use crate::components::light::ShaderPointlight;
+use crate::components::{CameraComponent, PointLightComponent};
 use crate::object::GameObjectId;
 use crate::state::State;
 use crate::world::World;
@@ -85,8 +86,7 @@ pub struct Renderer {
 
     post_process_pass: Option<PostProcessPass>,
 
-    #[cfg(debug_assertions)]
-    debug: DebugRenderer,
+    pub debug: DebugRenderer,
 }
 
 impl Renderer {
@@ -137,12 +137,12 @@ impl Renderer {
         (uniform_buffer, uniform_bind_group)
     }
 
-    pub(crate) async fn new(window: Window) -> Self {
-        let state = Box::new(State::new(&window).await);
+    pub(crate) async fn new(window: Window) -> Result<Self, Box<dyn std::error::Error>> {
+        let state = Box::new(State::new(&window).await?);
 
         let (offscreen_texture, offscreen_view) = Self::create_offscreen_texture(&state.device, state.config.width, state.config.height, state.config.format);
 
-        Renderer {
+        Ok(Renderer {
             state,
             window,
             current_pipeline: None,
@@ -150,9 +150,8 @@ impl Renderer {
             offscreen_texture,
             offscreen_view,
             post_process_pass: None,
-            #[cfg(debug_assertions)]
             debug: DebugRenderer::default(),
-        }
+        })
     }
 
     fn create_offscreen_texture(device: &Device, width: u32, height: u32, format: TextureFormat) -> (Texture, TextureView) {
@@ -209,14 +208,14 @@ impl Renderer {
             Ok(ctx) => ctx,
             Err(SurfaceError::Lost) => {
                 self.state.resize(self.state.size);
-                return false;
+                return true; // drop frame but don't cancel
             }
             Err(SurfaceError::OutOfMemory) => {
                 error!("The application ran out of GPU memory!");
                 return false;
             }
             Err(e) => {
-                error!("Surface error: {:?}", e);
+                error!("Surface error: {}", e);
                 return false;
             }
         };
@@ -371,8 +370,57 @@ impl Renderer {
             ..RenderPassDescriptor::default()
         });
 
+        // TODO: cache this if light data doesn't change?
+        let point_lights = World::instance().get_all_components_of_type::<PointLightComponent>();
+        let point_light_count = point_lights.len();
+
+        let light_bgl = world.assets.bind_group_layouts.get_bind_group_layout(LIGHT_UBGL_ID).unwrap();
+        let point_light_buffer = if point_light_count == 0 {
+            let dummy_point_light: ShaderPointlight = ShaderPointlight::default();
+            self.state.device.create_buffer_init(&BufferInitDescriptor {
+                label: Some("Empty Point Light Buffer"),
+                usage: BufferUsages::STORAGE,
+                contents: bytemuck::cast_slice(&[dummy_point_light]),
+            }) 
+        } else {
+            let light_data: Vec<ShaderPointlight> = point_lights
+                .iter()
+                .map(|m| m.borrow_mut())
+                .map(|mut light| {
+                    light.update_inner_pos();
+                    *light.inner()
+                })
+                .collect();
+            let light_bytes = bytemuck::cast_slice(&light_data);
+            self.state.device.create_buffer_init(&BufferInitDescriptor {
+                label: Some("Point Light Buffer"),
+                contents: light_bytes,
+                usage: BufferUsages::STORAGE,
+            })
+        };
+        let light_count_buffer = self.state.device.create_buffer_init(&BufferInitDescriptor {
+            label: Some("Light Count Buffer"),
+            contents: bytemuck::bytes_of(&(point_light_count as u32)),
+            usage: BufferUsages::UNIFORM,
+        });
+        let light_bind_group = self.state.device.create_bind_group(&BindGroupDescriptor {
+            label: Some("Light Bind Group"),
+            layout: light_bgl,
+            entries: &[
+                BindGroupEntry {
+                    binding: 0,
+                    resource: light_count_buffer.as_entire_binding(),
+                },
+                BindGroupEntry {
+                    binding: 1,
+                    resource: point_light_buffer.as_entire_binding(),
+                },
+            ],
+        });
+
         rpass.set_pipeline(&shader.pipeline);
         rpass.set_bind_group(0, &render_data.camera_uniform_bind_group, &[]);
+        rpass.set_bind_group(3, &light_bind_group, &[]);
 
         unsafe {
             self.traverse_and_render(

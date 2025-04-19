@@ -13,7 +13,7 @@ pub struct CameraComponent {
 
 impl CameraComponent {
     pub fn resize(&mut self, width: f32, height: f32) {
-        self.projection = Perspective3::new(width / height, 125f32.to_radians(), 0.01, 1000.0);
+        self.projection = Perspective3::new(width / height, 60f32.to_radians(), 0.01, 1000.0);
     }
 }
 

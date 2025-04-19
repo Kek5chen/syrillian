@@ -10,6 +10,8 @@ use crate::asset_management::bindgroup_layout_manager::{CAMERA_UBGL_ID, MATERIAL
 use crate::asset_management::mesh::Vertex3D;
 use crate::world::World;
 
+use super::bindgroup_layout_manager::LIGHT_UBGL_ID;
+
 const POST_PROCESS_SHADER_PRE_CONTEXT: &str = include_str!("../shaders/engine_reserved_groups/post_process.wgsl");
 const SHADER_PRE_CONTEXT: &str = include_str!("../shaders/engine_reserved_groups/basic.wgsl");
 
@@ -62,6 +64,7 @@ impl Shader {
         camera_uniform_bind_group_layout: &BindGroupLayout,
         model_uniform_bind_group_layout: &BindGroupLayout,
         material_uniform_bind_group_layout: &BindGroupLayout,
+        light_uniform_bind_group_layout: &BindGroupLayout,
     ) -> RuntimeShader {
         let shader = device.create_shader_module(ShaderModuleDescriptor {
             label: Some(&self.name),
@@ -73,6 +76,7 @@ impl Shader {
                 camera_uniform_bind_group_layout,
                 model_uniform_bind_group_layout,
                 material_uniform_bind_group_layout,
+                light_uniform_bind_group_layout
             ],
             push_constant_ranges: &[],
         });
@@ -274,11 +278,13 @@ impl ShaderManager {
                 let camera_ubgl = bgls.get_bind_group_layout(CAMERA_UBGL_ID).unwrap();
                 let model_ubgl = bgls.get_bind_group_layout(MODEL_UBGL_ID).unwrap();
                 let material_ubgl = bgls.get_bind_group_layout(MATERIAL_UBGL_ID).unwrap();
+                let lighting_ubgl = bgls.get_bind_group_layout(LIGHT_UBGL_ID).unwrap();
                 raw_shader.initialize_combined_runtime(
                     self.device.clone().unwrap().as_ref(),
                     camera_ubgl,
                     model_ubgl,
                     material_ubgl,
+                    lighting_ubgl
                 )
             },
             POST_PROCESS_SHADER_ID => {

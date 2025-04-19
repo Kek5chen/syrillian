@@ -12,6 +12,8 @@ pub use rigid_body::RigidBodyComponent;
 pub use rotate::RotateComponent;
 #[allow(unused_imports)]
 pub use freecam::FreecamController;
+#[allow(unused_imports)]
+pub use light::PointLightComponent;
 
 use crate::object::GameObjectId;
 
@@ -21,6 +23,7 @@ pub mod gravity;
 pub mod rigid_body;
 pub mod rotate;
 pub mod freecam;
+pub mod light;
 
 // TODO: resolve unsafe hell
 pub trait Component: Any {
