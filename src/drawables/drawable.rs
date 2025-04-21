@@ -3,6 +3,7 @@ use std::any::Any;
 use nalgebra::Matrix4;
 use wgpu::{Device, Queue, RenderPass};
 
+use crate::asset_management::ShaderId;
 use crate::object::GameObjectId;
 use crate::world::World;
 
@@ -21,5 +22,5 @@ pub trait Drawable: Any {
         queue: &Queue,
         outer_transform: &Matrix4<f32>,
     ) {}
-    fn draw(&self, world: &mut World, rpass: &mut RenderPass);
+    fn draw(&self, world: &mut World, rpass: &mut RenderPass, default_pipeline: Option<ShaderId>);
 }

@@ -338,7 +338,7 @@ impl Renderer {
         let shader = world
                 .assets
                 .shaders
-                .get_shader(shader_id)
+                .get_shader(Some(shader_id))
                 .expect("3D Pipeline should've been initialized previously");
 
         let (load_op_color, load_op_depth) = if shader.draw_over {
@@ -416,7 +416,6 @@ impl Renderer {
             ],
         });
 
-        rpass.set_pipeline(&shader.pipeline);
         rpass.set_bind_group(0, &render_data.camera_uniform_bind_group, &[]);
         rpass.set_bind_group(3, &light_bind_group, &[]);
 
@@ -455,7 +454,7 @@ impl Renderer {
                 }
                 unsafe {
                     let rpass_ptr: *mut RenderPass = rpass;
-                    drawable.draw(&mut *world_ptr, &mut *rpass_ptr);
+                    drawable.draw(&mut *world_ptr, &mut *rpass_ptr, self.current_pipeline.clone());
                 }
             }
         }
@@ -479,7 +478,7 @@ impl Renderer {
         let post_shader = world
             .assets
             .shaders
-            .get_shader(POST_PROCESS_SHADER_ID)
+            .get_shader(Some(POST_PROCESS_SHADER_ID))
             .expect("PostProcess shader should be initialized");
         rpass.set_pipeline(&post_shader.pipeline);
         rpass.set_bind_group(0, &self.post_process_pass.as_ref().unwrap().bind_group, &[]);

@@ -29,7 +29,6 @@ pub struct Material {
     pub shininess: f32,
     pub shininess_texture: Option<TextureId>,
     pub opacity: f32,
-    // Not honored yet
     pub shader: Option<ShaderId>,
 }
 
@@ -118,6 +117,7 @@ impl Material {
                 data,
                 buffer: material_buffer,
                 bind_group,
+                shader: self.shader
             }
         }
     }
@@ -143,6 +143,7 @@ pub struct RuntimeMaterial {
     pub(crate) data: RuntimeMaterialData,
     pub(crate) buffer: Buffer,
     pub(crate) bind_group: BindGroup,
+    pub(crate) shader: Option<ShaderId>,
 }
 
 #[derive(Debug)]
@@ -168,7 +169,7 @@ impl Default for MaterialManager {
             diffuse_texture: None,
             normal_texture: None,
             shininess: 0.0,
-            shader: Some(shadermanager::FALLBACK_SHADER_ID),
+            shader: Some(shadermanager::DIM3_SHADER_ID),
             opacity: 1.0,
             shininess_texture: None,
         };
