@@ -2,7 +2,7 @@ use std::error::Error;
 
 use log::error;
 use nalgebra::Vector3;
-use syrillian::{asset_management::{materialmanager::Material, Mesh, FALLBACK_SHADER_ID}, buffer::{CUBE, CUBE_INDICES}, components::RotateComponent, drawables::MeshRenderer, App, World};
+use syrillian::{asset_management::{materialmanager::Material, Mesh, DIM3_SHADER_ID, FALLBACK_SHADER_ID}, buffer::{CUBE, CUBE_INDICES}, components::RotateComponent, drawables::MeshRenderer, App, World};
 use winit::window::Window;
 
 #[tokio::main]
@@ -35,7 +35,7 @@ fn init(world: &mut World, _window: &Window) -> Result<(), Box<dyn Error>> {
         shininess: 0.0,
         shininess_texture: None,
         opacity: 1.0,
-        shader: Some(FALLBACK_SHADER_ID),
+        shader: Some(DIM3_SHADER_ID),
     });
     let mesh = world.assets.meshes.add_mesh(
         Mesh::new(

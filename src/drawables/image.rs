@@ -1,8 +1,8 @@
 use std::sync::RwLock;
 
-use log::error;
+use log::{error, warn};
 
-use crate::{asset_management::{materialmanager::MaterialId, Mesh, MeshId}, buffer::UNIT_SQUARE, World};
+use crate::{asset_management::{materialmanager::MaterialId, Mesh, MeshId, ShaderId}, buffer::UNIT_SQUARE, World};
 
 use super::Drawable;
 
@@ -55,7 +55,7 @@ impl Drawable for Image {
         *unit_square = Some(id);
     }
 
-    fn draw(&self, world: &mut World, rpass: &mut wgpu::RenderPass) {
+    fn draw(&self, world: &mut World, rpass: &mut wgpu::RenderPass, default_shader: Option<ShaderId>) {
         let unit_square_id = UNIT_SQUARE_ID.read().unwrap();
         let Some(id) = *unit_square_id else {
             error!("Unit Square ID should've been set in setup()");
@@ -70,6 +70,20 @@ impl Drawable for Image {
             return;
         };
 
+        let shader_id = world
+            .assets
+            .materials
+            .get_raw_material(self.material)
+            .and_then(|mat| mat.shader);
+
+        let Some(shader) = world
+            .assets
+            .shaders
+            .get_shader(shader_id) else {
+            warn!("Shader not found");
+            return;
+        };
+
         let Some(material) = world
             .assets
             .materials
@@ -77,6 +91,8 @@ impl Drawable for Image {
             error!("Runtime Material not available.");
             return;
         };
+
+        rpass.set_pipeline(&shader.pipeline);
 
         let vertex_buf_slice = unit_square_runtime.data.vertices_buf.slice(..);
         let mesh_bind_group = &unit_square_runtime.data.model_bind_group;

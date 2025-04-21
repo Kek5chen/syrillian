@@ -259,7 +259,8 @@ impl ShaderManager {
         id
     }
 
-    pub(crate) fn get_shader(&mut self, id: ShaderId) -> Option<&RuntimeShader> {
+    pub fn get_shader(&mut self, id: Option<ShaderId>) -> Option<&RuntimeShader> {
+        let id = id.unwrap_or(FALLBACK_SHADER_ID);
         // ugly but the borrow checker sucks a bit here
         if self.runtime_shaders.contains_key(&id) {
             self.runtime_shaders.get(&id)

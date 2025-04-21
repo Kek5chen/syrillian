@@ -18,6 +18,7 @@ use crate::asset_management::materialmanager::{Material, MaterialId};
 use crate::asset_management::mesh::{Mesh, Vertex3D};
 use crate::asset_management::shadermanager::ShaderId;
 use crate::asset_management::texturemanager::{TextureId, FALLBACK_DIFFUSE_TEXTURE};
+use crate::asset_management::DIM3_SHADER_ID;
 use crate::drawables::mesh_renderer::MeshRenderer;
 use crate::object::GameObjectId;
 use crate::utils::math::ExtraMatrixMath;
@@ -214,15 +215,9 @@ impl SceneLoader {
     }
 
     fn load_materials(scene: &Scene, world: &mut World) -> HashMap<u32, MaterialId> {
-        let shader3d = world
-            .assets
-            .shaders
-            .find_shader_by_name("3D")
-            .unwrap_or_default();
-
         let mut mapping = HashMap::new();
         for (i, material) in scene.materials.iter().enumerate() {
-            let mat_id = Self::load_material(world, material, shader3d);
+            let mat_id = Self::load_material(world, material, DIM3_SHADER_ID);
             mapping.insert(i as u32, mat_id);
         }
         mapping
