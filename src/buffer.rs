@@ -76,3 +76,28 @@ pub const CUBE_INDICES: [u32; 6 * 6] = [
     // Left face
     20, 22, 21, 21, 22, 23,
 ];
+
+#[allow(dead_code)]
+#[rustfmt::skip]
+pub const UNIT_SQUARE: [Vertex3D; 4] = [
+    SimpleVertex3D {
+        position: [-1.0, -1.0, 0.0],
+        normal:   [0.0, 0.0, -1.0],
+        uv:       [0.0, 0.0],
+    }.upgrade(),
+    SimpleVertex3D {
+        position: [1.0, -1.0, 0.0],
+        normal:   [0.0, 0.0, -1.0],
+        uv:       [1.0, 0.0],
+    }.upgrade(),
+    SimpleVertex3D {
+        position: [1.0, 1.0, 0.0],
+        normal:   [0.0, 0.0, -1.0],
+        uv:       [1.0, 1.0],
+    }.upgrade(),
+    SimpleVertex3D {
+        position: [-1.0, 1.0, 0.0],
+        normal:   [0.0, 0.0, -1.0],
+        uv:       [0.0, 1.0],
+    }.upgrade(),
+];
