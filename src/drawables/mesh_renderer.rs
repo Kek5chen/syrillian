@@ -1,8 +1,7 @@
 use nalgebra::Matrix4;
 use wgpu::{Device, IndexFormat, Queue, RenderPass};
 
-use crate::asset_management::materialmanager::{RuntimeMaterial, FALLBACK_MATERIAL_ID};
-use crate::asset_management::mesh::RuntimeMesh;
+use crate::asset_management::materialmanager::{MaterialId, RuntimeMaterial, FALLBACK_MATERIAL_ID};
 use crate::asset_management::meshmanager::MeshId;
 use crate::drawables::drawable::Drawable;
 use crate::object::GameObjectId;
@@ -29,23 +28,26 @@ impl Drawable for MeshRenderer {
         _queue: &Queue,
         world: &mut World,
     ) {
-        unsafe {
-            let world: *mut World = world;
-            (*world)
-                .assets
-                .meshes
-                .init_runtime_mesh(self.mesh);
-            let mesh = (*world)
-                .assets
-                .meshes
-                .get_raw_mesh(self.mesh)
-                .expect("Normal mesh should be set");
+        world.assets.meshes.init_runtime_mesh(self.mesh);
 
-            for (mat_id, _) in &mesh.material_ranges {
-                (*world).assets.materials.init_runtime_material_id(
-                    &mut *world,
-                    *mat_id,
-                ).expect("Runtime material should be initialized..");
+        let material_ids: Vec<MaterialId> = world
+            .assets
+            .meshes
+            .get_raw_mesh(self.mesh)
+            .expect("Mesh must exist")
+            .material_ranges
+            .iter()
+            .map(|(id, _)| *id)
+            .collect();
+
+        unsafe {
+            let world = world as *mut World;
+            for mat_id in material_ids {
+                (*world)
+                    .assets
+                    .materials
+                    .init_runtime_material_id(&mut (*world), mat_id,)
+                    .expect("Runtime material should be initialized..");
             }
         }
     }
@@ -63,10 +65,12 @@ impl Drawable for MeshRenderer {
             .meshes
             .get_runtime_mesh_mut(self.mesh)
             .expect("Runtime mesh should be initialized before calling update.");
+
         runtime_mesh
             .data
             .model_data
             .update(parent, outer_transform);
+
         queue.write_buffer(
             &runtime_mesh.data.model_data_buffer,
             0,
@@ -75,7 +79,7 @@ impl Drawable for MeshRenderer {
     }
 
     fn draw(&self, world: &mut World, rpass: &mut RenderPass) {
-        let runtime_mesh: *const RuntimeMesh = world
+        let runtime_mesh = world
             .assets
             .meshes
             .get_runtime_mesh(self.mesh)
@@ -88,11 +92,11 @@ impl Drawable for MeshRenderer {
             .expect("Normal mesh should be set");
 
         unsafe {
-            rpass.set_vertex_buffer(0, (*runtime_mesh).data.vertices_buf.slice(..));
-            rpass.set_bind_group(1, &(*runtime_mesh).data.model_bind_group, &[]);
-            if let Some(i_buffer) = (*runtime_mesh).data.indices_buf.as_ref() {
+            rpass.set_vertex_buffer(0, runtime_mesh.data.vertices_buf.slice(..));
+            rpass.set_bind_group(1, &runtime_mesh.data.model_bind_group, &[]);
+            if let Some(i_buffer) = &runtime_mesh.data.indices_buf.as_ref() {
                 for (mat_id, range) in &mesh.material_ranges {
-                    let material: *const RuntimeMaterial = match world
+                    let material: &RuntimeMaterial = match world
                         .assets
                         .materials
                         .get_runtime_material(*mat_id) {
@@ -100,7 +104,7 @@ impl Drawable for MeshRenderer {
                         Some(mat) => mat,
                     };
 
-                    rpass.set_bind_group(2, &(*material).bind_group, &[]);
+                    rpass.set_bind_group(2, &material.bind_group, &[]);
                     rpass.set_index_buffer(i_buffer.slice(..), IndexFormat::Uint32);
                     rpass.draw_indexed(range.clone(), 0, 0..1);
                 }

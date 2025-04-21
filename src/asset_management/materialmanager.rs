@@ -30,7 +30,7 @@ pub struct Material {
     pub shininess_texture: Option<TextureId>,
     pub opacity: f32,
     // Not honored yet
-    pub shader: ShaderId,
+    pub shader: Option<ShaderId>,
 }
 
 #[derive(Debug)]
@@ -168,7 +168,7 @@ impl Default for MaterialManager {
             diffuse_texture: None,
             normal_texture: None,
             shininess: 0.0,
-            shader: shadermanager::FALLBACK_SHADER_ID,
+            shader: Some(shadermanager::FALLBACK_SHADER_ID),
             opacity: 1.0,
             shininess_texture: None,
         };

@@ -35,7 +35,7 @@ fn init(world: &mut World, _window: &Window) -> Result<(), Box<dyn Error>> {
         shininess: 0.0,
         shininess_texture: None,
         opacity: 1.0,
-        shader: FALLBACK_SHADER_ID,
+        shader: Some(FALLBACK_SHADER_ID),
     });
     let mesh = world.assets.meshes.add_mesh(
         Mesh::new(

@@ -109,7 +109,7 @@ fn funnyinit(world: &mut World, _window: &Window) -> Result<(), Box<dyn Error>> 
         shininess: 0.0,
         shininess_texture: None,
         opacity: 1.0,
-        shader: DIM3_SHADER_ID,
+        shader: Some(DIM3_SHADER_ID),
     });
 
     let cube_mesh = world.assets.meshes.add_mesh(Mesh::new(

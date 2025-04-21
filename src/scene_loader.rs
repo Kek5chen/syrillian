@@ -355,7 +355,7 @@ impl SceneLoader {
             normal_texture: normal_tex_id,
             shininess_texture: None,
             opacity: 1.0,
-            shader,
+            shader: Some(shader),
         };
         world.assets.materials.add_material(new_material)
     }
