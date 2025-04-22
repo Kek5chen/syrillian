@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::fmt::Debug;
 use std::rc::Rc;
 
-use log::{debug, error};
+use log::{debug, warn, error};
 use nalgebra::{Matrix4, Perspective3};
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::*;
@@ -300,12 +300,10 @@ impl Renderer {
             return;
         }
 
-        if self.current_pipeline.is_none() {
-            debug!("No pipeline active");
+        let Some(current_pipeline) = self.current_pipeline else {
+            warn!("No pipeline active. Can't render");
             return;
-        }
-
-        let current_pipeline = self.current_pipeline.unwrap();
+        };
 
         let render_data = self
             .camera_render_data
