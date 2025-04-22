@@ -54,8 +54,8 @@ impl State {
                         | Features::BUFFER_BINDING_ARRAY,
                     required_limits: Limits::default(),
                     memory_hints: MemoryHints::default(),
+                    trace: wgpu::Trace::Off,
                 },
-                None,
             )
             .await?;
         Ok((Rc::new(device), Rc::new(queue)))

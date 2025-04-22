@@ -8,7 +8,7 @@ version = "0.1.2"
 edition = "2024"
 
 [dependencies]
-wgpu = { version = "24.0.1", features = ["vulkan-portability"] }
+wgpu = { version = "25.0.0", features = ["vulkan-portability"] }
 tokio = { version = "1.40.0", features = ["rt", "rt-multi-thread", "macros"] }
 winit = { version = "0.30.9", features = ["x11"] }
 bytemuck = "1.18.0"
@@ -18,7 +18,7 @@ num-traits = "0.2.19"
 russimp = "3.2.0"
 itertools = "0.14.0"
 image = "0.25.2"
-rapier3d = "0.23.0"
+rapier3d = "0.24.0"
 futures = "0.3.30"
 
 [build-dependencies]
