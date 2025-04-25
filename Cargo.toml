@@ -18,7 +18,7 @@ num-traits = "0.2.19"
 russimp = "3.2.0"
 itertools = "0.14.0"
 image = "0.25.2"
-rapier3d = "0.24.0"
+rapier3d = "0.25.0"
 futures = "0.3.30"
 
 [build-dependencies]
