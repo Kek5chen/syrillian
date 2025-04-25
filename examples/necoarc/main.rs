@@ -2,7 +2,7 @@ use std::error::Error;
 
 use log::error;
 use nalgebra::Vector3;
-use syrillian::{asset_management::{materialmanager::Material, Mesh, DIM3_SHADER_ID, FALLBACK_SHADER_ID}, buffer::{CUBE, CUBE_INDICES}, components::RotateComponent, drawables::MeshRenderer, App, World};
+use syrillian::{asset_management::{materialmanager::Material, Mesh, DIM3_SHADER_ID}, buffer::{CUBE, CUBE_INDICES}, components::RotateComponent, drawables::{Image, MeshRenderer}, App, World};
 use winit::window::Window;
 
 #[tokio::main]
@@ -53,6 +53,14 @@ fn init(world: &mut World, _window: &Window) -> Result<(), Box<dyn Error>> {
     neco.transform.set_position(Vector3::new(0.0, 0.0, -5.0));
 
     world.add_child(neco);
+
+    let mut image_obj = world.new_object("Image");
+    let image = Image::new(material);
+
+    image_obj.set_drawable(Some(image));
+
+    world.add_child(image_obj);
+
 
     Ok(())
 }
