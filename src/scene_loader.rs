@@ -8,10 +8,10 @@ use itertools::izip;
 use log::warn;
 use nalgebra::{Matrix4, Vector2, Vector3};
 use num_traits::{ToPrimitive, Zero};
-use russimp::material::{DataContent, MaterialProperty, PropertyTypeInfo, TextureType};
-use russimp::node::Node;
-use russimp::scene::{PostProcess, Scene};
-use russimp::Vector3D;
+use russimp_ng::material::{DataContent, MaterialProperty, PropertyTypeInfo, TextureType};
+use russimp_ng::node::Node;
+use russimp_ng::scene::{PostProcess, Scene};
+use russimp_ng::Vector3D;
 use wgpu::TextureFormat;
 
 use crate::asset_management::materialmanager::{Material, MaterialId};
@@ -236,7 +236,7 @@ impl SceneLoader {
 
     fn load_texture(
         world: &mut World,
-        texture: Rc<RefCell<russimp::material::Texture>>,
+        texture: Rc<RefCell<russimp_ng::material::Texture>>,
     ) -> TextureId {
         // TODO: Don't load textures that were loaded before and are just shared between two materials
         let texture = texture.borrow();
@@ -326,7 +326,7 @@ impl SceneLoader {
 
     fn load_material(
         world: &mut World,
-        material: &russimp::material::Material,
+        material: &russimp_ng::material::Material,
         shader: ShaderId,
     ) -> MaterialId {
         let name =

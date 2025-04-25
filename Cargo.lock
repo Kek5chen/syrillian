@@ -2952,30 +2952,29 @@ dependencies = [
 ]
 
 [[package]]
-name = "russimp"
-version = "3.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "581bbd613b048d7eaf9a092a70b082835f02683c3a7215ea3038cd4ad6d7807b"
+name = "russimp-ng"
+version = "3.2.1"
+source = "git+https://github.com/Kek5chen/russimp-ng#bf31224867c39ac663b344d8fc670f2bb4d8bbc5"
 dependencies = [
  "derivative",
  "num-derive",
  "num-traits",
  "num_enum 0.6.1",
- "russimp-sys",
+ "russimp-sys-ng",
  "strum 0.25.0",
  "strum_macros 0.25.3",
 ]
 
 [[package]]
-name = "russimp-sys"
-version = "2.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d3257f93c651c6b87d6f7a5329bf2079bfcf0fc4e2dc7e9b0f05cb3ba5d3b03b"
+name = "russimp-sys-ng"
+version = "2.0.3"
+source = "git+https://github.com/Kek5chen/russimp-sys-ng.git#1d023c9767a353ed8ed753ac4973ed311ae65ea0"
 dependencies = [
  "bindgen",
  "built 0.5.2",
  "cmake",
  "flate2",
+ "pkg-config",
  "reqwest",
  "tar",
  "which",
@@ -3450,7 +3449,7 @@ dependencies = [
  "nalgebra",
  "num-traits",
  "rapier3d",
- "russimp",
+ "russimp-ng",
  "tokio",
  "wgpu",
  "winit",
