@@ -316,12 +316,11 @@ impl Renderer {
         let camera = camera_rc;
         let camera_comp: Option<Rc<RefCell<Box<CameraComponent>>>> =
             camera.get_component::<CameraComponent>();
-        if camera_comp.is_none() {
+        let Some(camera_comp) = camera_comp else {
             debug!("Camera didn't have a camera component");
             return;
-        }
+        };
 
-        let camera_comp = camera_comp.unwrap();
         let projection_matrix: &Perspective3<f32> = &camera_comp.borrow_mut().projection;
         let camera_transform = &camera.transform;
         render_data
