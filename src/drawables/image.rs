@@ -1,8 +1,9 @@
-use std::sync::RwLock;
+use std::{error::Error, sync::{RwLock, RwLockWriteGuard}};
 
 use log::{error, warn};
+use russimp_ng::mesh;
 
-use crate::{asset_management::{materialmanager::MaterialId, Mesh, MeshId, ShaderId}, buffer::UNIT_SQUARE, World};
+use crate::{asset_management::{materialmanager::MaterialId, Mesh, MeshId, MeshManager, RuntimeMesh, ShaderId}, buffer::UNIT_SQUARE, World};
 
 use super::Drawable;
 
@@ -14,7 +15,7 @@ pub struct Image {
     material: MaterialId,
     left: u32,
     right: u32,
-    up: u32,
+    top: u32,
     bottom: u32,
 }
 
@@ -24,9 +25,41 @@ impl Image {
             material,
             left: 0,
             right: 0,
-            up: 0,
+            top: 0,
             bottom: 0,
         })
+    }
+
+    pub fn set_left(&mut self, left: u32) {
+        self.left = left;
+    }
+
+    pub fn set_right(&mut self, right: u32) {
+        self.right = right;
+    }
+
+    pub fn set_top(&mut self, top: u32) {
+        self.top = top;
+    }
+
+    pub fn set_bottom(&mut self, bottom: u32) {
+        self.bottom = bottom;
+    }
+
+    pub fn left(&self) -> u32 {
+        self.left
+    }
+
+    pub fn right(&self) -> u32 {
+        self.right
+    }
+
+    pub fn top(&self) -> u32 {
+        self.top
+    }
+
+    pub fn bottom(&self) -> u32 {
+        self.bottom
     }
 }
 
@@ -37,51 +70,16 @@ impl Drawable for Image {
             _queue: &wgpu::Queue,
             world: &mut World,
         ) {
-        let mut unit_square = UNIT_SQUARE_ID.write().unwrap();
-        if unit_square.is_some() {
-            return;
-        }
-
-        let id = world
-            .assets
-            .meshes
-            .add_mesh(
-                Mesh::new(
-                    UNIT_SQUARE.to_vec(),
-                    None,
-                    None
-                )
-            );
-        *unit_square = Some(id);
+        ensure_unit_square(world);
     }
 
     fn draw(&self, world: &mut World, rpass: &mut wgpu::RenderPass, default_shader: Option<ShaderId>) {
-        let unit_square_id = UNIT_SQUARE_ID.read().unwrap();
-        let Some(id) = *unit_square_id else {
-            error!("Unit Square ID should've been set in setup()");
-            return;
-        };
-
-        let Some(unit_square_runtime) = world
-            .assets
-            .meshes
-            .get_runtime_mesh(id) else {
-            error!("Unit Square Mesh should exist.");
-            return;
-        };
-
-        let shader_id = world
-            .assets
-            .materials
-            .get_raw_material(self.material)
-            .and_then(|mat| mat.shader);
-
-        let Some(shader) = world
-            .assets
-            .shaders
-            .get_shader(shader_id) else {
-            warn!("Shader not found");
-            return;
+        let unit_square_runtime = match unit_square_mesh(&world.assets.meshes) {
+            Ok(s) => s,
+            Err(e) => {
+                warn!("Can't render image because the unit square mesh couldn't be fetched: {e}");
+                return;
+            },
         };
 
         let Some(material) = world
@@ -89,6 +87,14 @@ impl Drawable for Image {
             .materials
             .get_runtime_material(self.material) else {
             error!("Runtime Material not available.");
+            return;
+        };
+
+        let Some(shader) = world
+            .assets
+            .shaders
+            .get_shader(material.shader) else {
+            warn!("Shader not found");
             return;
         };
 
@@ -106,20 +112,38 @@ impl Drawable for Image {
     }
 }
 
+fn unit_square_mesh(mesh_manager: &MeshManager) -> Result<&RuntimeMesh, Box<dyn Error>> {
+    let unit_square_id = UNIT_SQUARE_ID.read().unwrap();
+    let Some(id) = *unit_square_id else {
+        return Err("Unit Square ID should've been set in setup()".into());
+    };
 
+    let Some(unit_square_runtime) = mesh_manager
+        .get_runtime_mesh(id) else {
+        return Err("Unit Square Mesh should exist.".into());
+    };
 
+    Ok(unit_square_runtime)
+}
 
+fn ensure_unit_square(world: &mut World) {
+    let unit_square = UNIT_SQUARE_ID.write().unwrap();
+    if unit_square.is_some() {
+        return;
+    }
+    remake_unit_square(world, unit_square);
+}
 
-
-
-
-
-
-
-
-
-
-
-
-
-
+fn remake_unit_square(world: &mut World, mut unit_square: RwLockWriteGuard<'_, Option<MeshId>>) {
+    let id = world
+        .assets
+        .meshes
+        .add_mesh(
+            Mesh::new(
+                UNIT_SQUARE.to_vec(),
+                None,
+                None
+            )
+        );
+    *unit_square = Some(id);
+}
