@@ -2,7 +2,7 @@ use log::error;
 use nalgebra::Matrix4;
 use wgpu::{Device, IndexFormat, Queue, RenderPass};
 
-use crate::asset_management::materialmanager::{MaterialId, RuntimeMaterial, FALLBACK_MATERIAL_ID};
+use crate::asset_management::materialmanager::{MaterialId, FALLBACK_MATERIAL_ID};
 use crate::asset_management::meshmanager::MeshId;
 use crate::asset_management::ShaderId;
 use crate::drawables::drawable::Drawable;
