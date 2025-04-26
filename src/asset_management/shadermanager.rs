@@ -37,9 +37,11 @@ pub type ShaderId = usize;
 pub const FALLBACK_SHADER_ID: ShaderId = 0;
 // The default 3D shader.
 pub const DIM3_SHADER_ID: ShaderId = 1;
+// The default 2D shader.
+pub const DIM2_SHADER_ID: ShaderId = 2;
 
-pub const POST_PROCESS_SHADER_ID: ShaderId = 2;
-pub const DEBUG_EDGES_SHADER_ID: ShaderId = 3;
+pub const POST_PROCESS_SHADER_ID: ShaderId = 3;
+pub const DEBUG_EDGES_SHADER_ID: ShaderId = 4;
 
 #[derive(Debug)]
 pub struct ShaderManager {
@@ -208,6 +210,10 @@ impl ShaderManager {
             include_str!("../shaders/shader3d.wgsl").to_string(),
         );
         self.add_shader(
+            "2D Default Pipeline".to_string(),
+            include_str!("../shaders/shader2d.wgsl").to_string(),
+        );
+        self.add_shader(
             "PostProcess".to_string(),
             include_str!("../shaders/fullscreen_passhthrough.wgsl").to_string(),
         );
@@ -275,7 +281,14 @@ impl ShaderManager {
         let bgls = &world.assets.bind_group_layouts;
 
         let runtime_shader = match id {
-            FALLBACK_SHADER_ID | DIM3_SHADER_ID | DEBUG_EDGES_SHADER_ID => {
+            POST_PROCESS_SHADER_ID => {
+                let post_process_ubgl = bgls.get_bind_group_layout(POST_PROCESS_BGL_ID).unwrap();
+                raw_shader.initialize_post_process_runtime(
+                    self.device.clone().unwrap().as_ref(),
+                    post_process_ubgl,
+                )
+            },
+            _ => {
                 let camera_ubgl = bgls.get_bind_group_layout(CAMERA_UBGL_ID).unwrap();
                 let model_ubgl = bgls.get_bind_group_layout(MODEL_UBGL_ID).unwrap();
                 let material_ubgl = bgls.get_bind_group_layout(MATERIAL_UBGL_ID).unwrap();
@@ -288,14 +301,6 @@ impl ShaderManager {
                     lighting_ubgl
                 )
             },
-            POST_PROCESS_SHADER_ID => {
-                let post_process_ubgl = bgls.get_bind_group_layout(POST_PROCESS_BGL_ID).unwrap();
-                raw_shader.initialize_post_process_runtime(
-                    self.device.clone().unwrap().as_ref(),
-                    post_process_ubgl,
-                )
-            },
-            _ => panic!("Shader ID not recognized"),
         };
 
         self.runtime_shaders.insert(id, runtime_shader);
