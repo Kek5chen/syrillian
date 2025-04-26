@@ -1,15 +1,15 @@
-use std::alloc::System;
 use std::cell::RefCell;
 use std::fmt::Debug;
 use std::rc::Rc;
 
-use log::{debug, warn, error};
+use log::error;
 use nalgebra::{Matrix4, Perspective3, Vector2};
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::*;
 use winit::window::Window;
 use crate::asset_management::bindgroup_layout_manager::{CAMERA_UBGL_ID, LIGHT_UBGL_ID, POST_PROCESS_BGL_ID};
 use crate::asset_management::shadermanager::{ShaderId, DIM3_SHADER_ID, FALLBACK_SHADER_ID, POST_PROCESS_SHADER_ID};
+use crate::asset_management::RuntimeShader;
 use crate::components::camera::CameraData;
 use crate::components::light::ShaderPointlight;
 use crate::components::{CameraComponent, PointLightComponent};
@@ -304,130 +304,46 @@ impl Renderer {
         })
     }
 
-    fn render(&mut self, ctx: &mut RenderContext, world: &mut World, shader_override: Option<ShaderId>) {
-        if world.active_camera.is_none() {
-            debug!("No camera active");
-            return;
+    fn render(
+        &mut self,
+        ctx: &mut RenderContext,
+        world: &mut World,
+        shader_override: Option<ShaderId>
+    ) {
+        if let Err(e) = self.render_inner(ctx, world, shader_override) {
+            error!("{e}");
         }
+    }
 
-        let Some(current_pipeline) = self.current_pipeline else {
-            warn!("No pipeline active. Can't render");
-            return;
-        };
+    fn render_inner(
+        &mut self,
+        ctx: &mut RenderContext,
+        world: &mut World,
+        shader_override: Option<ShaderId>
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        self.setup_camera_data(world)?;
 
-        let render_data = self
-            .camera_render_data
-            .as_mut()
-            .expect("Camera render data should be initialized");
-
-        let world_ptr: *mut World = world;
-        let camera_rc = unsafe { (*world_ptr).active_camera.as_ref().unwrap() };
-
-        let camera = camera_rc;
-        let camera_comp: Option<Rc<RefCell<Box<CameraComponent>>>> =
-            camera.get_component::<CameraComponent>();
-        let Some(camera_comp) = camera_comp else {
-            debug!("Camera didn't have a camera component");
-            return;
-        };
-
-        let projection_matrix: &Perspective3<f32> = &camera_comp.borrow_mut().projection;
-        let camera_transform = &camera.transform;
-        render_data
-            .camera_uniform_data
-            .update(projection_matrix, camera_transform);
-        self.state.queue.write_buffer(
-            &render_data.camera_uniform_buffer,
-            0,
-            bytemuck::cast_slice(&[*render_data.camera_uniform_data]),
-        );
-
-        let shader_id = shader_override.unwrap_or(current_pipeline);
-
+        let shader_id = self.default_shader_id(shader_override)?;
         let shader = world
                 .assets
                 .shaders
                 .get_shader(Some(shader_id))
                 .expect("3D Pipeline should've been initialized previously");
+        let (load_op_color, load_op_depth) = determine_draw_over_color(shader);
 
-        let (load_op_color, load_op_depth) = if shader.draw_over {
-            (LoadOp::Load, LoadOp::Load)
-        } else {
-            (LoadOp::Clear(Color::BLACK), LoadOp::Clear(1.0))
-        };
+        let mut rpass = self.prepare_render_pass(ctx, load_op_color, load_op_depth);
 
-        let mut rpass = ctx.encoder.begin_render_pass(&RenderPassDescriptor {
-            label: Some("Offscreen Render Pass"),
-            color_attachments: &[Some(RenderPassColorAttachment {
-                view: &self.offscreen_view,
-                resolve_target: None,
-                ops: Operations {
-                    load: load_op_color,
-                    store: StoreOp::Store,
-                },
-            })],
-            depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
-                view: &ctx.depth_view,
-                depth_ops: Some(Operations {
-                    load: load_op_depth,
-                    store: StoreOp::Store,
-                }),
-                stencil_ops: None,
-            }),
-            ..RenderPassDescriptor::default()
-        });
+        let light_bind_group = self.setup_lights(world)?;
 
-        // TODO: cache this if light data doesn't change?
-        let point_lights = World::instance().get_all_components_of_type::<PointLightComponent>();
-        let point_light_count = point_lights.len();
-
-        let light_bgl = world.assets.bind_group_layouts.get_bind_group_layout(LIGHT_UBGL_ID).unwrap();
-        let point_light_buffer = if point_light_count == 0 {
-            let dummy_point_light: ShaderPointlight = ShaderPointlight::default();
-            self.state.device.create_buffer_init(&BufferInitDescriptor {
-                label: Some("Empty Point Light Buffer"),
-                usage: BufferUsages::STORAGE,
-                contents: bytemuck::cast_slice(&[dummy_point_light]),
-            }) 
-        } else {
-            let light_data: Vec<ShaderPointlight> = point_lights
-                .iter()
-                .map(|m| m.borrow_mut())
-                .map(|mut light| {
-                    light.update_inner_pos();
-                    *light.inner()
-                })
-                .collect();
-            let light_bytes = bytemuck::cast_slice(&light_data);
-            self.state.device.create_buffer_init(&BufferInitDescriptor {
-                label: Some("Point Light Buffer"),
-                contents: light_bytes,
-                usage: BufferUsages::STORAGE,
-            })
-        };
-        let light_count_buffer = self.state.device.create_buffer_init(&BufferInitDescriptor {
-            label: Some("Light Count Buffer"),
-            contents: bytemuck::bytes_of(&(point_light_count as u32)),
-            usage: BufferUsages::UNIFORM,
-        });
-        let light_bind_group = self.state.device.create_bind_group(&BindGroupDescriptor {
-            label: Some("Light Bind Group"),
-            layout: light_bgl,
-            entries: &[
-                BindGroupEntry {
-                    binding: 0,
-                    resource: light_count_buffer.as_entire_binding(),
-                },
-                BindGroupEntry {
-                    binding: 1,
-                    resource: point_light_buffer.as_entire_binding(),
-                },
-            ],
-        });
-
+        let render_data = self
+            .camera_render_data
+            .as_mut()
+            .expect("Render data shoudl be initialized here");
+        
         rpass.set_bind_group(0, &render_data.camera_uniform_bind_group, &[]);
         rpass.set_bind_group(3, &light_bind_group, &[]);
 
+        let world_ptr = world as *mut World;
         unsafe {
             self.traverse_and_render(
                 &mut *world_ptr,
@@ -436,6 +352,8 @@ impl Renderer {
                 Matrix4::identity(),
             );
         }
+
+        Ok(())
     }
 
     fn traverse_and_render(
@@ -508,5 +426,131 @@ impl Renderer {
 
     pub fn window_mut(&mut self) -> &mut Window {
         &mut self.window
+    }
+
+    fn setup_camera_data(&mut self, world: &World) -> Result<(), Box<dyn std::error::Error>> {
+        let render_data = self
+            .camera_render_data
+            .as_mut()
+            .ok_or("Camera render data should be initialized")?;
+
+        let Some(camera_rc) = world.active_camera.as_ref() else {
+            return Err("No camera set. Can't render".into())
+        };
+
+        let camera = camera_rc;
+        let camera_comp: Option<Rc<RefCell<Box<CameraComponent>>>> =
+            camera.get_component::<CameraComponent>();
+        let Some(camera_comp) = camera_comp else {
+            return Err("Camera didn't have a camera component".into());
+        };
+
+        let projection_matrix: &Perspective3<f32> = &camera_comp.borrow_mut().projection;
+        let camera_transform = &camera.transform;
+
+        render_data
+            .camera_uniform_data
+            .update(projection_matrix, camera_transform);
+
+        self.state.queue.write_buffer(
+            &render_data.camera_uniform_buffer,
+            0,
+            bytemuck::cast_slice(&[*render_data.camera_uniform_data]),
+        );
+
+        Ok(())
+    }
+
+    fn setup_lights(&self, world: &World) -> Result<BindGroup, Box<dyn std::error::Error>> {
+        // TODO: cache this if light data doesn't change?
+        let point_lights = World::instance().get_all_components_of_type::<PointLightComponent>();
+        let point_light_count = point_lights.len();
+
+        let light_bgl = world.assets.bind_group_layouts.get_bind_group_layout(LIGHT_UBGL_ID)
+            .ok_or("Light UBGL should be engine-given")?;
+        let point_light_buffer = if point_light_count == 0 {
+            let dummy_point_light: ShaderPointlight = ShaderPointlight::default();
+            self.state.device.create_buffer_init(&BufferInitDescriptor {
+                label: Some("Empty Point Light Buffer"),
+                usage: BufferUsages::STORAGE,
+                contents: bytemuck::cast_slice(&[dummy_point_light]),
+            }) 
+        } else {
+            let light_data: Vec<ShaderPointlight> = point_lights
+                .iter()
+                .map(|m| m.borrow_mut())
+                .map(|mut light| {
+                    light.update_inner_pos();
+                    *light.inner()
+                })
+                .collect();
+            let light_bytes = bytemuck::cast_slice(&light_data);
+            self.state.device.create_buffer_init(&BufferInitDescriptor {
+                label: Some("Point Light Buffer"),
+                contents: light_bytes,
+                usage: BufferUsages::STORAGE,
+            })
+        };
+        let light_count_buffer = self.state.device.create_buffer_init(&BufferInitDescriptor {
+            label: Some("Light Count Buffer"),
+            contents: bytemuck::bytes_of(&(point_light_count as u32)),
+            usage: BufferUsages::UNIFORM,
+        });
+        let light_bind_group = self.state.device.create_bind_group(&BindGroupDescriptor {
+            label: Some("Light Bind Group"),
+            layout: light_bgl,
+            entries: &[
+                BindGroupEntry {
+                    binding: 0,
+                    resource: light_count_buffer.as_entire_binding(),
+                },
+                BindGroupEntry {
+                    binding: 1,
+                    resource: point_light_buffer.as_entire_binding(),
+                },
+            ],
+        });
+
+        Ok(light_bind_group)
+    }
+
+    fn prepare_render_pass<'a>(&self, ctx: &'a mut RenderContext, load_op_color: LoadOp<Color>, load_op_depth: LoadOp<f32>) -> RenderPass<'a> {
+        ctx.encoder.begin_render_pass(&RenderPassDescriptor {
+            label: Some("Offscreen Render Pass"),
+            color_attachments: &[Some(RenderPassColorAttachment {
+                view: &self.offscreen_view,
+                resolve_target: None,
+                ops: Operations {
+                    load: load_op_color,
+                    store: StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
+                view: &ctx.depth_view,
+                depth_ops: Some(Operations {
+                    load: load_op_depth,
+                    store: StoreOp::Store,
+                }),
+                stencil_ops: None,
+            }),
+            ..RenderPassDescriptor::default()
+        })
+    }
+
+    fn default_shader_id(&self, shader_override: Option<usize>) -> Result<usize, Box<dyn std::error::Error>> {
+        let Some(current_pipeline) = self.current_pipeline else {
+            return Err("No pipeline active. Can't render".into());
+        };
+
+        let shader_id = shader_override.unwrap_or(current_pipeline);
+        Ok(shader_id)
+    }
+}
+
+fn determine_draw_over_color(shader: &RuntimeShader) -> (LoadOp<Color>, LoadOp<f32>) {
+    if shader.draw_over {
+        (LoadOp::Load, LoadOp::Load)
+    } else {
+        (LoadOp::Clear(Color::BLACK), LoadOp::Clear(1.0))
     }
 }
