@@ -363,27 +363,21 @@ impl Renderer {
         children: &[GameObjectId],
         combined_matrix: Matrix4<f32>,
     ) {
-        let world_ptr: *mut World = world;
         for child in children {
             if !child.children.is_empty() {
-                unsafe {
-                    self.traverse_and_render(
-                        &mut *world_ptr,
-                        rpass,
-                        &child.children,
-                        combined_matrix * child.transform.full_matrix().to_homogeneous(),
-                    );
-                }
+                self.traverse_and_render(
+                    world,
+                    rpass,
+                    &child.children,
+                    combined_matrix * child.transform.full_matrix().to_homogeneous(),
+                );
             }
-            if let Some(drawable) = &mut child.clone().drawable {
-                unsafe {
-                    drawable.update(&mut *world_ptr, *child, &self.state.queue, &combined_matrix);
-                }
-                unsafe {
-                    let rpass_ptr: *mut RenderPass = rpass;
-                    drawable.draw(&mut *world_ptr, &mut *rpass_ptr, self.current_pipeline.clone());
-                }
-            }
+            let Some(drawable) = &mut child.clone().drawable else {
+                continue;
+            };
+
+            drawable.update(world, *child, &self.state.queue, &combined_matrix);
+            drawable.draw(world, rpass, self.current_pipeline);
         }
     }
 
