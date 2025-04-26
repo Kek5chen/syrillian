@@ -468,29 +468,7 @@ impl Renderer {
 
         let light_bgl = world.assets.bind_group_layouts.get_bind_group_layout(LIGHT_UBGL_ID)
             .ok_or("Light UBGL should be engine-given")?;
-        let point_light_buffer = if point_light_count == 0 {
-            let dummy_point_light: ShaderPointlight = ShaderPointlight::default();
-            self.state.device.create_buffer_init(&BufferInitDescriptor {
-                label: Some("Empty Point Light Buffer"),
-                usage: BufferUsages::STORAGE,
-                contents: bytemuck::cast_slice(&[dummy_point_light]),
-            }) 
-        } else {
-            let light_data: Vec<ShaderPointlight> = point_lights
-                .iter()
-                .map(|m| m.borrow_mut())
-                .map(|mut light| {
-                    light.update_inner_pos();
-                    *light.inner()
-                })
-                .collect();
-            let light_bytes = bytemuck::cast_slice(&light_data);
-            self.state.device.create_buffer_init(&BufferInitDescriptor {
-                label: Some("Point Light Buffer"),
-                contents: light_bytes,
-                usage: BufferUsages::STORAGE,
-            })
-        };
+        let point_light_buffer = self.make_point_light_buffer(point_light_count, &point_lights);
         let light_count_buffer = self.state.device.create_buffer_init(&BufferInitDescriptor {
             label: Some("Light Count Buffer"),
             contents: bytemuck::bytes_of(&(point_light_count as u32)),
@@ -512,6 +490,32 @@ impl Renderer {
         });
 
         Ok(light_bind_group)
+    }
+
+    fn make_point_light_buffer(&self, point_light_count: usize, point_lights: &[Rc<RefCell<Box<PointLightComponent>>>]) -> Buffer {
+        if point_light_count == 0 {
+            let dummy_point_light: ShaderPointlight = ShaderPointlight::default();
+            self.state.device.create_buffer_init(&BufferInitDescriptor {
+                label: Some("Empty Point Light Buffer"),
+                usage: BufferUsages::STORAGE,
+                contents: bytemuck::cast_slice(&[dummy_point_light]),
+            }) 
+        } else {
+            let light_data: Vec<ShaderPointlight> = point_lights
+                .iter()
+                .map(|m| m.borrow_mut())
+                .map(|mut light| {
+                    light.update_inner_pos();
+                    *light.inner()
+                })
+                .collect();
+            let light_bytes = bytemuck::cast_slice(&light_data);
+            self.state.device.create_buffer_init(&BufferInitDescriptor {
+                label: Some("Point Light Buffer"),
+                contents: light_bytes,
+                usage: BufferUsages::STORAGE,
+            })
+        }
     }
 
     fn prepare_render_pass<'a>(&self, ctx: &'a mut RenderContext, load_op_color: LoadOp<Color>, load_op_depth: LoadOp<f32>) -> RenderPass<'a> {
