@@ -1,7 +1,6 @@
 use std::{error::Error, sync::{RwLock, RwLockWriteGuard}};
 
 use log::{error, warn};
-use russimp_ng::mesh;
 
 use crate::{asset_management::{materialmanager::MaterialId, Mesh, MeshId, MeshManager, RuntimeMesh, ShaderId}, buffer::UNIT_SQUARE, World};
 
