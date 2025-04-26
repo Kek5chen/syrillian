@@ -331,14 +331,14 @@ impl Renderer {
                 .expect("3D Pipeline should've been initialized previously");
         let (load_op_color, load_op_depth) = determine_draw_over_color(shader);
 
-        let mut rpass = self.prepare_render_pass(ctx, load_op_color, load_op_depth);
-
         let light_bind_group = self.setup_lights(world)?;
+
+        let mut rpass = self.prepare_render_pass(ctx, load_op_color, load_op_depth);
 
         let render_data = self
             .camera_render_data
             .as_mut()
-            .expect("Render data shoudl be initialized here");
+            .ok_or("Render data should be initialized here")?;
         
         rpass.set_bind_group(0, &render_data.camera_uniform_bind_group, &[]);
         rpass.set_bind_group(3, &light_bind_group, &[]);
