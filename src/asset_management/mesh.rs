@@ -112,7 +112,7 @@ impl Mesh {
         let model_data = ModelData::empty();
         let model_data_buffer = device.create_buffer_init(&BufferInitDescriptor {
             label: Some("Model Buffer"),
-            contents: bytemuck::cast_slice(&[model_data]),
+            contents: bytemuck::bytes_of(&model_data),
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
         });
         let bind_group = device.create_bind_group(&BindGroupDescriptor {
