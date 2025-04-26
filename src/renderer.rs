@@ -1,9 +1,10 @@
+use std::alloc::System;
 use std::cell::RefCell;
 use std::fmt::Debug;
 use std::rc::Rc;
 
 use log::{debug, warn, error};
-use nalgebra::{Matrix4, Perspective3};
+use nalgebra::{Matrix4, Perspective3, Vector2};
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::*;
 use winit::window::Window;
@@ -68,6 +69,13 @@ pub struct CameraRenderData {
     camera_uniform_bind_group: BindGroup,
 }
 
+#[derive(Default, Clone, Debug)]
+pub struct SystemRenderData {
+    screen_size: Vector2<u32>,
+    time: f32,
+    delta_time: f32,
+}
+
 #[derive(Debug, Default)]
 pub struct DebugRenderer {
     pub draw_edges: bool,
@@ -79,6 +87,7 @@ pub struct Renderer {
     window: Window,
     current_pipeline: Option<ShaderId>,
     camera_render_data: Option<CameraRenderData>,
+    system_render_data: SystemRenderData,
 
     // Offscreen texture for rendering the scene before post-processing
     offscreen_texture: Texture,
@@ -147,6 +156,7 @@ impl Renderer {
             window,
             current_pipeline: None,
             camera_render_data: None,
+            system_render_data: SystemRenderData::default(),
             offscreen_texture,
             offscreen_view,
             post_process_pass: None,
