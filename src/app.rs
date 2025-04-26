@@ -142,13 +142,15 @@ impl ApplicationHandler for App {
 
         renderer.init();
 
-        self.renderer = Some(renderer);
-
         if let Some(init) = self.hook_funcs.init {
-            if let Err(e) = init(&mut self.world, self.renderer.as_ref().unwrap().window()) {
+            if let Err(e) = init(&mut self.world, renderer.window()) {
                 error!("World init function hook returned: {e}");
             }
         }
+
+        self.world.initialize_runtime(&renderer);
+
+        self.renderer = Some(renderer);
     }
 
     fn window_event(
