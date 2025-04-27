@@ -1,9 +1,11 @@
 use std::{error::Error, sync::{RwLock, RwLockWriteGuard}};
 
 use log::{error, warn};
-use wgpu::{util::{BufferInitDescriptor, DeviceExt}, BindGroup, BindGroupDescriptor, BindGroupEntry, BufferUsages};
+use nalgebra::{Matrix4, Scale3, Translation3};
+use wgpu::{util::{BufferInitDescriptor, DeviceExt}, BindGroupDescriptor, BindGroupEntry, BufferUsages};
+use winit::window::Window;
 
-use crate::{asset_management::{bindgroup_layout_manager::MODEL_UBGL_ID, materialmanager::MaterialId, Mesh, MeshId, MeshManager, RuntimeMesh, ShaderId, DIM2_SHADER_ID}, buffer::UNIT_SQUARE, object::{GameObjectId, ModelData}, World};
+use crate::{asset_management::{bindgroup_layout_manager::MODEL_UBGL_ID, materialmanager::MaterialId, Mesh, MeshId, MeshManager, RuntimeMesh, DIM2_SHADER_ID}, buffer::UNIT_SQUARE, object::{GameObjectId, ModelData}, renderer::Renderer, World};
 
 use super::Drawable;
 
@@ -21,6 +23,7 @@ pub struct Image {
     right: u32,
     top: u32,
     bottom: u32,
+    initialized: bool,
     gpu_data: Option<ImageGPUData>,
 }
 
@@ -30,26 +33,31 @@ impl Image {
             material,
             left: 0,
             right: 0,
-            top: 0,
             bottom: 0,
+            top: 0,
+            initialized: false,
             gpu_data: None,
         })
     }
 
     pub fn set_left(&mut self, left: u32) {
-        self.left = left;
+        self.left = left.min(self.right);
+        self.initialized = true;
     }
 
     pub fn set_right(&mut self, right: u32) {
-        self.right = right;
+        self.right = right.max(self.left);
+        self.initialized = true;
     }
 
     pub fn set_top(&mut self, top: u32) {
-        self.top = top;
+        self.top = top.max(self.bottom);
+        self.initialized = true;
     }
 
     pub fn set_bottom(&mut self, bottom: u32) {
-        self.bottom = bottom;
+        self.bottom = bottom.min(self.top);
+        self.initialized = true;
     }
 
     pub fn left(&self) -> u32 {
@@ -72,26 +80,25 @@ impl Image {
 impl Drawable for Image {
     fn setup(
             &mut self,
-            device: &wgpu::Device,
-            _queue: &wgpu::Queue,
+            renderer: &Renderer,
             world: &mut World,
         ) {
         ensure_unit_square(world);
 
-        self.setup_model_data(world, device);
+        self.setup_model_data(world, &renderer.state.device);
     }
 
     fn update(
             &mut self,
             _world: &mut World,
-            parent: GameObjectId,
-            queue: &wgpu::Queue,
+            _parent: GameObjectId,
+            renderer: &Renderer,
             _outer_transform: &nalgebra::Matrix4<f32>,
         ) {
-        
+        self.update_model_matrix(&renderer.state.queue, &renderer.window);
     }
 
-    fn draw(&self, world: &mut World, rpass: &mut wgpu::RenderPass, _default_shader: Option<ShaderId>) {
+    fn draw(&self, world: &mut World, rpass: &mut wgpu::RenderPass, _renderer: &Renderer) {
         let unit_square_runtime = match unit_square_mesh(&mut world.assets.meshes) {
             Ok(s) => s,
             Err(e) => {
@@ -158,6 +165,44 @@ impl Image {
             model_data_buffer,
             model_bind_group,
         });
+    }
+
+    fn calculate_model_matrix(&self, window_width: f32, window_height: f32) -> Matrix4<f32> {
+        if self.right == 0 || self.top == 0 {
+            return Matrix4::zeros();
+        }
+
+        let left   = (self.left   as f32 / window_width)  * 2.0 - 1.0;
+        let right  = (self.right  as f32 / window_width)  * 2.0 - 1.0;
+        let bottom = (self.bottom as f32 / window_height) * 2.0 - 1.0;
+        let top    = (self.top    as f32 / window_height) * 2.0 - 1.0;
+
+        let sx = (right - left)  * 0.5;
+        let sy = (top   - bottom) * 0.5;
+
+        // clip space
+        let tx = (right + left)   * 0.5;
+        let ty = (top   + bottom) * 0.5;
+
+        Translation3::new(tx, ty, 0.0).to_homogeneous()
+            * Scale3::new(sx, sy, 1.0).to_homogeneous()
+    }
+
+    fn update_model_matrix(&mut self, queue: &wgpu::Queue, window: &Window) {
+        let window_size = window.inner_size();
+        let new_model_mat = self.calculate_model_matrix(window_size.width as f32, window_size.height as f32);
+
+        let Some(gpu_data) = &mut self.gpu_data else {
+            error!("GPU data not set");
+            return;
+        };
+        gpu_data.model_data.model_mat = new_model_mat;
+
+        queue.write_buffer(
+            &gpu_data.model_data_buffer,
+            0,
+            bytemuck::bytes_of(&gpu_data.model_data)
+        );
     }
 }
 
