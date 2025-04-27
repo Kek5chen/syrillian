@@ -83,9 +83,9 @@ pub struct DebugRenderer {
 
 #[allow(dead_code)]
 pub struct Renderer {
-    pub(crate) state: Box<State>,
-    window: Window,
-    current_pipeline: Option<ShaderId>,
+    pub state: Box<State>,
+    pub window: Window,
+    pub current_pipeline: Option<ShaderId>,
     camera_render_data: Option<CameraRenderData>,
     system_render_data: SystemRenderData,
 
@@ -376,8 +376,8 @@ impl Renderer {
                 continue;
             };
 
-            drawable.update(world, *child, &self.state.queue, &combined_matrix);
-            drawable.draw(world, rpass, self.current_pipeline);
+            drawable.update(world, *child, self, &combined_matrix);
+            drawable.draw(world, rpass, self);
         }
     }
 

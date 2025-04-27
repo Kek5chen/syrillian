@@ -1,12 +1,12 @@
 use log::error;
 use nalgebra::Matrix4;
-use wgpu::{Device, IndexFormat, Queue, RenderPass};
+use wgpu::{IndexFormat, RenderPass};
 
 use crate::asset_management::materialmanager::{MaterialId, FALLBACK_MATERIAL_ID};
 use crate::asset_management::meshmanager::MeshId;
-use crate::asset_management::ShaderId;
 use crate::drawables::drawable::Drawable;
 use crate::object::GameObjectId;
+use crate::renderer::Renderer;
 use crate::world::World;
 
 pub struct MeshRenderer {
@@ -26,8 +26,7 @@ impl MeshRenderer {
 impl Drawable for MeshRenderer {
     fn setup(
         &mut self,
-        _device: &Device,
-        _queue: &Queue,
+        _renderer: &Renderer,
         world: &mut World,
     ) {
         world.assets.meshes.init_runtime_mesh(self.mesh);
@@ -58,7 +57,7 @@ impl Drawable for MeshRenderer {
         &mut self,
         world: &mut World,
         parent: GameObjectId,
-        queue: &Queue,
+        renderer: &Renderer,
         outer_transform: &Matrix4<f32>,
     ) {
         // TODO: Meshes should be able to be shared. Give ModelData to the MeshRenderer
@@ -73,14 +72,14 @@ impl Drawable for MeshRenderer {
             .model_data
             .update(parent, outer_transform);
 
-        queue.write_buffer(
+        renderer.state.queue.write_buffer(
             &runtime_mesh.data.model_data_buffer,
             0,
             bytemuck::cast_slice(&[runtime_mesh.data.model_data]),
         )
     }
 
-    fn draw(&self, world: &mut World, rpass: &mut RenderPass, default_pipeline: Option<ShaderId>) {
+    fn draw(&self, world: &mut World, rpass: &mut RenderPass, renderer: &Renderer) {
         unsafe {
             let world = world as *mut World;
 
@@ -99,7 +98,7 @@ impl Drawable for MeshRenderer {
             let default_shader = (*world)
                 .assets
                 .shaders
-                .get_shader(default_pipeline)
+                .get_shader(renderer.current_pipeline)
                 .unwrap_or_else(|| {
                     error!("Passed in Default Pipeline is not available");
                     (*world)

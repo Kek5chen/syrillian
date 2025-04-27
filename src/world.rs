@@ -195,8 +195,7 @@ impl World {
             for obj in self.objects.values_mut() {
                 if let Some(ref mut drawable) = obj.drawable {
                     drawable.setup(
-                        &renderer.state.device,
-                        &renderer.state.queue,
+                        renderer,
                         &mut *world_ptr,
                     )
                 }
