@@ -187,8 +187,8 @@ impl Renderer {
         // TODO: Make it possible to pick a shader
         self.current_pipeline = Some(DIM3_SHADER_ID);
 
-        let camera_data = Box::new(CameraData::empty());
-        let system_data = Box::new(SystemRenderData::default());
+        let camera_data = Box::<CameraData>::default();
+        let system_data = Box::<SystemRenderData>::default();
 
         let camera_buffer = self.state.device.create_buffer_init(&BufferInitDescriptor {
             label: Some("Camera Uniform Buffer"),
