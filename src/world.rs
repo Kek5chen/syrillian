@@ -21,6 +21,7 @@ pub struct World {
     pub assets: AssetManager,
     pub physics: PhysicsSimulator,
     pub input: InputManager,
+    start_time: Instant,
     delta_time: Duration,
     last_frame_time: Instant,
     requested_shutdown: bool,
@@ -40,6 +41,7 @@ impl World {
             assets: AssetManager::default(),
             last_frame_time: Instant::now(),
             physics: PhysicsSimulator::default(),
+            start_time: Instant::now(),
             delta_time: Duration::default(),
             input: InputManager::default(),
             requested_shutdown: false,
@@ -187,6 +189,14 @@ impl World {
 
     pub fn get_delta_time(&self) -> Duration {
         self.delta_time
+    }
+
+    pub fn start_time(&self) -> &Instant {
+        &self.start_time
+    }
+
+    pub fn time(&self) -> Duration {
+        self.start_time.elapsed()
     }
 
     pub fn initialize_runtime(&mut self, renderer: &Renderer) {

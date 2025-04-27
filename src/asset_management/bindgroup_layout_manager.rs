@@ -28,7 +28,7 @@ pub struct BindGroupLayoutManager {
     device: Option<Rc<Device>>
 }
 
-pub const CAMERA_UBGL_ID: BGLId = 0;
+pub const RENDER_UBGL_ID: BGLId = 0;
 pub const MODEL_UBGL_ID: BGLId = 1;
 pub const MATERIAL_UBGL_ID: BGLId = 2;
 pub const LIGHT_UBGL_ID: BGLId = 3;
@@ -43,19 +43,30 @@ impl Default for BindGroupLayoutManager {
             device: None,
         };
 
-        let id = manager.add_bind_group_layout(Some("Camera Uniform Bind Group Layout"), vec![
-            BindGroupLayoutEntry {
-                binding: 0,
-                visibility: ShaderStages::VERTEX_FRAGMENT,
-                ty: BindingType::Buffer {
-                    ty: BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
+        let id = manager.add_bind_group_layout(Some("Render Uniform Bind Group Layout"), vec![
+                BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: ShaderStages::VERTEX_FRAGMENT,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
                 },
-                count: None,
-            }],
+                BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: ShaderStages::VERTEX_FRAGMENT,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }
+            ],
         );
-        assert_eq!(id, CAMERA_UBGL_ID);
+        assert_eq!(id, RENDER_UBGL_ID);
 
         let id = manager.add_bind_group_layout(Some("Model Uniform Bind Group Layout"), vec![
             BindGroupLayoutEntry {

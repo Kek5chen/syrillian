@@ -36,7 +36,7 @@ impl Component for CameraComponent {
 
 // TODO: Remove manual padding somehow?
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Default, Debug, Copy, Clone)]
 pub struct CameraData {
     pos: Vector3<f32>,
     _padding0: f32,
