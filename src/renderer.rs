@@ -2,12 +2,13 @@ use std::cell::RefCell;
 use std::fmt::Debug;
 use std::rc::Rc;
 
+use bytemuck::{Pod, Zeroable};
 use log::error;
 use nalgebra::{Matrix4, Perspective3, Vector2};
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::*;
 use winit::window::Window;
-use crate::asset_management::bindgroup_layout_manager::{CAMERA_UBGL_ID, LIGHT_UBGL_ID, POST_PROCESS_BGL_ID};
+use crate::asset_management::bindgroup_layout_manager::{RENDER_UBGL_ID, LIGHT_UBGL_ID, POST_PROCESS_BGL_ID};
 use crate::asset_management::shadermanager::{ShaderId, DIM3_SHADER_ID, FALLBACK_SHADER_ID, POST_PROCESS_SHADER_ID};
 use crate::asset_management::RuntimeShader;
 use crate::components::camera::CameraData;
@@ -63,17 +64,22 @@ pub struct RenderContext {
     pub encoder: CommandEncoder,
 }
 
-pub struct CameraRenderData {
-    camera_uniform_data: Box<CameraData>,
-    camera_uniform_buffer: Buffer,
-    camera_uniform_bind_group: BindGroup,
-}
-
-#[derive(Default, Clone, Debug)]
+#[derive(Default, Copy, Clone, Debug)]
 pub struct SystemRenderData {
     screen_size: Vector2<u32>,
     time: f32,
     delta_time: f32,
+}
+
+unsafe impl Zeroable for SystemRenderData {}
+unsafe impl Pod for SystemRenderData {}
+
+pub struct RenderUniformData {
+    camera_data: Box<CameraData>,
+    camera_buffer: Buffer,
+    system_data: Box<SystemRenderData>,
+    system_buffer: Buffer,
+    bind_group: BindGroup,
 }
 
 #[derive(Debug, Default)]
@@ -86,8 +92,7 @@ pub struct Renderer {
     pub state: Box<State>,
     pub window: Window,
     pub current_pipeline: Option<ShaderId>,
-    camera_render_data: Option<CameraRenderData>,
-    system_render_data: SystemRenderData,
+    render_uniform_data: Option<RenderUniformData>,
 
     // Offscreen texture for rendering the scene before post-processing
     offscreen_texture: Texture,
@@ -155,8 +160,7 @@ impl Renderer {
             state,
             window,
             current_pipeline: None,
-            camera_render_data: None,
-            system_render_data: SystemRenderData::default(),
+            render_uniform_data: None,
             offscreen_texture,
             offscreen_view,
             post_process_pass: None,
@@ -184,16 +188,41 @@ impl Renderer {
         self.current_pipeline = Some(DIM3_SHADER_ID);
 
         let camera_data = Box::new(CameraData::empty());
-        let camera_bgl = World::instance().assets.bind_group_layouts.get_bind_group_layout(CAMERA_UBGL_ID).unwrap();
-        let (camera_uniform_buffer, camera_uniform_bind_group) = Self::create_uniform_init(
-            camera_bgl,
-            &self.state,
-            bytemuck::cast_slice(&[*camera_data]),
-        );
-        self.camera_render_data = Some(CameraRenderData {
-            camera_uniform_data: camera_data,
-            camera_uniform_buffer,
-            camera_uniform_bind_group,
+        let system_data = Box::new(SystemRenderData::default());
+
+        let camera_buffer = self.state.device.create_buffer_init(&BufferInitDescriptor {
+            label: Some("Camera Uniform Buffer"),
+            contents: bytemuck::bytes_of(camera_data.as_ref()),
+            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+        });
+        let system_buffer = self.state.device.create_buffer_init(&BufferInitDescriptor {
+            label: Some("System Uniform Buffer"),
+            contents: bytemuck::bytes_of(system_data.as_ref()),
+            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+        });
+
+        let render_data_bgl = World::instance().assets.bind_group_layouts.get_bind_group_layout(RENDER_UBGL_ID).unwrap();
+        let bind_group = self.state.device.create_bind_group(&BindGroupDescriptor {
+            label: Some("Render Uniform Bind Group"),
+            layout: render_data_bgl,
+            entries: &[
+                BindGroupEntry {
+                    binding: 0,
+                    resource: camera_buffer.as_entire_binding(),
+                },
+                BindGroupEntry {
+                    binding: 1,
+                    resource: system_buffer.as_entire_binding(),
+                },
+            ],
+        });
+
+        self.render_uniform_data = Some(RenderUniformData {
+            camera_data,
+            camera_buffer,
+            system_data,
+            system_buffer,
+            bind_group,
         });
 
         let world = World::instance();
@@ -321,7 +350,7 @@ impl Renderer {
         world: &mut World,
         shader_override: Option<ShaderId>
     ) -> Result<(), Box<dyn std::error::Error>> {
-        self.setup_camera_data(world)?;
+        self.update_render_data(world)?;
 
         let shader_id = self.default_shader_id(shader_override)?;
         let shader = world
@@ -336,11 +365,11 @@ impl Renderer {
         let mut rpass = self.prepare_render_pass(ctx, load_op_color, load_op_depth);
 
         let render_data = self
-            .camera_render_data
+            .render_uniform_data
             .as_mut()
             .ok_or("Render data should be initialized here")?;
         
-        rpass.set_bind_group(0, &render_data.camera_uniform_bind_group, &[]);
+        rpass.set_bind_group(0, &render_data.bind_group, &[]);
         rpass.set_bind_group(3, &light_bind_group, &[]);
 
         let world_ptr = world as *mut World;
@@ -422,11 +451,18 @@ impl Renderer {
         &mut self.window
     }
 
-    fn setup_camera_data(&mut self, world: &World) -> Result<(), Box<dyn std::error::Error>> {
+    fn update_render_data(&mut self, world: &World) -> Result<(), Box<dyn std::error::Error>> {
+        self.update_camera_data(world)?;
+        self.update_system_data(world)?;
+
+        Ok(())
+    }
+
+    fn update_camera_data(&mut self, world: &World) -> Result<(), Box<dyn std::error::Error>> {
         let render_data = self
-            .camera_render_data
+            .render_uniform_data
             .as_mut()
-            .ok_or("Camera render data should be initialized")?;
+            .ok_or("Render data should be initialized")?;
 
         let Some(camera_rc) = world.active_camera.as_ref() else {
             return Err("No camera set. Can't render".into())
@@ -443,13 +479,35 @@ impl Renderer {
         let camera_transform = &camera.transform;
 
         render_data
-            .camera_uniform_data
+            .camera_data
             .update(projection_matrix, camera_transform);
 
         self.state.queue.write_buffer(
-            &render_data.camera_uniform_buffer,
+            &render_data.camera_buffer,
             0,
-            bytemuck::cast_slice(&[*render_data.camera_uniform_data]),
+            bytemuck::bytes_of(render_data.camera_data.as_ref())
+        );
+
+        Ok(())
+    }
+
+    fn update_system_data(&mut self, world: &World) -> Result<(), Box<dyn std::error::Error>> {
+        let render_data = self
+            .render_uniform_data
+            .as_mut()
+            .ok_or("Render data should be initialized")?;
+
+        let window_size = self.window.inner_size();
+        let window_size = Vector2::new(window_size.width, window_size.height);
+
+        render_data.system_data.screen_size = window_size;
+        render_data.system_data.time        = world.time().as_secs_f32();
+        render_data.system_data.delta_time  = world.get_delta_time().as_secs_f32();
+
+        self.state.queue.write_buffer(
+            &render_data.system_buffer,
+            0,
+            bytemuck::bytes_of(render_data.system_data.as_ref())
         );
 
         Ok(())

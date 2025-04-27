@@ -6,11 +6,11 @@ use std::path::Path;
 use std::rc::Rc;
 use wgpu::*;
 
-use crate::asset_management::bindgroup_layout_manager::{CAMERA_UBGL_ID, MATERIAL_UBGL_ID, MODEL_UBGL_ID, POST_PROCESS_BGL_ID};
+use crate::asset_management::bindgroup_layout_manager::{MATERIAL_UBGL_ID, MODEL_UBGL_ID, POST_PROCESS_BGL_ID};
 use crate::asset_management::mesh::Vertex3D;
 use crate::world::World;
 
-use super::bindgroup_layout_manager::LIGHT_UBGL_ID;
+use super::bindgroup_layout_manager::{LIGHT_UBGL_ID, RENDER_UBGL_ID};
 
 const POST_PROCESS_SHADER_PRE_CONTEXT: &str = include_str!("../shaders/engine_reserved_groups/post_process.wgsl");
 const SHADER_PRE_CONTEXT: &str = include_str!("../shaders/engine_reserved_groups/basic.wgsl");
@@ -60,10 +60,10 @@ impl Shader {
         Cow::Owned(format!("{}\n{}", &self.code, POST_PROCESS_SHADER_PRE_CONTEXT))
     }
 
-    pub fn initialize_combined_runtime(
+    pub fn initialize_default_runtime(
         &self,
         device: &Device,
-        camera_uniform_bind_group_layout: &BindGroupLayout,
+        render_uniform_bind_group_layout: &BindGroupLayout,
         model_uniform_bind_group_layout: &BindGroupLayout,
         material_uniform_bind_group_layout: &BindGroupLayout,
         light_uniform_bind_group_layout: &BindGroupLayout,
@@ -75,7 +75,7 @@ impl Shader {
         let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
             label: Some(&format!("{} Pipeline Layout", self.name)),
             bind_group_layouts: &[
-                camera_uniform_bind_group_layout,
+                render_uniform_bind_group_layout,
                 model_uniform_bind_group_layout,
                 material_uniform_bind_group_layout,
                 light_uniform_bind_group_layout
@@ -280,28 +280,26 @@ impl ShaderManager {
         let world = World::instance();
         let bgls = &world.assets.bind_group_layouts;
 
-        let runtime_shader = match id {
-            POST_PROCESS_SHADER_ID => {
+        let runtime_shader = 
+            if id == POST_PROCESS_SHADER_ID {
                 let post_process_ubgl = bgls.get_bind_group_layout(POST_PROCESS_BGL_ID).unwrap();
                 raw_shader.initialize_post_process_runtime(
                     self.device.clone().unwrap().as_ref(),
                     post_process_ubgl,
                 )
-            },
-            _ => {
-                let camera_ubgl = bgls.get_bind_group_layout(CAMERA_UBGL_ID).unwrap();
+            } else {
+                let render_ubgl = bgls.get_bind_group_layout(RENDER_UBGL_ID).unwrap();
                 let model_ubgl = bgls.get_bind_group_layout(MODEL_UBGL_ID).unwrap();
                 let material_ubgl = bgls.get_bind_group_layout(MATERIAL_UBGL_ID).unwrap();
                 let lighting_ubgl = bgls.get_bind_group_layout(LIGHT_UBGL_ID).unwrap();
-                raw_shader.initialize_combined_runtime(
+                raw_shader.initialize_default_runtime(
                     self.device.clone().unwrap().as_ref(),
-                    camera_ubgl,
+                    render_ubgl,
                     model_ubgl,
                     material_ubgl,
                     lighting_ubgl
                 )
-            },
-        };
+            };
 
         self.runtime_shaders.insert(id, runtime_shader);
 
