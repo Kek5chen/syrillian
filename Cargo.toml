@@ -15,7 +15,7 @@ bytemuck = "1.18.0"
 log = "0.4.22"
 nalgebra = { version = "0.33.0" }
 num-traits = "0.2.19"
-russimp-ng = { git = "https://github.com/Kek5chen/russimp-ng" }
+russimp-ng = { git = "https://github.com/Kek5chen/russimp-ng", features = [ "static-link" ] }
 itertools = "0.14.0"
 image = "0.25.2"
 rapier3d = "0.25.0"
