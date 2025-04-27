@@ -23,7 +23,6 @@ pub struct Image {
     right: u32,
     top: u32,
     bottom: u32,
-    initialized: bool,
     gpu_data: Option<ImageGPUData>,
 }
 
@@ -35,29 +34,35 @@ impl Image {
             right: 0,
             bottom: 0,
             top: 0,
-            initialized: false,
+            gpu_data: None,
+        })
+    }
+
+    pub fn new_with_size(material: MaterialId, left: u32, right: u32, bottom: u32, top: u32) -> Box<Image> {
+        Box::new(Image {
+            material,
+            left,
+            right,
+            bottom,
+            top,
             gpu_data: None,
         })
     }
 
     pub fn set_left(&mut self, left: u32) {
         self.left = left.min(self.right);
-        self.initialized = true;
     }
 
     pub fn set_right(&mut self, right: u32) {
         self.right = right.max(self.left);
-        self.initialized = true;
     }
 
     pub fn set_top(&mut self, top: u32) {
         self.top = top.max(self.bottom);
-        self.initialized = true;
     }
 
     pub fn set_bottom(&mut self, bottom: u32) {
         self.bottom = bottom.min(self.top);
-        self.initialized = true;
     }
 
     pub fn left(&self) -> u32 {

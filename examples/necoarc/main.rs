@@ -1,13 +1,16 @@
 use std::error::Error;
 
-use log::error;
+use log::{error, LevelFilter};
 use nalgebra::Vector3;
 use syrillian::{asset_management::{materialmanager::Material, Mesh, DIM3_SHADER_ID}, buffer::{CUBE, CUBE_INDICES}, components::RotateComponent, drawables::{Image, MeshRenderer}, App, World};
 use winit::window::Window;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    env_logger::init();
+    env_logger::builder()
+        .filter_level(LevelFilter::Info)
+        .parse_default_env()
+        .init();
 
     let mut app = App::create("Neco Arc", 800, 600);
     app.with_init(Some(init));
@@ -47,20 +50,17 @@ fn init(world: &mut World, _window: &Window) -> Result<(), Box<dyn Error>> {
 
     let drawable = MeshRenderer::new(mesh);
     neco.set_drawable(Some(drawable));
-
     neco.add_component::<RotateComponent>();
-
     neco.transform.set_position(Vector3::new(0.0, 0.0, -5.0));
-
     world.add_child(neco);
 
     let mut image_obj = world.new_object("Image");
-    let image = Image::new(material);
-
-    image_obj.set_drawable(Some(image));
-
+    image_obj.set_drawable(Some(Image::new_with_size(material, 0, 800, 0, 200)));
     world.add_child(image_obj);
 
+    let mut image_obj = world.new_object("Image 2");
+    image_obj.set_drawable(Some(Image::new_with_size(material, 0, 800, 400, 600)));
+    world.add_child(image_obj);
 
     Ok(())
 }
