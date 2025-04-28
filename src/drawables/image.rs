@@ -11,18 +11,41 @@ use super::Drawable;
 
 static UNIT_SQUARE_ID: RwLock<Option<MeshId>> = RwLock::new(None);
 
+#[derive(Debug, Clone, Copy)]
+pub enum ImageScalingMode {
+    Absolute {
+        left: u32,
+        right: u32,
+        top: u32,
+        bottom: u32,
+    },
+    Relative {
+        width: u32,
+        height: u32,
+        left: u32,
+        right: u32,
+        top: u32,
+        bottom: u32,
+    },
+    RelativeStretch {
+        left: f32,
+        right: f32,
+        top: f32,
+        bottom: f32,
+    },
+}
+
+#[derive(Debug)]
 struct ImageGPUData {
     model_data: ModelData,
     model_data_buffer: wgpu::Buffer,
     model_bind_group: wgpu::BindGroup,
 }
 
+#[derive(Debug)]
 pub struct Image {
     material: MaterialId,
-    left: u32,
-    right: u32,
-    top: u32,
-    bottom: u32,
+    scaling: ImageScalingMode,
     gpu_data: Option<ImageGPUData>,
 }
 
@@ -30,55 +53,30 @@ impl Image {
     pub fn new(material: MaterialId) -> Box<Image> {
         Box::new(Image {
             material,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            top: 0,
+            scaling: ImageScalingMode::Absolute {
+                left: 0,
+                right: 0,
+                top: 0,
+                bottom: 0,
+            },
             gpu_data: None,
         })
     }
 
-    pub fn new_with_size(material: MaterialId, left: u32, right: u32, bottom: u32, top: u32) -> Box<Image> {
+    pub fn new_with_size(material: MaterialId, scaling: ImageScalingMode) -> Box<Image> {
         Box::new(Image {
             material,
-            left,
-            right,
-            bottom,
-            top,
+            scaling,
             gpu_data: None,
         })
     }
 
-    pub fn set_left(&mut self, left: u32) {
-        self.left = left.min(self.right);
+    pub fn scaling_mode(&self) -> ImageScalingMode {
+        self.scaling
     }
 
-    pub fn set_right(&mut self, right: u32) {
-        self.right = right.max(self.left);
-    }
-
-    pub fn set_top(&mut self, top: u32) {
-        self.top = top.max(self.bottom);
-    }
-
-    pub fn set_bottom(&mut self, bottom: u32) {
-        self.bottom = bottom.min(self.top);
-    }
-
-    pub fn left(&self) -> u32 {
-        self.left
-    }
-
-    pub fn right(&self) -> u32 {
-        self.right
-    }
-
-    pub fn top(&self) -> u32 {
-        self.top
-    }
-
-    pub fn bottom(&self) -> u32 {
-        self.bottom
+    pub fn set_scaling_mode(&mut self, scaling: ImageScalingMode) {
+        self.scaling = scaling;
     }
 }
 
@@ -172,17 +170,21 @@ impl Image {
         });
     }
 
-    fn calculate_model_matrix(&self, window_width: f32, window_height: f32) -> Matrix4<f32> {
-        if self.right == 0 || self.top == 0 {
+    fn calculate_model_matrix_absolute(&self, window_width: f32, window_height: f32) -> Matrix4<f32> {
+        let ImageScalingMode::Absolute { left, right, top, bottom } = self.scaling else {
+            return Matrix4::zeros();
+        };
+
+        if right <= left || top <= bottom {
             return Matrix4::zeros();
         }
 
-        let left   = (self.left   as f32 / window_width)  * 2.0 - 1.0;
-        let right  = (self.right  as f32 / window_width)  * 2.0 - 1.0;
-        let bottom = (self.bottom as f32 / window_height) * 2.0 - 1.0;
-        let top    = (self.top    as f32 / window_height) * 2.0 - 1.0;
+        let left   = (left   as f32 / window_width)  * 2.0 - 1.0;
+        let right  = (right  as f32 / window_width)  * 2.0 - 1.0;
+        let bottom = (bottom as f32 / window_height) * 2.0 - 1.0;
+        let top    = (top    as f32 / window_height) * 2.0 - 1.0;
 
-        let sx = (right - left)  * 0.5;
+        let sx = (right - left)   * 0.5;
         let sy = (top   - bottom) * 0.5;
 
         // clip space
@@ -193,9 +195,74 @@ impl Image {
             * Scale3::new(sx, sy, 1.0).to_homogeneous()
     }
 
+    fn calculate_model_matrix_relative(&self) -> Matrix4<f32> {
+        let ImageScalingMode::Relative { 
+            width,
+            height,
+            left,
+            right,
+            top,
+            bottom,
+        } = self.scaling else {
+            return Matrix4::zeros();
+        };
+
+        if right <= left || top <= bottom {
+            return Matrix4::zeros();
+        }
+
+        let width = width as f32;
+        let height = height as f32;
+
+        let left   = (left   as f32 / width)  * 2.0 - 1.0;
+        let right  = (right  as f32 / width)  * 2.0 - 1.0;
+        let bottom = (bottom as f32 / height) * 2.0 - 1.0;
+        let top    = (top    as f32 / height) * 2.0 - 1.0;
+
+        let sx = (right - left)   * 0.5;
+        let sy = (top   - bottom) * 0.5;
+
+        // clip space
+        let tx = (right + left)   * 0.5;
+        let ty = (top   + bottom) * 0.5;
+
+        Translation3::new(tx, ty, 0.0).to_homogeneous()
+            * Scale3::new(sx, sy, 1.0).to_homogeneous()
+    }
+
+    fn calculate_model_matrix_relative_stretch(&self) -> Matrix4<f32> {
+        let ImageScalingMode::RelativeStretch { left, right, top, bottom } = self.scaling else {
+            return Matrix4::zeros();
+        };
+
+        if right <= left || top <= bottom {
+            return Matrix4::zeros();
+        }
+
+        let sx = right - left;
+        let sy = top   - bottom;
+
+        let tx = left   + right - 1.0;
+        let ty = bottom + top   - 1.0;
+
+        Translation3::new(tx, ty, 0.0).to_homogeneous()
+            * Scale3::new(sx, sy, 1.0).to_homogeneous()
+    }
+
+    fn calculate_model_matrix(&self, window_width: f32, window_height: f32) -> Matrix4<f32> {
+        match self.scaling {
+            ImageScalingMode::Absolute {..} => self.calculate_model_matrix_absolute(window_width, window_height),
+            ImageScalingMode::Relative {..} => self.calculate_model_matrix_relative(),
+            ImageScalingMode::RelativeStretch {..} => self.calculate_model_matrix_relative_stretch(),
+        }
+    }
+
     fn update_model_matrix(&mut self, queue: &wgpu::Queue, window: &Window) {
         let window_size = window.inner_size();
-        let new_model_mat = self.calculate_model_matrix(window_size.width as f32, window_size.height as f32);
+        let width = window_size.width as f32;
+        let height = window_size.height as f32;
+
+        let new_model_mat = self.calculate_model_matrix(width, height);
 
         let Some(gpu_data) = &mut self.gpu_data else {
             error!("GPU data not set");

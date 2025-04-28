@@ -2,7 +2,7 @@ use std::error::Error;
 
 use log::{error, LevelFilter};
 use nalgebra::Vector3;
-use syrillian::{asset_management::{materialmanager::Material, Mesh, DIM3_SHADER_ID}, buffer::{CUBE, CUBE_INDICES}, components::RotateComponent, drawables::{Image, MeshRenderer}, App, World};
+use syrillian::{asset_management::{materialmanager::Material, Mesh, DIM3_SHADER_ID}, buffer::{CUBE, CUBE_INDICES}, components::RotateComponent, drawables::{Image, ImageScalingMode, MeshRenderer}, App, World};
 use winit::window::Window;
 
 #[tokio::main]
@@ -55,11 +55,21 @@ fn init(world: &mut World, _window: &Window) -> Result<(), Box<dyn Error>> {
     world.add_child(neco);
 
     let mut image_obj = world.new_object("Image");
-    image_obj.set_drawable(Some(Image::new_with_size(material, 0, 800, 0, 200)));
+    image_obj.set_drawable(Some(Image::new_with_size(material, ImageScalingMode::RelativeStretch {
+        left: 0.0,
+        right: 1.0,
+        top: 1.0,
+        bottom: 0.666
+    })));
     world.add_child(image_obj);
 
     let mut image_obj = world.new_object("Image 2");
-    image_obj.set_drawable(Some(Image::new_with_size(material, 0, 800, 400, 600)));
+    image_obj.set_drawable(Some(Image::new_with_size(material, ImageScalingMode::RelativeStretch {
+        left: 0.0,
+        right: 1.0,
+        top: 0.333,
+        bottom: 0.0,
+    })));
     world.add_child(image_obj);
 
     Ok(())
