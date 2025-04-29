@@ -20,6 +20,8 @@ pub type MaterialId = usize;
 
 pub const FALLBACK_MATERIAL_ID: usize = 0;
 
+// TODO: Consider Builder Pattern
+//
 #[derive(Debug, Clone)]
 pub struct Material {
     pub name: String,
