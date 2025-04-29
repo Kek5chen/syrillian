@@ -1,7 +1,7 @@
 use std::ops::Range;
 
 use bytemuck::{Pod, Zeroable};
-use nalgebra::{Point, Vector2, Vector3, Vector4};
+use nalgebra::{Matrix4, Point, Vector2, Vector3, Vector4};
 use wgpu::{BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BufferAddress, BufferUsages, Device, VertexAttribute, VertexFormat};
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 
@@ -18,38 +18,130 @@ pub struct SimpleVertex3D {
 impl SimpleVertex3D {
     pub const fn upgrade(self) -> Vertex3D {
         Vertex3D {
-            position: Vector3::new(self.position[0], self.position[1], self.position[2]),
+            position:  Vector3::new(self.position[0], self.position[1], self.position[2]),
             tex_coord: Vector2::new(self.uv[0], self.uv[1]),
-            normal: Vector3::new(self.normal[0], self.normal[1], self.normal[2]),
-            tangent: Vector3::new(0.0, 0.0, 0.0),
+            normal:    Vector3::new(self.normal[0], self.normal[1], self.normal[2]),
+            tangent:   Vector3::new(0.0, 0.0, 0.0),
             bitangent: Vector3::new(0.0, 0.0, 0.0),
+            bone_indicies: [ 0xFF, 0xFF, 0xFF, 0xFF ],
+            bone_weights:  [ 0.0, 0.0, 0.0, 0.0 ],
         }
     }
 }
 
-#[derive(Copy, Clone, Debug)]
 #[repr(C)]
+#[derive(Copy, Clone, Debug)]
 pub struct Vertex3D {
-    pub position: Vector3<f32>,
-    pub tex_coord: Vector2<f32>,
-    pub normal: Vector3<f32>,
-    pub tangent: Vector3<f32>,
-    pub bitangent: Vector3<f32>,
+    pub position:      Vector3<f32>,
+    pub tex_coord:     Vector2<f32>,
+    pub normal:        Vector3<f32>,
+    pub tangent:       Vector3<f32>,
+    pub bitangent:     Vector3<f32>,
+    pub bone_indicies: [u32; 4],
+    pub bone_weights:  [f32; 4],
+}
+
+impl Vertex3D {
+    pub fn new(
+        position:      Vector3<f32>,
+        tex_coord:     Vector2<f32>,
+        normal:        Vector3<f32>,
+        tangent:       Vector3<f32>,
+        bitangent:     Vector3<f32>,
+        bone_indicies: &[u32],
+        bone_weights:  &[f32],
+    ) -> Self {
+        Vertex3D {
+            position,
+            tex_coord,
+            normal,
+            tangent,
+            bitangent,
+            bone_indicies: pad_to_four(bone_indicies, 0xFF),
+            bone_weights: pad_to_four(bone_weights, 0.0),
+        }
+    }
+}
+
+fn pad_to_four<T: Copy>(input: &[T], default: T) -> [T; 4] {
+    let mut arr = [default; 4];
+    let count = input.len().min(4);
+    arr[..count].copy_from_slice(&input[..count]);
+    arr
 }
 
 unsafe impl Zeroable for Vertex3D {}
-unsafe impl Pod for Vertex3D {}
+unsafe impl Pod      for Vertex3D {}
 
 #[allow(dead_code)]
 #[derive(Debug)]
 pub struct RuntimeMeshData {
     pub(crate) vertices_buf: wgpu::Buffer,
     pub(crate) vertices_num: usize,
-    pub(crate) indices_buf: Option<wgpu::Buffer>,
-    pub(crate) indices_num: usize,
-    pub(crate) model_data: ModelData,
+    pub(crate) indices_buf:  Option<wgpu::Buffer>,
+    pub(crate) indices_num:  usize,
+
+    // TODO: Move this to object not mesh.. so meshes are sharable
+    pub(crate) model_data:        ModelData,
     pub(crate) model_data_buffer: wgpu::Buffer,
-    pub(crate) model_bind_group: wgpu::BindGroup,
+    pub(crate) model_bind_group:  wgpu::BindGroup,
+
+    pub(crate) bones: BoneData,
+}
+
+#[repr(C)]
+#[derive(Debug, Default, Clone)]
+pub struct BoneData {
+    pub(crate) bones: Vec<Bone>,
+}
+
+#[repr(C)]
+#[derive(Debug, Clone)]
+pub struct Bone {
+    pub(crate) offset_matrix: Matrix4<f32>,
+}
+
+impl From<&russimp_ng::bone::Bone> for Bone {
+    fn from(value: &russimp_ng::bone::Bone) -> Self {
+        let m = value.offset_matrix;
+        Bone {
+            offset_matrix: Matrix4::new(
+                m.a1, m.a2, m.a3, m.a4, 
+                m.b1, m.b2, m.b3, m.b4, 
+                m.c1, m.c2, m.c3, m.c4, 
+                m.d1, m.d2, m.d3, m.d4, 
+            ),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct BoneMeta {
+    pub(crate) name: String,
+}
+
+impl BoneMeta {
+    pub fn new(name: String) -> Self {
+        BoneMeta {
+            name
+        }
+    }
+
+    pub fn name(&self) -> &str {
+        self.name.as_str()
+    }
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct Bones {
+    pub(crate) metadata: Vec<BoneMeta>,
+    pub(crate) data: BoneData,
+}
+
+impl Bones {
+    pub fn none() -> Bones {
+        Bones::default()
+    }
 }
 
 #[derive(Debug)]
@@ -61,8 +153,9 @@ pub struct MeshVertexData<T> {
 #[derive(Debug)]                     //         |
 pub struct Mesh {                    //         |
     //         here <---------------------------- i forgor why tho :<
-    pub(crate) data: MeshVertexData<Vertex3D>,
+    pub(crate) data:     MeshVertexData<Vertex3D>,
     pub material_ranges: Vec<(MaterialId, Range<u32>)>,
+    pub bones:           Bones,
 }
 
 #[derive(Debug)]
@@ -75,6 +168,7 @@ impl Mesh {
         vertices: Vec<Vertex3D>,
         indices: Option<Vec<u32>>,
         material_ranges: Option<Vec<(MaterialId, Range<u32>)>>,
+        bones: Bones,
     ) -> Box<Mesh> {
         let mut material_ranges = material_ranges.unwrap_or_default();
 
@@ -89,6 +183,7 @@ impl Mesh {
         Box::new(Mesh {
             data: MeshVertexData::<Vertex3D> { vertices, indices },
             material_ranges,
+            bones,
         })
     }
 
@@ -133,9 +228,12 @@ impl Mesh {
                 .as_ref()
                 .map(|i| i.len())
                 .unwrap_or_default(),
+
             model_data,
             model_data_buffer,
             model_bind_group: bind_group,
+
+            bones: self.bones.data.clone(),
         };
         RuntimeMesh {
             data: runtime_mesh_data,
@@ -178,7 +276,10 @@ impl Vertex3D {
         assert_eq!(size_of::<Vector2<f32>>(), VEC2_SIZE);
         assert_eq!(size_of::<Vector3<f32>>(), VEC3_SIZE);
         assert_eq!(size_of::<Vector4<f32>>(), VEC4_SIZE);
-        assert_eq!(size_of::<Vertex3D>(), 56);
+
+        assert_eq!(size_of::<Vertex3D>(), VEC2_SIZE
+                                          + VEC3_SIZE * 4
+                                          + VEC4_SIZE * 2);
         
         
         wgpu::VertexBufferLayout {
@@ -209,6 +310,16 @@ impl Vertex3D {
                     format: VertexFormat::Float32x3,
                     offset: (VEC3_SIZE * 3 + VEC2_SIZE) as BufferAddress,
                     shader_location: 4,
+                },
+                VertexAttribute {
+                    format: VertexFormat::Uint32x4,
+                    offset: (VEC3_SIZE * 4 + VEC2_SIZE) as BufferAddress,
+                    shader_location: 5,
+                },
+                VertexAttribute {
+                    format: VertexFormat::Float32x4,
+                    offset: (VEC3_SIZE * 4 + VEC2_SIZE + VEC4_SIZE) as BufferAddress,
+                    shader_location: 6,
                 },
             ],
         }

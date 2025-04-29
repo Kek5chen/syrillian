@@ -4,7 +4,7 @@ use std::error::Error;
 use std::rc::Rc;
 
 use bytemuck::Contiguous;
-use itertools::izip;
+use itertools::{izip, Itertools};
 use log::warn;
 use nalgebra::{Matrix4, Vector2, Vector3};
 use num_traits::{ToPrimitive, Zero};
@@ -18,7 +18,7 @@ use crate::asset_management::materialmanager::{Material, MaterialId};
 use crate::asset_management::mesh::{Mesh, Vertex3D};
 use crate::asset_management::shadermanager::ShaderId;
 use crate::asset_management::texturemanager::{TextureId, FALLBACK_DIFFUSE_TEXTURE};
-use crate::asset_management::DIM3_SHADER_ID;
+use crate::asset_management::{BoneMeta, Bones, DIM3_SHADER_ID};
 use crate::drawables::mesh_renderer::MeshRenderer;
 use crate::object::GameObjectId;
 use crate::utils::math::ExtraMatrixMath;
@@ -41,6 +41,7 @@ impl SceneLoader {
                 PostProcess::GenerateNormals,
                 PostProcess::ForceGenerateNormals,
                 PostProcess::EmbedTextures,
+                PostProcess::LimitBoneWeights,
             ],
         )?;
 
@@ -51,8 +52,10 @@ impl SceneLoader {
 
         let materials = Self::load_materials(&scene, world);
         Self::update_material_indicies(&mut scene, materials);
+
         let root_object = world.new_object(&root.name);
         Self::load_rec(world, &scene, &root, root_object);
+
         Ok(root_object)
     }
 
@@ -119,11 +122,15 @@ impl SceneLoader {
             return;
         }
 
-        let mut positions: Vec<Vector3<f32>> = Vec::new();
-        let mut tex_coords: Vec<Vector2<f32>> = Vec::new();
-        let mut normals: Vec<Vector3<f32>> = Vec::new();
-        let mut tangents: Vec<Vector3<f32>> = Vec::new();
-        let mut bitangents: Vec<Vector3<f32>> = Vec::new();
+        let mut bones = Bones::default();
+
+        let mut positions:    Vec<Vector3<f32>>  = Vec::new();
+        let mut tex_coords:   Vec<Vector2<f32>>  = Vec::new();
+        let mut normals:      Vec<Vector3<f32>>  = Vec::new();
+        let mut tangents:     Vec<Vector3<f32>>  = Vec::new();
+        let mut bitangents:   Vec<Vector3<f32>>  = Vec::new();
+        let mut bone_idxs:    Vec<Vec<u32>>      = Vec::new();
+        let mut bone_weights: Vec<Vec<f32>>      = Vec::new();
 
         const VEC3_FROM_VEC3D: fn(&Vector3D) -> Vector3<f32> =
             |v: &Vector3D| Vector3::new(v.x, v.y, v.z);
@@ -131,23 +138,26 @@ impl SceneLoader {
             |v: &Vector3D| Vector2::new(v.x, v.y);
 
         let mut material_ranges = Vec::new();
-        let mut mesh_vertex_count_start = 0;
-        for (_, mesh) in (0..)
-            .zip(scene.meshes.iter())
-            .filter(|(i, _)| node.meshes.contains(i))
-        {
+        let mut mesh_vertex_count_start: usize = 0;
+
+
+        for mesh in scene.meshes.iter() {
             let mut mesh_vertex_count = mesh_vertex_count_start;
-            for face in &mesh.faces {
-                if face.0.len() != 3 {
-                    continue; // ignore line and point primitives
-                }
+            // filter faces with not 3 vertices.
+            // 1 and 2 are point and line faces which I can't render yet
+            // 3+ shouldn't happen because of Triangulate PostProcess Assimp feature
+            let filtered_faces = mesh.faces.iter().filter(|face| face.0.len() == 3);
+
+            for face in filtered_faces.clone() {
                 let face_indices = &face.0;
+
                 Self::extend_data(
                     &mut positions,
                     face_indices,
                     &mesh.vertices,
                     VEC3_FROM_VEC3D,
                 );
+
                 if let Some(Some(dif_tex_coords)) = mesh.texture_coords.first() {
                     Self::extend_data(
                         &mut tex_coords,
@@ -156,24 +166,35 @@ impl SceneLoader {
                         VEC2_FROM_VEC3D,
                     );
                 }
-                Self::extend_data(&mut normals, face_indices, &mesh.normals, VEC3_FROM_VEC3D);
-                Self::extend_data(&mut tangents, face_indices, &mesh.tangents, VEC3_FROM_VEC3D);
-                Self::extend_data(
-                    &mut bitangents,
-                    face_indices,
-                    &mesh.bitangents,
-                    VEC3_FROM_VEC3D,
-                );
+
+                Self::extend_data(&mut normals,    face_indices, &mesh.normals,    VEC3_FROM_VEC3D);
+                Self::extend_data(&mut tangents,   face_indices, &mesh.tangents,   VEC3_FROM_VEC3D);
+                Self::extend_data(&mut bitangents, face_indices, &mesh.bitangents, VEC3_FROM_VEC3D);
+
                 mesh_vertex_count += 3;
             }
+
+            bone_idxs.resize_with(mesh_vertex_count, Vec::new);
+            bone_weights.resize_with(mesh_vertex_count, Vec::new);
+
+            Self::map_bones(
+                bone_idxs[mesh_vertex_count_start..mesh_vertex_count].as_mut(),
+                bone_weights[mesh_vertex_count_start..mesh_vertex_count].as_mut(),
+                &mut bones,
+                mesh,
+                filtered_faces,
+            );
+
+            // TODO: Change material ranges to usize?
             material_ranges.push((
                 mesh.material_index as usize,
-                mesh_vertex_count_start..mesh_vertex_count,
+                mesh_vertex_count_start as u32..mesh_vertex_count as u32,
             ));
+
             mesh_vertex_count_start = mesh_vertex_count;
         }
 
-        // it does work tho
+        // it do work tho
         Self::normalize_data(
             &mut positions,
             &mut tex_coords,
@@ -182,19 +203,14 @@ impl SceneLoader {
             &mut bitangents,
         );
 
-        let vertices = izip!(positions, tex_coords, normals, tangents, bitangents)
+        let vertices = izip!(positions, tex_coords, normals, tangents, bitangents, bone_idxs, bone_weights)
             .map(
-                |(position, tex_coord, normal, tangent, bitangent)| Vertex3D {
-                    position,
-                    tex_coord,
-                    normal,
-                    tangent,
-                    bitangent,
-                },
+                |(position, tex_coord, normal, tangent, bitangent, bone_indicies, bone_weights)|
+                    Vertex3D::new(position, tex_coord, normal, tangent, bitangent, &bone_indicies, &bone_weights),
             )
             .collect();
 
-        let mesh = Mesh::new(vertices, None, Some(material_ranges));
+        let mesh = Mesh::new(vertices, None, Some(material_ranges), bones);
         let id = world.assets.meshes.add_mesh(mesh);
 
         let mut node_obj = node_obj;
@@ -214,6 +230,55 @@ impl SceneLoader {
         node_obj.transform.set_local_rotation(rotation);
         node_obj.transform.set_nonuniform_local_scale(scale);
     }
+    
+    fn map_bones<'a>(
+        indices: &mut [Vec<u32>],                                     // start from 0 to how many were defined in the raw mesh, not including point or line "faces"
+        weights: &mut [Vec<f32>],                                     // "
+        mapped:  &mut Bones,                                          // are the total bones that this merged mesh will have, mapped to the merged vertices
+        raw:     &'a russimp_ng::mesh::Mesh,                          // the raw bones for this specific mesh part
+        faces:   impl Iterator<Item = &'a russimp_ng::face::Face>,    // the faces that need to be mapped
+    ) {
+        // grab bones length before so we know where we base our ids off of. the new indices should
+        // now be bones_base + raw id
+        let original_bone_count = mapped.data.bones.len();
+
+        // map bones from raw into mapped bone list
+        for bone in &raw.bones {
+            mapped.metadata.push(BoneMeta::new(bone.name.clone()));
+            mapped.data.bones.push(bone.into())
+        }
+
+        // transpose the mapping from `Vec<weights.vertex ids>` to `vertex ids -> Vec<weights>`
+        let mapped_indices: HashMap<u32, Vec<(usize, f32)>> = raw.bones
+            .iter()
+            .enumerate()
+            .flat_map(|(i, b)| {
+                b.weights.iter().map(move |w| {
+                    (w.vertex_id, (i + original_bone_count, w.weight))
+                })
+            })
+            .into_group_map();
+
+        // map the bone weights to these face vertex ids.
+        for face in faces {
+            for v_id in &face.0 {
+                let Some(idxs) = indices.get_mut(*v_id as usize) else {
+                    unreachable!("The indices should've been prepared.");
+                };
+                let Some(weights) = weights.get_mut(*v_id as usize) else {
+                    unreachable!("The weights should've been prepared.");
+                };
+
+                let Some(bones_by_index) = mapped_indices.get(v_id) else {
+                    // no bones found for this index
+                    break;
+                };
+
+                idxs.extend(bones_by_index.iter().map(|b| b.0 as u32));
+                weights.extend(bones_by_index.iter().map(|b| b.1));
+            }
+        }
+    }
 
     fn load_materials(scene: &Scene, world: &mut World) -> HashMap<u32, MaterialId> {
         let mut mapping = HashMap::new();
@@ -223,6 +288,7 @@ impl SceneLoader {
         }
         mapping
     }
+
     fn update_material_indicies(scene: &mut Scene, mat_map: HashMap<u32, MaterialId>) {
         for mesh in &mut scene.meshes {
             let new_idx = mat_map.get(&mesh.material_index).cloned();

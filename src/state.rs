@@ -52,7 +52,10 @@ impl State {
                     required_features: Features::default() 
                         | Features::POLYGON_MODE_LINE
                         | Features::BUFFER_BINDING_ARRAY,
-                    required_limits: Limits::default(),
+                    required_limits: Limits {
+                        max_bind_groups: 5,
+                        ..Limits::default()
+                    },
                     memory_hints: MemoryHints::default(),
                     trace: wgpu::Trace::Off,
                 },

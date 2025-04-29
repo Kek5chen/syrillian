@@ -2,6 +2,7 @@ use env_logger::Env;
 use log::{error, LevelFilter};
 use nalgebra::Vector3;
 use rapier3d::prelude::*;
+use syrillian::asset_management::Bones;
 use std::any::Any;
 use std::cell::RefCell;
 use std::collections::VecDeque;
@@ -116,6 +117,7 @@ fn funnyinit(world: &mut World, _window: &Window) -> Result<(), Box<dyn Error>> 
         CUBE.to_vec(),
         Some(CUBE_INDICES.to_vec()),
         Some(vec![(neco_material, 0..CUBE_INDICES.len() as u32)]),
+        Bones::none(),
     ));
 
     let mut cube = world.new_object("Cube");
