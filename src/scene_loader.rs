@@ -96,20 +96,21 @@ impl SceneLoader {
         Z: Zero + Clone,
         A: Zero + Clone,
     {
+        let len = scalar.len();
         if x.len() != scalar.len() {
-            x.resize(scalar.len(), X::zero());
+            x.resize(len, X::zero());
         }
 
         if y.len() != scalar.len() {
-            y.resize(scalar.len(), Y::zero());
+            y.resize(len, Y::zero());
         }
 
         if z.len() != scalar.len() {
-            z.resize(scalar.len(), Z::zero());
+            z.resize(len, Z::zero());
         }
 
         if a.len() != scalar.len() {
-            a.resize(scalar.len(), A::zero());
+            a.resize(len, A::zero());
         }
     }
 
