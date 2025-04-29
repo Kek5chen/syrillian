@@ -12,8 +12,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .parse_default_env()
         .init();
 
-    let mut app = App::create("Neco Arc", 800, 600);
-    app.with_init(Some(init));
+    let app = App::create("Neco Arc", 800, 600)
+        .with_init(Some(init));
 
     if let Err(e) = app.run().await {
         error!("{e}");

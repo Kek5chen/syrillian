@@ -89,16 +89,19 @@ impl PrematureApp {
         Ok((event_loop, app))
     }
 
-    pub fn with_init(&mut self, init: Option<HookFunc>) {
+    pub fn with_init(mut self, init: Option<HookFunc>) -> Self {
         self.init_cb = init;
+        self
     }
     
-    pub fn with_update(&mut self, update: Option<HookFunc>) {
+    pub fn with_update(mut self, update: Option<HookFunc>) -> Self {
         self.update_cb = update;
+        self
     }
 
-    pub fn with_deinit(&mut self, deinit: Option<HookFunc>) {
+    pub fn with_deinit(mut self, deinit: Option<HookFunc>) -> Self {
         self.deinit_cb = deinit;
+        self
     }
     
     pub async fn run(mut self) -> Result<(), Box<dyn Error>> {
