@@ -3450,6 +3450,7 @@ dependencies = [
  "num-traits",
  "rapier3d",
  "russimp-ng",
+ "static_assertions",
  "tokio",
  "wgpu",
  "winit",
