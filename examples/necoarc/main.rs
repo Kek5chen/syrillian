@@ -2,7 +2,7 @@ use std::error::Error;
 
 use log::{error, LevelFilter};
 use nalgebra::Vector3;
-use syrillian::{asset_management::{materialmanager::Material, Mesh, DIM3_SHADER_ID}, buffer::{CUBE, CUBE_INDICES}, components::RotateComponent, drawables::{Image, ImageScalingMode, MeshRenderer}, App, World};
+use syrillian::{asset_management::{materialmanager::Material, Bones, Mesh, DIM3_SHADER_ID}, buffer::{CUBE, CUBE_INDICES}, components::RotateComponent, drawables::{Image, ImageScalingMode, MeshRenderer}, App, World};
 use winit::window::Window;
 
 #[tokio::main]
@@ -44,7 +44,8 @@ fn init(world: &mut World, _window: &Window) -> Result<(), Box<dyn Error>> {
         Mesh::new(
             CUBE.to_vec(), 
             Some(CUBE_INDICES.to_vec()), 
-            Some(vec![(material, 0..CUBE_INDICES.len() as u32)])
+            Some(vec![(material, 0..CUBE_INDICES.len() as u32)]),
+            Bones::default(),
         )
     );
 

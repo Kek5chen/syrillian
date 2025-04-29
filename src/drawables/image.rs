@@ -5,7 +5,7 @@ use nalgebra::{Matrix4, Scale3, Translation3};
 use wgpu::{util::{BufferInitDescriptor, DeviceExt}, BindGroupDescriptor, BindGroupEntry, BufferUsages};
 use winit::window::Window;
 
-use crate::{asset_management::{bindgroup_layout_manager::MODEL_UBGL_ID, materialmanager::MaterialId, Mesh, MeshId, MeshManager, RuntimeMesh, ShaderId, DIM2_SHADER_ID}, buffer::UNIT_SQUARE, object::{GameObjectId, ModelData}, renderer::Renderer, World};
+use crate::{asset_management::{bindgroup_layout_manager::MODEL_UBGL_ID, materialmanager::MaterialId, Bones, Mesh, MeshId, MeshManager, RuntimeMesh, ShaderId, DIM2_SHADER_ID}, buffer::UNIT_SQUARE, object::{GameObjectId, ModelData}, renderer::Renderer, World};
 
 use super::Drawable;
 
@@ -314,7 +314,8 @@ fn remake_unit_square(world: &mut World, mut unit_square: RwLockWriteGuard<'_, O
             Mesh::new(
                 UNIT_SQUARE.to_vec(),
                 None,
-                None
+                None,
+                Bones::none(),
             )
         );
 
