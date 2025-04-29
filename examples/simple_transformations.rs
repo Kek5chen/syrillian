@@ -9,9 +9,11 @@ use syrillian::world::World;
 async fn main() {
     env_logger::init();
 
-    let mut app = App::create("Simple Transformations", 800, 600);
-    app.with_init(Some(init));
-    app.run().await.expect("Couldn't run app");
+    App::create("Simple Transformations", 800, 600)
+        .with_init(Some(init))
+        .run()
+        .await
+        .expect("Couldn't run app");
 }
 
 fn init(world: &mut World, _window: &Window) -> Result<(), Box<dyn Error>> {
