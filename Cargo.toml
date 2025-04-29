@@ -9,25 +9,25 @@ edition = "2024"
 
 [dependencies]
 wgpu = { version = "25.0.0", features = ["vulkan-portability"] }
-tokio = { version = "1.40.0", features = ["rt", "rt-multi-thread", "macros"] }
+tokio = { version = "1.40.2", features = ["rt", "rt-multi-thread", "macros"] }
 winit = { version = "0.30.9", features = ["x11"] }
-bytemuck = "1.18.0"
+bytemuck = "1.23.0"
 log = "0.4.22"
-nalgebra = { version = "0.33.0" }
+nalgebra = { version = "0.33.2" }
 num-traits = "0.2.19"
 russimp-ng = { git = "https://github.com/Kek5chen/russimp-ng" }
 itertools = "0.14.0"
-image = "0.25.2"
+image = "0.25.6"
 rapier3d = "0.25.0"
-futures = "0.3.30"
+futures = "0.3.31"
 static_assertions = "1.1.0"
 
 [build-dependencies]
-chrono = "0.4.38"
+chrono = "0.4.41"
 
 [dev-dependencies]
-chrono = "0.4.38"
-env_logger = { version = "0.11.5", features = ["auto-color"] }
+chrono = "0.4.41"
+env_logger = { version = "0.11.8", features = ["auto-color"] }
 
 [profile.dev]
 opt-level = 2
