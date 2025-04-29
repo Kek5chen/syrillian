@@ -5,7 +5,7 @@ use nalgebra::{Matrix4, Scale3, Translation3};
 use wgpu::{util::{BufferInitDescriptor, DeviceExt}, BindGroupDescriptor, BindGroupEntry, BufferUsages};
 use winit::window::Window;
 
-use crate::{asset_management::{bindgroup_layout_manager::MODEL_UBGL_ID, materialmanager::MaterialId, Mesh, MeshId, MeshManager, RuntimeMesh, DIM2_SHADER_ID}, buffer::UNIT_SQUARE, object::{GameObjectId, ModelData}, renderer::Renderer, World};
+use crate::{asset_management::{bindgroup_layout_manager::MODEL_UBGL_ID, materialmanager::MaterialId, Mesh, MeshId, MeshManager, RuntimeMesh, ShaderId, DIM2_SHADER_ID}, buffer::UNIT_SQUARE, object::{GameObjectId, ModelData}, renderer::Renderer, World};
 
 use super::Drawable;
 
@@ -101,7 +101,13 @@ impl Drawable for Image {
         self.update_model_matrix(&renderer.state.queue, &renderer.window);
     }
 
-    fn draw(&self, world: &mut World, rpass: &mut wgpu::RenderPass, _renderer: &Renderer) {
+    fn draw(
+        &self,
+        world: &mut World,
+        rpass: &mut wgpu::RenderPass,
+        _renderer: &Renderer,
+        _shader_override: Option<ShaderId>,
+    ) {
         let unit_square_runtime = match unit_square_mesh(&mut world.assets.meshes) {
             Ok(s) => s,
             Err(e) => {

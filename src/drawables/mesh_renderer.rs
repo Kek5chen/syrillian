@@ -4,6 +4,7 @@ use wgpu::{IndexFormat, RenderPass};
 
 use crate::asset_management::materialmanager::{MaterialId, FALLBACK_MATERIAL_ID};
 use crate::asset_management::meshmanager::MeshId;
+use crate::asset_management::ShaderId;
 use crate::drawables::drawable::Drawable;
 use crate::object::GameObjectId;
 use crate::renderer::Renderer;
@@ -79,7 +80,7 @@ impl Drawable for MeshRenderer {
         )
     }
 
-    fn draw(&self, world: &mut World, rpass: &mut RenderPass, renderer: &Renderer) {
+    fn draw(&self, world: &mut World, rpass: &mut RenderPass, renderer: &Renderer, shader_override: Option<ShaderId>) {
         unsafe {
             let world = world as *mut World;
 
@@ -125,10 +126,12 @@ impl Drawable for MeshRenderer {
                 let shader = (*world)
                     .assets
                     .shaders
-                    .get_shader(runtime_material.shader)
+                    .get_shader(shader_override.or(runtime_material.shader))
                     .unwrap_or(default_shader);
+
                 rpass.set_pipeline(&shader.pipeline);
                 rpass.set_bind_group(2, &runtime_material.bind_group, &[]);
+
                 if let Some(i_buffer) = i_buffer {
                     rpass.set_index_buffer(i_buffer.slice(..), IndexFormat::Uint32);
                     rpass.draw_indexed(range.clone(), 0, 0..1);

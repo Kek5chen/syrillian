@@ -348,7 +348,7 @@ impl Renderer {
         &mut self,
         ctx: &mut RenderContext,
         world: &mut World,
-        shader_override: Option<ShaderId>
+        shader_override: Option<ShaderId>,
     ) -> Result<(), Box<dyn std::error::Error>> {
         self.update_render_data(world)?;
 
@@ -379,6 +379,7 @@ impl Renderer {
                 &mut rpass,
                 &world.children,
                 Matrix4::identity(),
+                shader_override,
             );
         }
 
@@ -391,6 +392,7 @@ impl Renderer {
         rpass: &mut RenderPass,
         children: &[GameObjectId],
         combined_matrix: Matrix4<f32>,
+        shader_override: Option<ShaderId>,
     ) {
         for child in children {
             if !child.children.is_empty() {
@@ -399,6 +401,7 @@ impl Renderer {
                     rpass,
                     &child.children,
                     combined_matrix * child.transform.full_matrix().to_homogeneous(),
+                    shader_override
                 );
             }
             let Some(drawable) = &mut child.clone().drawable else {
@@ -406,7 +409,7 @@ impl Renderer {
             };
 
             drawable.update(world, *child, self, &combined_matrix);
-            drawable.draw(world, rpass, self);
+            drawable.draw(world, rpass, self, shader_override);
         }
     }
 

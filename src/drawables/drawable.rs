@@ -3,6 +3,7 @@ use std::any::Any;
 use nalgebra::Matrix4;
 use wgpu::RenderPass;
 
+use crate::asset_management::ShaderId;
 use crate::object::GameObjectId;
 use crate::renderer::Renderer;
 use crate::world::World;
@@ -21,5 +22,11 @@ pub trait Drawable: Any {
         renderer: &Renderer,
         outer_transform: &Matrix4<f32>,
     ) {}
-    fn draw(&self, world: &mut World, rpass: &mut RenderPass, renderer: &Renderer);
+    fn draw(
+        &self,
+        world: &mut World,
+        rpass: &mut RenderPass,
+        renderer: &Renderer,
+        shader_override: Option<ShaderId>,
+    );
 }
