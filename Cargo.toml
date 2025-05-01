@@ -20,6 +20,7 @@ itertools = "0.14.0"
 image = "0.25.6"
 rapier3d = "0.25.0"
 futures = "0.3.31"
+aligned = "0.4.2"
 static_assertions = "1.1.0"
 
 [build-dependencies]

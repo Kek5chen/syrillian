@@ -3,7 +3,7 @@ use std::ops::Range;
 use bytemuck::{Pod, Zeroable};
 use nalgebra::{Matrix4, Point, Vector2, Vector3, Vector4};
 use static_assertions::const_assert_eq;
-use wgpu::{BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BufferAddress, BufferUsages, Device, VertexAttribute, VertexFormat};
+use wgpu::{BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BufferAddress, BufferUsages, Device, VertexAttribute, VertexBufferLayout, VertexFormat};
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 
 use crate::asset_management::materialmanager::{FALLBACK_MATERIAL_ID, MaterialId};
@@ -282,7 +282,9 @@ const_assert_eq!(size_of::<Vertex3D>(), VEC2_SIZE
 
 impl Vertex3D {
     pub fn continuous_descriptor<'a>() -> wgpu::VertexBufferLayout<'a> {
-        wgpu::VertexBufferLayout {
+        use crate::utils::sizes::*;
+
+        const LAYOUT: wgpu::VertexBufferLayout = wgpu::VertexBufferLayout {
             array_stride: size_of::<Vertex3D>() as BufferAddress,
             step_mode: wgpu::VertexStepMode::Vertex,
             attributes: &[
@@ -322,6 +324,10 @@ impl Vertex3D {
                     shader_location: 6,
                 },
             ],
-        }
+        };
+
+        const_assert_eq!(size_of::<Vertex3D>(), layout_size(&LAYOUT));
+
+        LAYOUT
     }
 }

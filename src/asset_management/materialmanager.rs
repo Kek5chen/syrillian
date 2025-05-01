@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 
+use aligned::{Aligned, A16};
 use bytemuck::{Pod, Zeroable};
 use nalgebra::Vector3;
 use wgpu::{
@@ -48,8 +49,7 @@ impl Material {
         _queue: &Queue,
     ) -> RuntimeMaterial {
         let data = RuntimeMaterialData {
-            diffuse: self.diffuse,
-            _padding1: 0,
+            diffuse: Aligned(self.diffuse),
             use_diffuse_texture: self.diffuse_texture.is_some() as u32,
             use_normal_texture: self.normal_texture.is_some() as u32,
             shininess: self.shininess,
@@ -128,8 +128,7 @@ impl Material {
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
 pub struct RuntimeMaterialData {
-    diffuse: Vector3<f32>,
-    _padding1: u32,
+    diffuse: Aligned<A16, Vector3<f32>>,
     use_diffuse_texture: u32,
     use_normal_texture: u32,
     shininess: f32,
