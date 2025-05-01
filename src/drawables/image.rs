@@ -5,7 +5,7 @@ use nalgebra::{Matrix4, Scale3, Translation3};
 use wgpu::{util::{BufferInitDescriptor, DeviceExt}, BindGroupDescriptor, BindGroupEntry, BufferUsages};
 use winit::window::Window;
 
-use crate::{asset_management::{bindgroup_layout_manager::MODEL_UBGL_ID, materialmanager::MaterialId, Bones, Mesh, MeshId, MeshManager, RuntimeMesh, ShaderId, DIM2_SHADER_ID}, buffer::UNIT_SQUARE, object::{GameObjectId, ModelData}, renderer::Renderer, World};
+use crate::{asset_management::{bindgroup_layout_manager::MODEL_UBGL_ID, materialmanager::MaterialId, BoneData, Bones, Mesh, MeshId, MeshManager, RuntimeMesh, ShaderId, DIM2_SHADER_ID}, buffer::UNIT_SQUARE, object::{GameObjectId, ModelData}, renderer::Renderer, World};
 
 use super::Drawable;
 
@@ -37,8 +37,12 @@ pub enum ImageScalingMode {
 
 #[derive(Debug)]
 struct ImageGPUData {
-    model_data: ModelData,
-    model_data_buffer: wgpu::Buffer,
+    translation_data: ModelData,
+    translation_data_buffer: wgpu::Buffer,
+
+    dummy_bone_data: BoneData,
+    dummy_bone_data_buffer: wgpu::Buffer,
+
     model_bind_group: wgpu::BindGroup,
 }
 
@@ -154,24 +158,43 @@ impl Image {
     fn setup_model_data(&mut self, world: &World, device: &wgpu::Device) {
         let bgl = world.assets.bind_group_layouts.get_bind_group_layout(MODEL_UBGL_ID).unwrap();
 
-        let model_data = ModelData::empty();
-        let model_data_buffer = device.create_buffer_init(&BufferInitDescriptor {
-            label: Some("Image Model Buffer"),
-            contents: bytemuck::bytes_of(&model_data),
+        let translation_data = ModelData::empty();
+        let translation_data_buffer = device.create_buffer_init(&BufferInitDescriptor {
+            label: Some("Image Translation Buffer"),
+            contents: bytemuck::bytes_of(&translation_data),
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
         });
+
+        let dummy_bone_data = BoneData::default();
+        let dummy_bone_data_buffer = device.create_buffer_init(&BufferInitDescriptor {
+            label: Some("Image Dummy Bone Buffer"),
+            contents: dummy_bone_data.as_bytes(),
+            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+        });
+
+
         let model_bind_group = device.create_bind_group(&BindGroupDescriptor {
             label: Some("Image Model Bind Group"),
             layout: bgl,
-            entries: &[BindGroupEntry {
-                binding: 0,
-                resource: model_data_buffer.as_entire_binding(),
-            }],
+            entries: &[
+                BindGroupEntry {
+                    binding: 0,
+                    resource: translation_data_buffer.as_entire_binding(),
+                },
+                BindGroupEntry {
+                    binding: 1,
+                    resource: dummy_bone_data_buffer.as_entire_binding(),
+                }
+            ],
         });
 
         self.gpu_data = Some(ImageGPUData {
-            model_data,
-            model_data_buffer,
+            translation_data,
+            translation_data_buffer,
+
+            dummy_bone_data,
+            dummy_bone_data_buffer,
+
             model_bind_group,
         });
     }
@@ -274,12 +297,12 @@ impl Image {
             error!("GPU data not set");
             return;
         };
-        gpu_data.model_data.model_mat = new_model_mat;
+        gpu_data.translation_data.model_mat = new_model_mat;
 
         queue.write_buffer(
-            &gpu_data.model_data_buffer,
+            &gpu_data.translation_data_buffer,
             0,
-            bytemuck::bytes_of(&gpu_data.model_data)
+            bytemuck::bytes_of(&gpu_data.translation_data)
         );
     }
 }

@@ -78,8 +78,18 @@ impl Default for BindGroupLayoutManager {
                     min_binding_size: None,
                 },
                 count: None,
-            }]
-        );
+            },
+            BindGroupLayoutEntry {
+                binding: 1,
+                visibility: ShaderStages::VERTEX_FRAGMENT,
+                ty: BindingType::Buffer {
+                    ty: BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            }
+        ]);
         assert_eq!(id, MODEL_UBGL_ID);
 
         let id = manager.add_bind_group_layout(Some("Material Uniform Bind Group Layout"), vec![
