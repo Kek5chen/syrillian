@@ -40,8 +40,8 @@ struct ImageGPUData {
     translation_data: ModelData,
     translation_data_buffer: wgpu::Buffer,
 
-    dummy_bone_data: BoneData,
-    dummy_bone_data_buffer: wgpu::Buffer,
+    _dummy_bone_data: BoneData,
+    _dummy_bone_data_buffer: wgpu::Buffer,
 
     model_bind_group: wgpu::BindGroup,
 }
@@ -165,10 +165,10 @@ impl Image {
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
         });
 
-        let dummy_bone_data = BoneData::default();
-        let dummy_bone_data_buffer = device.create_buffer_init(&BufferInitDescriptor {
+        let _dummy_bone_data = BoneData::default();
+        let _dummy_bone_data_buffer = device.create_buffer_init(&BufferInitDescriptor {
             label: Some("Image Dummy Bone Buffer"),
-            contents: dummy_bone_data.as_bytes(),
+            contents: _dummy_bone_data.as_bytes(),
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
         });
 
@@ -183,7 +183,7 @@ impl Image {
                 },
                 BindGroupEntry {
                     binding: 1,
-                    resource: dummy_bone_data_buffer.as_entire_binding(),
+                    resource: _dummy_bone_data_buffer.as_entire_binding(),
                 }
             ],
         });
@@ -192,8 +192,8 @@ impl Image {
             translation_data,
             translation_data_buffer,
 
-            dummy_bone_data,
-            dummy_bone_data_buffer,
+            _dummy_bone_data,
+            _dummy_bone_data_buffer,
 
             model_bind_group,
         });
