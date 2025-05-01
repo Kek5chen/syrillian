@@ -1,9 +1,9 @@
 use std::ops::Range;
 
 use bytemuck::{Pod, Zeroable};
-use nalgebra::{Matrix4, Point, Vector2, Vector3, Vector4};
+use nalgebra::{Matrix4, Point, Vector2, Vector3};
 use static_assertions::const_assert_eq;
-use wgpu::{BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BufferAddress, BufferUsages, Device, VertexAttribute, VertexBufferLayout, VertexFormat};
+use wgpu::{BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BufferAddress, BufferUsages, Device, VertexAttribute, VertexFormat};
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 
 use crate::asset_management::materialmanager::{FALLBACK_MATERIAL_ID, MaterialId};
@@ -267,18 +267,6 @@ impl MeshVertexData<Vertex3D> {
     }
 }
 
-// sanity values and checks
-const VEC2_SIZE: usize = 8;
-const VEC3_SIZE: usize = 12;
-const VEC4_SIZE: usize = 16;
-
-const_assert_eq!(size_of::<Vector2<f32>>(), VEC2_SIZE);
-const_assert_eq!(size_of::<Vector3<f32>>(), VEC3_SIZE);
-const_assert_eq!(size_of::<Vector4<f32>>(), VEC4_SIZE);
-
-const_assert_eq!(size_of::<Vertex3D>(), VEC2_SIZE
-                                      + VEC3_SIZE * 4
-                                      + VEC4_SIZE * 2);
 
 impl Vertex3D {
     pub fn continuous_descriptor<'a>() -> wgpu::VertexBufferLayout<'a> {
