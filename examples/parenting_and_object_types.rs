@@ -23,9 +23,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .parse_env(log_env) // Or override with whatever env says
         .init();
 
-    let mut app = App::create("SYRILLIAN", 800, 600);
-    app.with_init(Some(init));
-    app.with_update(Some(update));
+    let app = App::create("SYRILLIAN", 800, 600)
+        .with_init(Some(init))
+        .with_update(Some(update));
     
     if let Err(e) = app.run().await {
         error!("{e}");
