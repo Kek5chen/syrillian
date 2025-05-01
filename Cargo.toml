@@ -7,15 +7,20 @@ authors = [ "Kek5chen" ]
 version = "0.1.2"
 edition = "2024"
 
+
+
+#################################################
+#               Simple dependencies             #
+#################################################
+
+
+
 [dependencies]
-wgpu = { version = "25.0.0", features = ["vulkan-portability"] }
-tokio = { version = "1.40.2", features = ["rt", "rt-multi-thread", "macros"] }
 winit = { version = "0.30.9", features = ["x11"] }
 bytemuck = "1.23.0"
 log = "0.4.22"
 nalgebra = { version = "0.33.2" }
 num-traits = "0.2.19"
-russimp-ng = { git = "https://github.com/Kek5chen/russimp-ng" }
 itertools = "0.14.0"
 image = "0.25.6"
 rapier3d = "0.25.0"
@@ -30,5 +35,52 @@ chrono = "0.4.41"
 chrono = "0.4.41"
 env_logger = { version = "0.11.8", features = ["auto-color"] }
 
+
+
+#################################################
+#              Complex dependencies             #
+#################################################
+
+
+
+[dependencies.wgpu]
+version = "25.0.0"
+default-features = false
+features = [
+  "vulkan-portability",
+  "wgpu-core",
+
+  # Backends
+  "vulkan",
+  "metal",
+  "dx12",
+  "gles",
+
+  # Shader compatibility
+  "wgsl"
+]
+
+[dependencies.tokio]
+version = "1.40.0"
+features = ["rt", "rt-multi-thread", "macros", "sync"]
+
+[dependencies.russimp-ng]
+git = "https://github.com/Kek5chen/russimp-ng"
+features = ["static-link"]
+
+
+
+#################################################
+#                Build Profiles                 #
+#################################################
+
+
+
 [profile.dev]
 opt-level = 2
+
+[profile.release]
+opt-level = 3
+codegen-units = 1
+lto = "fat"
+
