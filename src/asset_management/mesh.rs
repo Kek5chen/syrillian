@@ -83,11 +83,13 @@ pub struct RuntimeMeshData {
     pub(crate) indices_num:  usize,
 
     // TODO: Move this to object not mesh.. so meshes are sharable
-    pub(crate) model_data:        ModelData,
-    pub(crate) model_data_buffer: wgpu::Buffer,
-    pub(crate) model_bind_group:  wgpu::BindGroup,
+    pub(crate) transformation_data:        ModelData,
+    pub(crate) transformation_data_buffer: wgpu::Buffer,
 
-    pub(crate) bones: BoneData,
+    pub(crate) bone_data:        BoneData,
+    pub(crate) bone_data_buffer: wgpu::Buffer,
+
+    pub(crate) model_bind_group: wgpu::BindGroup,
 }
 
 #[repr(C)]
@@ -96,11 +98,33 @@ pub struct BoneData {
     pub(crate) bones: Vec<Bone>,
 }
 
+impl BoneData {
+    pub fn as_bytes(&self) -> &[u8] {
+        const DUMMY_BONE: Bone = Bone {
+            offset_matrix: Matrix4::new(
+                1.0, 0.0, 0.0, 0.0,
+                0.0, 1.0, 0.0, 0.0,
+                0.0, 0.0, 1.0, 0.0,
+                0.0, 0.0, 0.0, 1.0
+            )
+        };
+
+        if self.bones.is_empty() {
+            bytemuck::bytes_of(&DUMMY_BONE)
+        } else {
+            bytemuck::cast_slice(&self.bones[..])
+        }
+    }
+}
+
 #[repr(C)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct Bone {
     pub(crate) offset_matrix: Matrix4<f32>,
 }
+
+unsafe impl Zeroable for Bone {}
+unsafe impl Pod for Bone {}
 
 impl From<&russimp_ng::bone::Bone> for Bone {
     fn from(value: &russimp_ng::bone::Bone) -> Self {
@@ -205,20 +229,38 @@ impl Mesh {
                 usage: BufferUsages::INDEX,
             })
         });
-        let model_data = ModelData::empty();
-        let model_data_buffer = device.create_buffer_init(&BufferInitDescriptor {
+
+        let transformation_data = ModelData::empty();
+        let transformation_data_buffer = device.create_buffer_init(&BufferInitDescriptor {
             label: Some("Model Buffer"),
-            contents: bytemuck::bytes_of(&model_data),
+            contents: bytemuck::bytes_of(&transformation_data),
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
         });
-        let bind_group = device.create_bind_group(&BindGroupDescriptor {
+
+        let bone_data = self.bones.data.clone();
+        let bone_bytes = bone_data.as_bytes();
+
+        let bone_data_buffer = device.create_buffer_init(&BufferInitDescriptor {
+            label: Some("Model Bone Data"),
+            contents: bone_bytes,
+            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+        });
+
+        let model_bind_group = device.create_bind_group(&BindGroupDescriptor {
             label: Some("Model Bind Group"),
             layout: model_bind_group_layout,
-            entries: &[BindGroupEntry {
-                binding: 0,
-                resource: model_data_buffer.as_entire_binding(),
-            }],
+            entries: &[
+                BindGroupEntry {
+                    binding: 0,
+                    resource: transformation_data_buffer.as_entire_binding(),
+                },
+                BindGroupEntry {
+                    binding: 1,
+                    resource: bone_data_buffer.as_entire_binding(),
+                }
+            ],
         });
+
         let runtime_mesh_data = RuntimeMeshData {
             vertices_buf: v_buffer,
             vertices_num: self.data.vertices.len(),
@@ -230,12 +272,15 @@ impl Mesh {
                 .map(|i| i.len())
                 .unwrap_or_default(),
 
-            model_data,
-            model_data_buffer,
-            model_bind_group: bind_group,
+            transformation_data,
+            transformation_data_buffer,
 
-            bones: self.bones.data.clone(),
+            bone_data,
+            bone_data_buffer,
+
+            model_bind_group,
         };
+
         RuntimeMesh {
             data: runtime_mesh_data,
         }

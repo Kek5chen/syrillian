@@ -70,14 +70,22 @@ impl Drawable for MeshRenderer {
 
         runtime_mesh
             .data
-            .model_data
+            .transformation_data
             .update(parent, outer_transform);
 
         renderer.state.queue.write_buffer(
-            &runtime_mesh.data.model_data_buffer,
+            &runtime_mesh.data.transformation_data_buffer,
             0,
-            bytemuck::cast_slice(&[runtime_mesh.data.model_data]),
-        )
+            bytemuck::bytes_of(&runtime_mesh.data.transformation_data),
+        );
+
+        if !runtime_mesh.data.bone_data.bones.is_empty() {
+            renderer.state.queue.write_buffer(
+                &runtime_mesh.data.bone_data_buffer,
+                0,
+                runtime_mesh.data.bone_data.as_bytes(),
+            );
+        }
     }
 
     fn draw(&self, world: &mut World, rpass: &mut RenderPass, renderer: &Renderer, shader_override: Option<ShaderId>) {
