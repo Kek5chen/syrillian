@@ -313,7 +313,7 @@ impl SceneLoader {
                 let decoded = match image::load_from_memory(data) {
                     Ok(decoded) => decoded,
                     Err(e) => {
-                        warn!("Failed to load texture: {}. Using fallback texture.", e);
+                        warn!("Failed to load texture: {e}. Using fallback texture.");
                         return FALLBACK_DIFFUSE_TEXTURE;
                     }
                 };
