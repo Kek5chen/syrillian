@@ -44,20 +44,26 @@ impl State {
             )
     }
 
+    // wgpu tracing is currently unavailable
+    const fn trace_mode() -> wgpu::Trace {
+        const _IS_DEBUG_ENABLED: bool = cfg!(debug_assertions);
+
+        wgpu::Trace::Off
+    }
+
     async fn get_device_and_queue(adapter: &Adapter) -> Result<(Rc<Device>, Rc<Queue>), Box<dyn Error>> {
         let (device, queue) = adapter
             .request_device(
                 &DeviceDescriptor {
                     label: Some("Renderer Hardware"),
                     required_features: Features::default() 
-                        | Features::POLYGON_MODE_LINE
-                        | Features::BUFFER_BINDING_ARRAY,
+                        | Features::POLYGON_MODE_LINE,
                     required_limits: Limits {
                         max_bind_groups: 5,
                         ..Limits::default()
                     },
                     memory_hints: MemoryHints::default(),
-                    trace: wgpu::Trace::Off,
+                    trace: Self::trace_mode(),
                 },
             )
             .await?;
