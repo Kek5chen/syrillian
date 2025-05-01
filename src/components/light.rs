@@ -1,3 +1,4 @@
+use aligned::{Aligned, A16};
 use bytemuck::{Pod, Zeroable};
 use nalgebra::Vector3;
 
@@ -7,14 +8,11 @@ use super::Component;
 
 #[repr(C)]
 #[derive(Copy, Clone, Default)]
-// Need padding for 16-bytes GPU Uniform alignment
 pub(crate) struct ShaderPointlight {
-    pub(crate) pos: Vector3<f32>,
+    pub(crate) pos: Aligned<A16, Vector3<f32>>,
+    pub(crate) color: Aligned<A16, Vector3<f32>>,
     pub(crate) radius: f32,
-    pub(crate) intensity: f32,
-    pub(crate) _pad1: [u32; 3],
-    pub(crate) color: Vector3<f32>,
-    pub(crate) _pad2: u32,
+    pub(crate) intensity: f32, 
 }
 
 unsafe impl Zeroable for ShaderPointlight {}
@@ -32,12 +30,10 @@ impl Component for PointLightComponent {
             PointLightComponent {
                 parent,
                 inner: ShaderPointlight {
-                    pos: parent.transform.position(),
+                    pos: Aligned(parent.transform.position()),
+                    color: Aligned(Vector3::new(1.0, 1.0, 1.0)),
                     radius: 100.0,
                     intensity: 1.0,
-                    _pad1: [0, 0, 0],
-                    color: Vector3::new(1.0, 1.0, 1.0),
-                    _pad2: 0,
                 }
             }
     }
@@ -71,11 +67,11 @@ impl PointLightComponent {
     }
 
     pub fn set_color(&mut self, color: Vector3<f32>) {
-        self.inner.color = color;
+        self.inner.color = Aligned(color);
     }
 
     pub(crate) fn update_inner_pos(&mut self) {
-        self.inner.pos = self.parent.transform.position();
+        self.inner.pos = Aligned(self.parent.transform.position());
     }
 
     pub(crate) fn inner(&self) -> &ShaderPointlight {

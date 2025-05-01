@@ -43,7 +43,6 @@ struct ModelData {
 
 struct Material {
     diffuse: vec3<f32>,
-    _padding1: u32,
     use_diffuse_texture: u32,
     use_normal_texture: u32,
     shininess: f32,
@@ -52,9 +51,9 @@ struct Material {
 
 struct PointLight {
     pos: vec3<f32>,
+    color: vec3<f32>,
     radius: f32,
     intensity: f32,
-    color: vec3<f32>,
 }
 
 struct SystemData {
