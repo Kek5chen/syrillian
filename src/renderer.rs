@@ -254,7 +254,7 @@ impl Renderer {
                 return false;
             }
             Err(e) => {
-                error!("Surface error: {}", e);
+                error!("Surface error: {e}");
                 return false;
             }
         };
