@@ -1,6 +1,7 @@
 use aligned::{Aligned, A16};
 use bytemuck::{Pod, Zeroable};
 use nalgebra::Vector3;
+use static_assertions::const_assert_eq;
 
 use crate::object::GameObjectId;
 
@@ -8,19 +9,21 @@ use super::Component;
 
 #[repr(C)]
 #[derive(Copy, Clone, Default)]
-pub(crate) struct ShaderPointlight {
+pub(crate) struct ShaderPointLight {
     pub(crate) pos: Aligned<A16, Vector3<f32>>,
-    pub(crate) color: Aligned<A16, Vector3<f32>>,
+    pub(crate) color: Vector3<f32>,
     pub(crate) radius: f32,
     pub(crate) intensity: f32, 
 }
 
-unsafe impl Zeroable for ShaderPointlight {}
-unsafe impl Pod for ShaderPointlight {}
+const_assert_eq!(size_of::<ShaderPointLight>(), 48);
+
+unsafe impl Zeroable for ShaderPointLight {}
+unsafe impl Pod for ShaderPointLight {}
 
 pub struct PointLightComponent {
     parent: GameObjectId,
-    inner: ShaderPointlight,
+    inner: ShaderPointLight,
 }
 
 impl Component for PointLightComponent {
@@ -29,9 +32,9 @@ impl Component for PointLightComponent {
         Self: Sized {
             PointLightComponent {
                 parent,
-                inner: ShaderPointlight {
+                inner: ShaderPointLight {
                     pos: Aligned(parent.transform.position()),
-                    color: Aligned(Vector3::new(1.0, 1.0, 1.0)),
+                    color: Vector3::new(1.0, 1.0, 1.0),
                     radius: 100.0,
                     intensity: 1.0,
                 }
@@ -67,14 +70,14 @@ impl PointLightComponent {
     }
 
     pub fn set_color(&mut self, color: Vector3<f32>) {
-        self.inner.color = Aligned(color);
+        self.inner.color = color;
     }
 
     pub(crate) fn update_inner_pos(&mut self) {
         self.inner.pos = Aligned(self.parent.transform.position());
     }
 
-    pub(crate) fn inner(&self) -> &ShaderPointlight {
+    pub(crate) fn inner(&self) -> &ShaderPointLight {
         &self.inner
     }
 }
