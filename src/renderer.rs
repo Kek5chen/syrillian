@@ -12,7 +12,7 @@ use crate::asset_management::bindgroup_layout_manager::{RENDER_UBGL_ID, LIGHT_UB
 use crate::asset_management::shadermanager::{ShaderId, DIM3_SHADER_ID, FALLBACK_SHADER_ID, POST_PROCESS_SHADER_ID};
 use crate::asset_management::RuntimeShader;
 use crate::components::camera::CameraData;
-use crate::components::light::ShaderPointlight;
+use crate::components::light::ShaderPointLight;
 use crate::components::{CameraComponent, PointLightComponent};
 use crate::object::GameObjectId;
 use crate::state::State;
@@ -549,14 +549,14 @@ impl Renderer {
 
     fn make_point_light_buffer(&self, point_light_count: usize, point_lights: &[Rc<RefCell<Box<PointLightComponent>>>]) -> Buffer {
         if point_light_count == 0 {
-            let dummy_point_light: ShaderPointlight = ShaderPointlight::default();
+            let dummy_point_light: ShaderPointLight = ShaderPointLight::default();
             self.state.device.create_buffer_init(&BufferInitDescriptor {
                 label: Some("Empty Point Light Buffer"),
                 usage: BufferUsages::STORAGE,
                 contents: bytemuck::cast_slice(&[dummy_point_light]),
             }) 
         } else {
-            let light_data: Vec<ShaderPointlight> = point_lights
+            let light_data: Vec<ShaderPointLight> = point_lights
                 .iter()
                 .map(|m| m.borrow_mut())
                 .map(|mut light| {
