@@ -200,6 +200,11 @@ impl BindGroupLayoutManager {
         self.init_all_runtime();
     }
 
+    pub fn invalidate_runtime(&mut self) {
+        self.device = None;
+        self.runtime_layouts.clear();
+    }
+
     pub fn init_all_runtime(&mut self) {
         let device = self.device.clone().unwrap();
         for (id, layout) in self.raw_layouts.iter() {
