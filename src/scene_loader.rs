@@ -117,7 +117,7 @@ impl SceneLoader {
         }
     }
 
-    fn load_data(world: &mut World, scene: &Scene, node: &Rc<Node>, node_obj: GameObjectId) {
+    fn load_data(world: &mut World, scene: &Scene, node: &Rc<Node>, mut node_obj: GameObjectId) {
         if node.meshes.is_empty() {
             return;
         }
@@ -203,18 +203,19 @@ impl SceneLoader {
             &mut bitangents,
         );
 
-        let vertices = izip!(positions, tex_coords, normals, tangents, bitangents, bone_idxs, bone_weights)
+        let vertices: Vec<Vertex3D> = izip!(positions, tex_coords, normals, tangents, bitangents, bone_idxs, bone_weights)
             .map(
                 |(position, tex_coord, normal, tangent, bitangent, bone_indicies, bone_weights)|
                     Vertex3D::new(position, tex_coord, normal, tangent, bitangent, &bone_indicies, &bone_weights),
             )
             .collect();
 
-        let mesh = Mesh::new(vertices, None, Some(material_ranges), bones);
-        let id = world.assets.meshes.add_mesh(mesh);
+        if !vertices.is_empty() {
+            let mesh = Mesh::new(vertices, None, Some(material_ranges), bones);
+            let id = world.assets.meshes.add_mesh(mesh);
 
-        let mut node_obj = node_obj;
-        node_obj.drawable = Some(MeshRenderer::new(id));
+            node_obj.drawable = Some(MeshRenderer::new(id));
+        }
 
         // set transformations
         let t = node.transformation;
