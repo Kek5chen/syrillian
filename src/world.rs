@@ -178,6 +178,8 @@ impl World {
     pub fn print_objects_rec(children: &Vec<GameObjectId>, i: i32) {
         for child in children {
             info!("{}- {}", "  ".repeat(i as usize), &child.name);
+            info!("{}-> Components: {}", "  ".repeat(i as usize + 1), child.components.len());
+            info!("{}-> Has Drawable: {}", "  ".repeat(i as usize + 1), child.drawable.is_some());
             Self::print_objects_rec(&child.children, i + 1);
         }
     }
