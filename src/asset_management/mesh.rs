@@ -3,11 +3,10 @@ use std::ops::Range;
 use bytemuck::{Pod, Zeroable};
 use nalgebra::{Matrix4, Point, Vector2, Vector3};
 use static_assertions::const_assert_eq;
-use wgpu::{BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BufferAddress, BufferUsages, Device, VertexAttribute, VertexFormat};
+use wgpu::{BufferAddress, BufferUsages, Device, VertexAttribute, VertexFormat};
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 
 use crate::asset_management::materialmanager::{FALLBACK_MATERIAL_ID, MaterialId};
-use crate::object::ModelData;
 
 #[derive(Copy, Clone)]
 pub struct SimpleVertex3D {
@@ -81,46 +80,13 @@ pub struct RuntimeMeshData {
     pub(crate) vertices_num: usize,
     pub(crate) indices_buf:  Option<wgpu::Buffer>,
     pub(crate) indices_num:  usize,
-
-    // TODO: Move this to object not mesh.. so meshes are sharable
-    pub(crate) transformation_data:        ModelData,
-    pub(crate) transformation_data_buffer: wgpu::Buffer,
-
-    pub(crate) bone_data:        BoneData,
-    pub(crate) bone_data_buffer: wgpu::Buffer,
-
-    pub(crate) model_bind_group: wgpu::BindGroup,
 }
 
-#[repr(C)]
-#[derive(Debug, Default, Clone)]
-pub struct BoneData {
-    pub(crate) bones: Vec<Bone>,
-}
-
-impl BoneData {
-    pub fn as_bytes(&self) -> &[u8] {
-        const DUMMY_BONE: Bone = Bone {
-            offset_matrix: Matrix4::new(
-                1.0, 0.0, 0.0, 0.0,
-                0.0, 1.0, 0.0, 0.0,
-                0.0, 0.0, 1.0, 0.0,
-                0.0, 0.0, 0.0, 1.0
-            )
-        };
-
-        if self.bones.is_empty() {
-            bytemuck::bytes_of(&DUMMY_BONE)
-        } else {
-            bytemuck::cast_slice(&self.bones[..])
-        }
-    }
-}
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Bone {
-    pub(crate) offset_matrix: Matrix4<f32>,
+    pub(crate) transform: Matrix4<f32>,
 }
 
 unsafe impl Zeroable for Bone {}
@@ -130,7 +96,7 @@ impl From<&russimp_ng::bone::Bone> for Bone {
     fn from(value: &russimp_ng::bone::Bone) -> Self {
         let m = value.offset_matrix;
         Bone {
-            offset_matrix: Matrix4::new(
+            transform: Matrix4::new(
                 m.a1, m.a2, m.a3, m.a4, 
                 m.b1, m.b2, m.b3, m.b4, 
                 m.c1, m.c2, m.c3, m.c4, 
@@ -140,30 +106,29 @@ impl From<&russimp_ng::bone::Bone> for Bone {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct BoneMeta {
-    pub(crate) name: String,
-}
-
-impl BoneMeta {
-    pub fn new(name: String) -> Self {
-        BoneMeta {
-            name
-        }
-    }
-
-    pub fn name(&self) -> &str {
-        self.name.as_str()
-    }
-}
-
 #[derive(Debug, Default, Clone)]
 pub struct Bones {
-    pub(crate) metadata: Vec<BoneMeta>,
-    pub(crate) data: BoneData,
+    pub names: Vec<String>,
+    pub raw: Vec<Bone>,
 }
 
 impl Bones {
+    pub fn name(&self, idx: usize) -> Option<&str> {
+        self.names.get(idx).map(|s| s.as_str())
+    }
+
+    pub fn base_offset(&self, idx: usize) -> Option<&Matrix4<f32>> {
+        self.raw.get(idx).map(|b| &b.transform)
+    }
+
+    pub fn names(&self) -> &[String] {
+        &self.names
+    }
+
+    pub fn bones(&self) -> &[Bone] {
+        &self.raw
+    }
+
     pub fn none() -> Bones {
         Bones::default()
     }
@@ -172,12 +137,11 @@ impl Bones {
 #[derive(Debug)]
 pub struct MeshVertexData<T> {
     pub(crate) vertices: Vec<T>,
-    pub(crate) indices: Option<Vec<u32>>, // <--- put this
-}                                    //         |
-                                     //         |
-#[derive(Debug)]                     //         |
-pub struct Mesh {                    //         |
-    //         here <---------------------------- i forgor why tho :<
+    pub(crate) indices: Option<Vec<u32>>, 
+}
+
+#[derive(Debug)]
+pub struct Mesh {
     pub(crate) data:     MeshVertexData<Vertex3D>,
     pub material_ranges: Vec<(MaterialId, Range<u32>)>,
     pub bones:           Bones,
@@ -215,7 +179,6 @@ impl Mesh {
     pub(crate) fn init_runtime(
         &mut self,
         device: &Device,
-        model_bind_group_layout: &BindGroupLayout,
     ) -> RuntimeMesh {
         let v_buffer = device.create_buffer_init(&BufferInitDescriptor {
             label: Some("3D Object Vertex Buffer"),
@@ -230,37 +193,6 @@ impl Mesh {
             })
         });
 
-        let transformation_data = ModelData::empty();
-        let transformation_data_buffer = device.create_buffer_init(&BufferInitDescriptor {
-            label: Some("Model Buffer"),
-            contents: bytemuck::bytes_of(&transformation_data),
-            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-        });
-
-        let bone_data = self.bones.data.clone();
-        let bone_bytes = bone_data.as_bytes();
-
-        let bone_data_buffer = device.create_buffer_init(&BufferInitDescriptor {
-            label: Some("Model Bone Data"),
-            contents: bone_bytes,
-            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-        });
-
-        let model_bind_group = device.create_bind_group(&BindGroupDescriptor {
-            label: Some("Model Bind Group"),
-            layout: model_bind_group_layout,
-            entries: &[
-                BindGroupEntry {
-                    binding: 0,
-                    resource: transformation_data_buffer.as_entire_binding(),
-                },
-                BindGroupEntry {
-                    binding: 1,
-                    resource: bone_data_buffer.as_entire_binding(),
-                }
-            ],
-        });
-
         let runtime_mesh_data = RuntimeMeshData {
             vertices_buf: v_buffer,
             vertices_num: self.data.vertices.len(),
@@ -271,14 +203,6 @@ impl Mesh {
                 .as_ref()
                 .map(|i| i.len())
                 .unwrap_or_default(),
-
-            transformation_data,
-            transformation_data_buffer,
-
-            bone_data,
-            bone_data_buffer,
-
-            model_bind_group,
         };
 
         RuntimeMesh {

@@ -18,7 +18,7 @@ use crate::asset_management::materialmanager::{Material, MaterialId};
 use crate::asset_management::mesh::{Mesh, Vertex3D};
 use crate::asset_management::shadermanager::ShaderId;
 use crate::asset_management::texturemanager::{TextureId, FALLBACK_DIFFUSE_TEXTURE};
-use crate::asset_management::{BoneMeta, Bones, DIM3_SHADER_ID};
+use crate::asset_management::{Bones, DIM3_SHADER_ID};
 use crate::drawables::mesh_renderer::MeshRenderer;
 use crate::object::GameObjectId;
 use crate::utils::math::ExtraMatrixMath;
@@ -241,12 +241,12 @@ impl SceneLoader {
     ) {
         // grab bones length before so we know where we base our ids off of. the new indices should
         // now be bones_base + raw id
-        let original_bone_count = mapped.data.bones.len();
+        let original_bone_count = mapped.raw.len();
 
         // map bones from raw into mapped bone list
         for bone in &raw.bones {
-            mapped.metadata.push(BoneMeta::new(bone.name.clone()));
-            mapped.data.bones.push(bone.into())
+            mapped.names.push(bone.name.clone());
+            mapped.raw.push(bone.into())
         }
 
         // transpose the mapping from `Vec<weights.vertex ids>` to `vertex ids -> Vec<weights>`

@@ -5,9 +5,9 @@ use nalgebra::{Matrix4, Scale3, Translation3};
 use wgpu::{util::{BufferInitDescriptor, DeviceExt}, BindGroupDescriptor, BindGroupEntry, BufferUsages};
 use winit::window::Window;
 
-use crate::{asset_management::{bindgroup_layout_manager::MODEL_UBGL_ID, materialmanager::MaterialId, BoneData, Bones, Mesh, MeshId, MeshManager, RuntimeMesh, ShaderId, DIM2_SHADER_ID}, buffer::UNIT_SQUARE, object::{GameObjectId, ModelData}, renderer::Renderer, World};
+use crate::{asset_management::{bindgroup_layout_manager::MODEL_UBGL_ID, materialmanager::MaterialId, Bones, Mesh, MeshId, MeshManager, RuntimeMesh, ShaderId, DIM2_SHADER_ID}, buffer::UNIT_SQUARE, object::{GameObjectId, ModelData}, renderer::Renderer, World};
 
-use super::Drawable;
+use super::{BoneData, Drawable};
 
 static UNIT_SQUARE_ID: RwLock<Option<MeshId>> = RwLock::new(None);
 
