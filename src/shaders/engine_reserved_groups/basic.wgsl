@@ -23,8 +23,6 @@ struct VOutput {
 
 struct CameraData {
     pos:            vec3<f32>,
-    rot:            vec3<f32>, // redundant?
-    scale:          vec3<f32>, // redundant?
     view_mat:       mat4x4<f32>,
     projection_mat: mat4x4<f32>,
     view_proj_mat:  mat4x4<f32>,
