@@ -83,7 +83,7 @@
           src = ./.;
 
           useCargoFetchVendor = true;
-          cargoHash = "sha256-NIhNXbueWXrYmPUrPOZqmyaZONalzJqfhraxmDcOOOc=";
+          cargoHash = "sha256-a512W3HWCp1wZhH/MvKcvfFbaYX7RaYov0H/PgAnhSQ=";
           dontCargoInstall = true;
 
           nativeBuildInputs = [ pkgs.pkg-config pkgs.rustPlatform.bindgenHook ];
@@ -93,6 +93,7 @@
             zlib
             assimpCross
             mcfgStatic
+            cmake
           ];
 
           installPhase = ''
