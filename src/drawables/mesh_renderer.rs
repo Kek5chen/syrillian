@@ -1,22 +1,63 @@
 use log::error;
 use nalgebra::Matrix4;
-use wgpu::{IndexFormat, RenderPass};
+use wgpu::util::{BufferInitDescriptor, DeviceExt};
+use wgpu::{BindGroupDescriptor, BindGroupEntry, BufferUsages, IndexFormat, RenderPass};
 
+use crate::asset_management::bindgroup_layout_manager::MODEL_UBGL_ID;
 use crate::asset_management::materialmanager::{MaterialId, FALLBACK_MATERIAL_ID};
 use crate::asset_management::meshmanager::MeshId;
-use crate::asset_management::ShaderId;
+use crate::asset_management::{Bone, ShaderId};
 use crate::drawables::drawable::Drawable;
-use crate::object::GameObjectId;
+use crate::object::{GameObjectId, ModelData};
 use crate::renderer::Renderer;
 use crate::world::World;
 
+#[derive(Debug, Default, Clone)]
+pub struct BoneData {
+    pub(crate) bones: Vec<Bone>,
+}
+
+impl BoneData {
+    pub fn as_bytes(&self) -> &[u8] {
+        const DUMMY_BONE: Bone = Bone {
+            transform: Matrix4::new(
+                1.0, 0.0, 0.0, 0.0,
+                0.0, 1.0, 0.0, 0.0,
+                0.0, 0.0, 1.0, 0.0,
+                0.0, 0.0, 0.0, 1.0
+            )
+        };
+
+        if self.bones.is_empty() {
+            bytemuck::bytes_of(&DUMMY_BONE)
+        } else {
+            bytemuck::cast_slice(&self.bones[..])
+        }
+    }
+}
+
+pub struct RuntimeMeshRenderData {
+    mesh_data:        ModelData,
+    mesh_data_buffer: wgpu::Buffer,
+
+    bone_data:        BoneData,
+    bone_data_buffer: wgpu::Buffer,
+
+    model_bind_group: wgpu::BindGroup,
+}
+
+
 pub struct MeshRenderer {
     mesh: MeshId,
+    runtime_data: Option<RuntimeMeshRenderData>,
 }
 
 impl MeshRenderer {
     pub fn new(mesh: MeshId) -> Box<MeshRenderer> {
-        Box::new(MeshRenderer { mesh })
+        Box::new(MeshRenderer { 
+            mesh,
+            runtime_data: None,
+        })
     }
     
     pub fn mesh(&self) -> MeshId {
@@ -27,7 +68,7 @@ impl MeshRenderer {
 impl Drawable for MeshRenderer {
     fn setup(
         &mut self,
-        _renderer: &Renderer,
+        renderer: &Renderer,
         world: &mut World,
     ) {
         world.assets.meshes.init_runtime_mesh(self.mesh);
@@ -52,38 +93,89 @@ impl Drawable for MeshRenderer {
                     .expect("Runtime material should be initialized..");
             }
         }
+
+        let device = renderer.state.device.as_ref();
+
+        let mesh_data = ModelData::empty();
+        let mesh_data_buffer = device.create_buffer_init(&BufferInitDescriptor {
+            label: Some("Model Buffer"),
+            contents: bytemuck::bytes_of(&mesh_data),
+            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+        });
+
+        let bones = world.assets.meshes
+            .get_raw_mesh(self.mesh)
+            .expect("Mesh must exist")
+            .bones
+            .bones()
+            .to_vec();
+
+        let bone_data = BoneData {
+            bones,
+        };
+        
+        let bone_data_buffer = device.create_buffer_init(&BufferInitDescriptor {
+            label: Some("Model Bone Data"),
+            contents: bone_data.as_bytes(),
+            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+        });
+
+        let model_bind_group_layout = world.assets.bind_group_layouts
+            .get_bind_group_layout(MODEL_UBGL_ID)
+            .expect("Model BGL should exist");
+
+        let model_bind_group = device.create_bind_group(&BindGroupDescriptor {
+            label: Some("Model Bind Group"),
+            layout: model_bind_group_layout,
+            entries: &[
+                BindGroupEntry {
+                    binding: 0,
+                    resource: mesh_data_buffer.as_entire_binding(),
+                },
+                BindGroupEntry {
+                    binding: 1,
+                    resource: bone_data_buffer.as_entire_binding(),
+                }
+            ],
+        });
+
+       let runtime_data = RuntimeMeshRenderData {
+            mesh_data,
+            mesh_data_buffer,
+
+            bone_data,
+            bone_data_buffer,
+
+            model_bind_group,
+        };
+
+       self.runtime_data = Some(runtime_data);
     }
 
     fn update(
         &mut self,
-        world: &mut World,
+        _world: &mut World,
         parent: GameObjectId,
         renderer: &Renderer,
         outer_transform: &Matrix4<f32>,
     ) {
-        // TODO: Meshes should be able to be shared. Give ModelData to the MeshRenderer
-        let runtime_mesh = world
-            .assets
-            .meshes
-            .get_runtime_mesh_mut(self.mesh)
-            .expect("Runtime mesh should be initialized before calling update.");
+        let runtime_data = self.runtime_data.as_mut().expect("Should be initialized in init");
 
-        runtime_mesh
-            .data
-            .transformation_data
+        runtime_data
+            .mesh_data
             .update(parent, outer_transform);
 
         renderer.state.queue.write_buffer(
-            &runtime_mesh.data.transformation_data_buffer,
+            &runtime_data.mesh_data_buffer,
             0,
-            bytemuck::bytes_of(&runtime_mesh.data.transformation_data),
+            bytemuck::bytes_of(&runtime_data.mesh_data),
         );
 
-        if !runtime_mesh.data.bone_data.bones.is_empty() {
+        if !runtime_data.bone_data.bones.is_empty() {
             renderer.state.queue.write_buffer(
-                &runtime_mesh.data.bone_data_buffer,
+                &runtime_data.bone_data_buffer,
                 0,
-                runtime_mesh.data.bone_data.as_bytes(),
+                runtime_data.bone_data.as_bytes(),
             );
         }
     }
@@ -117,8 +209,10 @@ impl Drawable for MeshRenderer {
                         .expect("Fallback shader should always exist")
             });
 
+            let runtime_data = self.runtime_data.as_ref().expect("Should be initialized in init");
+
             rpass.set_vertex_buffer(0, runtime_mesh.data.vertices_buf.slice(..));
-            rpass.set_bind_group(1, &runtime_mesh.data.model_bind_group, &[]);
+            rpass.set_bind_group(1, &runtime_data.model_bind_group, &[]);
 
             let i_buffer = &runtime_mesh.data.indices_buf.as_ref();
 
