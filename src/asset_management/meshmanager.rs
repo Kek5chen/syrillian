@@ -2,9 +2,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use wgpu::Device;
-use crate::asset_management::bindgroup_layout_manager::MODEL_UBGL_ID;
 use crate::asset_management::mesh::{Mesh, RuntimeMesh};
-use crate::world::World;
 
 pub type MeshId = usize;
 
@@ -76,10 +74,8 @@ impl MeshManager {
             return mesh.runtime.as_ref();
         }
 
-        let model_bgl = World::instance().assets.bind_group_layouts.get_bind_group_layout(MODEL_UBGL_ID).unwrap();
         let runtime_mesh = mesh.raw.as_mut().init_runtime(
             self.device.as_ref().unwrap(),
-            model_bgl
         );
         mesh.runtime = Some(runtime_mesh);
         mesh.runtime.as_ref()
@@ -91,10 +87,8 @@ impl MeshManager {
             return mesh.runtime.as_mut();
         }
 
-        let model_bgl = World::instance().assets.bind_group_layouts.get_bind_group_layout(MODEL_UBGL_ID).unwrap();
         let runtime_mesh = mesh.raw.as_mut().init_runtime(
             self.device.as_ref().unwrap(),
-            model_bgl,
         );
         mesh.runtime = Some(runtime_mesh);
         mesh.runtime.as_mut()

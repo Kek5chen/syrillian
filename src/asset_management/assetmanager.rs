@@ -18,6 +18,7 @@ pub struct AssetManager {
 
 impl AssetManager {
     pub fn invalidate(&mut self) {
+        self.bind_group_layouts.invalidate_runtime();
         self.textures.invalidate_runtime();
         self.shaders.invalidate_runtime();
         self.materials.invalidate_runtime();
@@ -25,10 +26,10 @@ impl AssetManager {
     }
 
     pub fn init_runtime(&mut self, device: Rc<Device>, queue: Rc<Queue>) {
+        self.bind_group_layouts.init_runtime(device.clone());
         self.textures.init_runtime(device.clone(), queue.clone());
         self.shaders.init_runtime(device.clone());
         self.materials.init_runtime(device.clone(), queue.clone());
         self.meshes.init_runtime(device.clone());
-        self.bind_group_layouts.init_runtime(device.clone());
     }
 }

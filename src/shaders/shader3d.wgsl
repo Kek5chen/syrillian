@@ -21,6 +21,9 @@ fn vs_main(in: VInput) -> VOutput {
     // Recompute bitangent for guaranteed orthogonality.
     out.world_bitangent = cross(out.world_normal, out.world_tangent);
 
+    out.bone_indices = in.vboneidx;
+    out.bone_weights = in.vboneweights;
+
     return out;
 }
 

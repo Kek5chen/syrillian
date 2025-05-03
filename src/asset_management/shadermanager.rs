@@ -4,6 +4,7 @@ use std::error::Error;
 use std::fs;
 use std::path::Path;
 use std::rc::Rc;
+use log::{debug, warn};
 use wgpu::*;
 
 use crate::asset_management::bindgroup_layout_manager::{MATERIAL_UBGL_ID, MODEL_UBGL_ID, POST_PROCESS_BGL_ID};
@@ -15,12 +16,19 @@ use super::bindgroup_layout_manager::{LIGHT_UBGL_ID, RENDER_UBGL_ID};
 const POST_PROCESS_SHADER_PRE_CONTEXT: &str = include_str!("../shaders/engine_reserved_groups/post_process.wgsl");
 const SHADER_PRE_CONTEXT: &str = include_str!("../shaders/engine_reserved_groups/basic.wgsl");
 
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum ShaderStage {
+    Default,
+    PostProcess,
+}
+
 #[derive(Debug)]
 pub struct Shader {
     pub name: String,
     pub code: String,
     pub polygon_mode: PolygonMode,
     pub draw_over: bool,
+    pub stage: ShaderStage,
 }
 
 #[derive(Debug)]
@@ -201,30 +209,48 @@ impl Default for ShaderManager {
 #[allow(dead_code)]
 impl ShaderManager {
     pub fn init(&mut self) {
-        self.add_shader(
-            "Fallback".to_string(),
-            include_str!("../shaders/fallback_shader3d.wgsl").to_string(),
-        );
-        self.add_shader(
-            "3D Default Pipeline".to_string(),
-            include_str!("../shaders/shader3d.wgsl").to_string(),
-        );
-        self.add_shader(
-            "2D Default Pipeline".to_string(),
-            include_str!("../shaders/shader2d.wgsl").to_string(),
-        );
-        self.add_shader(
-            "PostProcess".to_string(),
-            include_str!("../shaders/fullscreen_passhthrough.wgsl").to_string(),
-        );
-        self.add_shader(
-            "3D Debug Edges Shader".to_string(),
-            include_str!("../shaders/debug/edges.wgsl").to_string(),
+        assert_eq!(
+            self.add_default_shader(
+                "Fallback".to_string(),
+                include_str!("../shaders/fallback_shader3d.wgsl").to_string(),
+            ),
+            FALLBACK_SHADER_ID
         );
 
-        let shader = self.raw_shaders.get_mut(&DEBUG_EDGES_SHADER_ID).unwrap();
-        shader.draw_over = true;
-        shader.polygon_mode = PolygonMode::Line;
+        assert_eq!(
+            self.add_default_shader(
+                "3D Default Pipeline".to_string(),
+                include_str!("../shaders/shader3d.wgsl").to_string(),
+            ),
+            DIM3_SHADER_ID
+        );
+
+        assert_eq!(
+            self.add_default_shader(
+                "2D Default Pipeline".to_string(),
+                include_str!("../shaders/shader2d.wgsl").to_string(),
+            ),
+            DIM2_SHADER_ID
+        );
+
+        assert_eq!(
+            self.add_post_process_shader(
+                "PostProcess".to_string(),
+                include_str!("../shaders/fullscreen_passhthrough.wgsl").to_string(),
+            ),
+            POST_PROCESS_SHADER_ID
+        );
+
+        assert_eq!(
+            self.add_shader(Shader {
+                name: "3D Debug Edges Shader".to_owned(),
+                code: include_str!("../shaders/debug/edges.wgsl").to_string(),
+                polygon_mode: PolygonMode::Line,
+                draw_over: true,
+                stage: ShaderStage::Default,
+            }),
+            DEBUG_EDGES_SHADER_ID
+        );
     }
 
     pub fn invalidate_runtime(&mut self) {
@@ -234,10 +260,29 @@ impl ShaderManager {
 
     pub fn init_runtime(&mut self, device: Rc<Device>) {
         self.device = Some(device);
-        self.init();
+        let shaders: Vec<ShaderId> = self.raw_shaders.keys().cloned().collect();
+        for id in shaders {
+            if self.init_single_runtime(id).is_none() {
+                warn!("Failed to initialize shader with ID {id}");
+            }
+        }
+        if cfg!(debug_assertions) {
+            let mut default = 0;
+            let mut post_process = 0;
+
+            for shader in self.runtime_shaders.values() {
+                if shader.draw_over {
+                    post_process += 1;
+                } else {
+                    default += 1;
+                }
+            }
+
+            debug!("Initialized {default} Default and {post_process} Post Processing Shaders");
+        }
     }
 
-    pub fn add_combined_shader_file<T>(
+    pub fn add_default_shader_from_file<T>(
         &mut self,
         name: &str,
         path: T,
@@ -246,19 +291,35 @@ impl ShaderManager {
         T: AsRef<Path>,
     {
         let content = fs::read_to_string(path)?;
-        Ok(self.add_combined_shader(name, &content))
+        Ok(self.add_default_shader(name.to_owned(), content.to_owned()))
     }
 
-    pub fn add_combined_shader(&mut self, name: &str, shader: &str) -> ShaderId {
-        self.add_shader(name.to_string(), shader.to_string())
+    pub fn add_post_process_shader(&mut self, name: String, code: String) -> ShaderId {
+        self.add_shader(Shader {
+            name,
+            code,
+            polygon_mode: PolygonMode::Fill,
+            draw_over: true,
+            stage: ShaderStage::PostProcess,
+        })
     }
 
-    pub fn add_shader(&mut self, name: String, code: String) -> ShaderId {
+    pub fn add_default_shader(&mut self, name: String, code: String) -> ShaderId {
+        self.add_shader(Shader {
+            name,
+            code,
+            polygon_mode: PolygonMode::Fill,
+            draw_over: false,
+            stage: ShaderStage::Default,
+        })
+    }
+
+    pub fn add_shader(&mut self, shader: Shader) -> ShaderId {
         let id = self.next_id;
 
         self.raw_shaders.insert(
             self.next_id,
-            Shader { name, code, polygon_mode: PolygonMode::Fill, draw_over: false },
+            shader,
         );
         self.next_id += 1;
 
@@ -281,17 +342,18 @@ impl ShaderManager {
         let bgls = &world.assets.bind_group_layouts;
 
         let runtime_shader = 
-            if id == POST_PROCESS_SHADER_ID {
+            if raw_shader.stage == ShaderStage::PostProcess {
                 let post_process_ubgl = bgls.get_bind_group_layout(POST_PROCESS_BGL_ID).unwrap();
                 raw_shader.initialize_post_process_runtime(
                     self.device.clone().unwrap().as_ref(),
                     post_process_ubgl,
                 )
             } else {
-                let render_ubgl = bgls.get_bind_group_layout(RENDER_UBGL_ID).unwrap();
-                let model_ubgl = bgls.get_bind_group_layout(MODEL_UBGL_ID).unwrap();
+                let render_ubgl   = bgls.get_bind_group_layout(RENDER_UBGL_ID).unwrap();
+                let model_ubgl    = bgls.get_bind_group_layout(MODEL_UBGL_ID).unwrap();
                 let material_ubgl = bgls.get_bind_group_layout(MATERIAL_UBGL_ID).unwrap();
                 let lighting_ubgl = bgls.get_bind_group_layout(LIGHT_UBGL_ID).unwrap();
+
                 raw_shader.initialize_default_runtime(
                     self.device.clone().unwrap().as_ref(),
                     render_ubgl,
@@ -306,7 +368,7 @@ impl ShaderManager {
         self.runtime_shaders.get(&id)
     }
 
-    pub(crate) fn find_shader_by_name(&self, name: &str) -> Option<ShaderId> {
+    pub fn find_shader_by_name(&self, name: &str) -> Option<ShaderId> {
         self.raw_shaders
             .iter()
             .find(|(_, v)| v.name == name)
