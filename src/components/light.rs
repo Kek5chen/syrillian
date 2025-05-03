@@ -41,6 +41,10 @@ impl Component for PointLightComponent {
             }
     }
 
+    fn update(&mut self) {
+        self.inner.pos = Aligned(self.parent.transform.position());
+    }
+
     fn get_parent(&self) -> GameObjectId {
         self.parent
     }
@@ -69,7 +73,7 @@ impl PointLightComponent {
         self.inner.intensity = intensity;
     }
 
-    pub fn set_color(&mut self, color: Vector3<f32>) {
+    pub fn set_color_rgb(&mut self, color: Vector3<f32>) {
         self.inner.color = color;
     }
 
