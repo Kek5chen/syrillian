@@ -1,10 +1,31 @@
-use std::error::Error;
+use snafu::{ensure, ResultExt, Snafu};
 use std::rc::Rc;
 use wgpu::{
-    Adapter, CompositeAlphaMode, Device, DeviceDescriptor, Extent3d, Features, Instance, Limits, MemoryHints, PowerPreference, PresentMode, Queue, RequestAdapterOptions, Surface, SurfaceConfiguration, Texture, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages
+    Adapter, CompositeAlphaMode, CreateSurfaceError, Device, DeviceDescriptor, Extent3d, Features, Instance, Limits, MemoryHints, PowerPreference, PresentMode, Queue, RequestAdapterOptions, RequestDeviceError, Surface, SurfaceConfiguration, Texture, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages
 };
 use winit::dpi::PhysicalSize;
 use winit::window::Window;
+
+type Result<T, E = StateError> = std::result::Result<T, E>;
+
+#[derive(Debug, Snafu)]
+#[snafu(context(suffix(Err)))]
+pub enum StateError {
+    #[snafu(display("Unable to get device: {source}"))]
+    RequestDevice {
+        source: RequestDeviceError,
+    },
+
+    #[snafu(display("Can only run on Bgra8UnormSrgb currently, but it's not supported by your GPU. Available: {formats:?}"))]
+    ColorFormatNotAvailable {
+        formats: Vec<TextureFormat>,
+    },
+
+    #[snafu(display("Failed to create surface: {source}"))]
+    CreateSurface {
+        source: CreateSurfaceError,
+    },
+}
 
 #[allow(unused)]
 pub struct State {
@@ -22,11 +43,11 @@ impl State {
         Instance::default()
     }
 
-    fn setup_surface(instance: &Instance, window: &Window) -> Result<Surface<'static>, Box<dyn Error>> {
+    fn setup_surface(instance: &Instance, window: &Window) -> Result<Surface<'static>> {
         unsafe {
             // We are creating a 'static lifetime out of a local reference
             // VERY UNSAFE: Make absolutely sure `window` lives as long as `surface`
-            let surface = instance.create_surface(window)?;
+            let surface = instance.create_surface(window).context(CreateSurfaceErr)?;
             Ok(std::mem::transmute::<Surface, Surface<'static>>(surface))
         }
     }
@@ -51,22 +72,21 @@ impl State {
         wgpu::Trace::Off
     }
 
-    async fn get_device_and_queue(adapter: &Adapter) -> Result<(Rc<Device>, Rc<Queue>), Box<dyn Error>> {
+    async fn get_device_and_queue(adapter: &Adapter) -> Result<(Rc<Device>, Rc<Queue>)> {
         let (device, queue) = adapter
-            .request_device(
-                &DeviceDescriptor {
-                    label: Some("Renderer Hardware"),
-                    required_features: Features::default() 
-                        | Features::POLYGON_MODE_LINE,
-                    required_limits: Limits {
-                        max_bind_groups: 5,
-                        ..Limits::default()
-                    },
-                    memory_hints: MemoryHints::default(),
-                    trace: Self::trace_mode(),
+            .request_device(&DeviceDescriptor {
+                label: Some("Renderer Hardware"),
+                required_features: Features::default() | Features::POLYGON_MODE_LINE,
+                required_limits: Limits {
+                    max_bind_groups: 5,
+                    ..Limits::default()
                 },
-            )
-            .await?;
+                memory_hints: MemoryHints::default(),
+                trace: Self::trace_mode(),
+            })
+            .await
+            .context(RequestDeviceErr)?;
+
         Ok((Rc::new(device), Rc::new(queue)))
     }
 
@@ -75,7 +95,7 @@ impl State {
         surface: &Surface,
         adapter: &Adapter,
         device: &Device,
-    ) -> Result<SurfaceConfiguration, Box<dyn Error>> {
+    ) -> Result<SurfaceConfiguration> {
         let caps = surface.get_capabilities(adapter);
 
         let present_mode = if caps.present_modes.contains(&PresentMode::Mailbox) {
@@ -83,12 +103,18 @@ impl State {
         } else if caps.present_modes.contains(&PresentMode::Immediate) {
             PresentMode::Immediate
         } else {
-            caps.present_modes.first().cloned().unwrap_or(PresentMode::Fifo)
+            caps.present_modes
+                .first()
+                .cloned()
+                .unwrap_or(PresentMode::Fifo)
         };
 
-        if !caps.formats.contains(&TextureFormat::Bgra8UnormSrgb) {
-            return Err(format!("Can only run on Bgra8UnormSrgb currently, but it's not supported by your GPU. Available: {:?}", caps.formats).into());
-        }
+        ensure!(
+            caps.formats.contains(&TextureFormat::Bgra8UnormSrgb),
+            ColorFormatNotAvailableErr {
+                formats: caps.formats
+            }
+        );
 
         let config = SurfaceConfiguration {
             usage: TextureUsages::RENDER_ATTACHMENT,
@@ -121,7 +147,7 @@ impl State {
         })
     }
 
-    pub async fn new(window: &Window) -> Result<Self, Box<dyn Error>> {
+    pub async fn new(window: &Window) -> Result<Self> {
         let size = window.inner_size();
         let size = PhysicalSize {
             height: size.height.max(1),

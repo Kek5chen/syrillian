@@ -147,7 +147,7 @@ impl ApplicationHandler for App {
 
         if let Some(init) = self.hook_funcs.init {
             if let Err(e) = init(&mut self.world, renderer.window()) {
-                error!("World init function hook returned: {e}");
+                panic!("World init function hook returned: {e}");
             }
         }
 

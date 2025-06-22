@@ -2,27 +2,66 @@ use std::cell::RefCell;
 use std::fmt::Debug;
 use std::rc::Rc;
 
-use bytemuck::{Pod, Zeroable};
-use log::error;
-use nalgebra::{Matrix4, Perspective3, Vector2};
-use wgpu::util::{BufferInitDescriptor, DeviceExt};
-use wgpu::*;
-use winit::window::Window;
-use crate::asset_management::bindgroup_layout_manager::{RENDER_UBGL_ID, LIGHT_UBGL_ID, POST_PROCESS_BGL_ID};
-use crate::asset_management::shadermanager::{ShaderId, DIM3_SHADER_ID, FALLBACK_SHADER_ID, POST_PROCESS_SHADER_ID};
+use crate::asset_management::bindgroup_layout_manager::{
+    LIGHT_UBGL_ID, POST_PROCESS_BGL_ID, RENDER_UBGL_ID,
+};
+use crate::asset_management::shadermanager::{
+    ShaderId, DIM3_SHADER_ID, FALLBACK_SHADER_ID, POST_PROCESS_SHADER_ID,
+};
 use crate::asset_management::RuntimeShader;
 use crate::components::camera::CameraData;
 use crate::components::light::ShaderPointLight;
 use crate::components::{CameraComponent, PointLightComponent};
 use crate::object::GameObjectId;
-use crate::state::State;
+use crate::state::{State, StateError};
 use crate::world::World;
+use bytemuck::{Pod, Zeroable};
+use log::error;
+use nalgebra::{Matrix4, Perspective3, Vector2};
+use snafu::{ResultExt, Snafu};
+use wgpu::util::{BufferInitDescriptor, DeviceExt};
+use wgpu::{
+    AddressMode, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindingResource,
+    Buffer, BufferAddress, BufferDescriptor, BufferUsages, Color, CommandEncoder,
+    CommandEncoderDescriptor, Device, Extent3d, FilterMode, LoadOp, Operations, RenderPass,
+    RenderPassColorAttachment, RenderPassDepthStencilAttachment, RenderPassDescriptor,
+    SamplerDescriptor, StoreOp, SurfaceError, SurfaceTexture, Texture, TextureDescriptor,
+    TextureDimension, TextureFormat, TextureUsages, TextureView, TextureViewDescriptor,
+};
+use winit::window::Window;
 
 #[cfg(debug_assertions)]
 use crate::asset_management::shadermanager::DEBUG_EDGES_SHADER_ID;
 
 struct PostProcessPass {
     bind_group: BindGroup,
+}
+
+type Result<T, E = RenderError> = std::result::Result<T, E>;
+
+#[derive(Debug, Snafu)]
+#[snafu(context(suffix(Err)))]
+pub enum RenderError {
+    #[snafu(display("Render data should've been set"))]
+    DataNotSet,
+
+    #[snafu(display("Render pipeline is not set"))]
+    NoRenderPipeline,
+
+    #[snafu(display("No camera set for rendering"))]
+    NoCameraSet,
+
+    #[snafu(display("Rendering camera doesn't have a camera component"))]
+    NoCameraComponentSet,
+
+    #[snafu(display("Light UBGL was not created"))]
+    NoLightUBGL,
+
+    #[snafu(display("Error with current render surface: {source}"))]
+    Surface { source: SurfaceError },
+
+    #[snafu(display("Failed to create render state: {source}"))]
+    State { source: StateError },
 }
 
 impl PostProcessPass {
@@ -49,7 +88,7 @@ impl PostProcessPass {
                 BindGroupEntry {
                     binding: 1,
                     resource: BindingResource::Sampler(&sampler),
-                }
+                },
             ],
         });
 
@@ -101,6 +140,8 @@ pub struct Renderer {
     post_process_pass: Option<PostProcessPass>,
 
     pub debug: DebugRenderer,
+
+    printed_errors: u32,
 }
 
 impl Renderer {
@@ -151,10 +192,15 @@ impl Renderer {
         (uniform_buffer, uniform_bind_group)
     }
 
-    pub(crate) async fn new(window: Window) -> Result<Self, Box<dyn std::error::Error>> {
-        let state = Box::new(State::new(&window).await?);
+    pub(crate) async fn new(window: Window) -> Result<Self> {
+        let state = Box::new(State::new(&window).await.context(StateErr)?);
 
-        let (offscreen_texture, offscreen_view) = Self::create_offscreen_texture(&state.device, state.config.width, state.config.height, state.config.format);
+        let (offscreen_texture, offscreen_view) = Self::create_offscreen_texture(
+            &state.device,
+            state.config.width,
+            state.config.height,
+            state.config.format,
+        );
 
         Ok(Renderer {
             state,
@@ -165,13 +211,23 @@ impl Renderer {
             offscreen_view,
             post_process_pass: None,
             debug: DebugRenderer::default(),
+            printed_errors: 0,
         })
     }
 
-    fn create_offscreen_texture(device: &Device, width: u32, height: u32, format: TextureFormat) -> (Texture, TextureView) {
+    fn create_offscreen_texture(
+        device: &Device,
+        width: u32,
+        height: u32,
+        format: TextureFormat,
+    ) -> (Texture, TextureView) {
         let texture = device.create_texture(&TextureDescriptor {
             label: Some("Offscreen Texture"),
-            size: Extent3d { width, height, depth_or_array_layers: 1 },
+            size: Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
             mip_level_count: 1,
             sample_count: 1,
             dimension: TextureDimension::D2,
@@ -201,7 +257,11 @@ impl Renderer {
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
         });
 
-        let render_data_bgl = World::instance().assets.bind_group_layouts.get_bind_group_layout(RENDER_UBGL_ID).unwrap();
+        let render_data_bgl = World::instance()
+            .assets
+            .bind_group_layouts
+            .get_bind_group_layout(RENDER_UBGL_ID)
+            .unwrap();
         let bind_group = self.state.device.create_bind_group(&BindGroupDescriptor {
             label: Some("Render Uniform Bind Group"),
             layout: render_data_bgl,
@@ -226,11 +286,15 @@ impl Renderer {
         });
 
         let world = World::instance();
-        let post_bgl = world.assets.bind_group_layouts.get_bind_group_layout(POST_PROCESS_BGL_ID).unwrap();
+        let post_bgl = world
+            .assets
+            .bind_group_layouts
+            .get_bind_group_layout(POST_PROCESS_BGL_ID)
+            .unwrap();
         self.post_process_pass = Some(PostProcessPass::new(
             &self.state.device,
             post_bgl,
-            &self.offscreen_view
+            &self.offscreen_view,
         ));
 
         #[cfg(debug_assertions)]
@@ -245,11 +309,15 @@ impl Renderer {
     pub fn render_world(&mut self, world: &mut World) -> bool {
         let mut ctx = match self.begin_render() {
             Ok(ctx) => ctx,
-            Err(SurfaceError::Lost) => {
+            Err(RenderError::Surface {
+                source: SurfaceError::Lost,
+            }) => {
                 self.state.resize(self.state.size);
                 return true; // drop frame but don't cancel
             }
-            Err(SurfaceError::OutOfMemory) => {
+            Err(RenderError::Surface {
+                source: SurfaceError::OutOfMemory,
+            }) => {
                 error!("The application ran out of GPU memory!");
                 return false;
             }
@@ -284,30 +352,36 @@ impl Renderer {
             &self.state.device,
             self.state.config.width,
             self.state.config.height,
-            self.state.config.format
+            self.state.config.format,
         );
         self.offscreen_texture = new_offscreen;
         self.offscreen_view = new_offscreen_view;
 
         if let Some(pp) = &mut self.post_process_pass {
             let world = World::instance();
-            let post_bgl = world.assets.bind_group_layouts.get_bind_group_layout(POST_PROCESS_BGL_ID).unwrap();
+            let post_bgl = world
+                .assets
+                .bind_group_layouts
+                .get_bind_group_layout(POST_PROCESS_BGL_ID)
+                .unwrap();
             *pp = PostProcessPass::new(&self.state.device, post_bgl, &self.offscreen_view);
         }
     }
 
-    fn begin_render(&mut self) -> Result<RenderContext, SurfaceError> {
-        let mut output = self.state.surface.get_current_texture()?;
+    fn begin_render(&mut self) -> Result<RenderContext> {
+        let mut output = self
+            .state
+            .surface
+            .get_current_texture()
+            .context(SurfaceErr)?;
         if output.suboptimal {
             drop(output);
             self.state.recreate_surface();
-            let st = match self.state.surface.get_current_texture() {
-                Ok(st) => st,
-                Err(e) => {
-                    return Err(e);
-                }
-            };
-            output = st;
+            output = self
+                .state
+                .surface
+                .get_current_texture()
+                .context(SurfaceErr)?;
         }
 
         let color_view = output
@@ -317,9 +391,12 @@ impl Renderer {
             .state
             .depth_texture
             .create_view(&TextureViewDescriptor::default());
-        let encoder = self.state.device.create_command_encoder(&CommandEncoderDescriptor {
-            label: Some("Main Encoder"),
-        });
+        let encoder = self
+            .state
+            .device
+            .create_command_encoder(&CommandEncoderDescriptor {
+                label: Some("Main Encoder"),
+            });
 
         if self.current_pipeline.is_none() {
             self.current_pipeline = Some(FALLBACK_SHADER_ID);
@@ -337,11 +414,16 @@ impl Renderer {
         &mut self,
         ctx: &mut RenderContext,
         world: &mut World,
-        shader_override: Option<ShaderId>
+        shader_override: Option<ShaderId>,
     ) {
         if let Err(e) = self.render_inner(ctx, world, shader_override) {
-            error!("{e}");
+            if self.printed_errors < 5 {
+                self.printed_errors += 1;
+                error!("{e}")
+            }
+            return;
         }
+        self.printed_errors = 0;
     }
 
     fn render_inner(
@@ -349,15 +431,15 @@ impl Renderer {
         ctx: &mut RenderContext,
         world: &mut World,
         shader_override: Option<ShaderId>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<()> {
         self.update_render_data(world)?;
 
         let shader_id = self.default_shader_id(shader_override)?;
         let shader = world
-                .assets
-                .shaders
-                .get_shader(Some(shader_id))
-                .expect("3D Pipeline should've been initialized previously");
+            .assets
+            .shaders
+            .get_shader(Some(shader_id))
+            .expect("3D Pipeline should've been initialized previously");
         let (load_op_color, load_op_depth) = determine_draw_over_color(shader);
 
         let light_bind_group = self.setup_lights(world)?;
@@ -367,8 +449,8 @@ impl Renderer {
         let render_data = self
             .render_uniform_data
             .as_mut()
-            .ok_or("Render data should be initialized here")?;
-        
+            .ok_or(RenderError::DataNotSet)?;
+
         rpass.set_bind_group(0, &render_data.bind_group, &[]);
         rpass.set_bind_group(3, &light_bind_group, &[]);
 
@@ -401,7 +483,7 @@ impl Renderer {
                     rpass,
                     &child.children,
                     combined_matrix * child.transform.full_matrix().to_homogeneous(),
-                    shader_override
+                    shader_override,
                 );
             }
             let Some(drawable) = &mut child.clone().drawable else {
@@ -454,29 +536,28 @@ impl Renderer {
         &mut self.window
     }
 
-    fn update_render_data(&mut self, world: &World) -> Result<(), Box<dyn std::error::Error>> {
+    fn update_render_data(&mut self, world: &World) -> Result<()> {
         self.update_camera_data(world)?;
         self.update_system_data(world)?;
 
         Ok(())
     }
 
-    fn update_camera_data(&mut self, world: &World) -> Result<(), Box<dyn std::error::Error>> {
+    fn update_camera_data(&mut self, world: &World) -> Result<()> {
         let render_data = self
             .render_uniform_data
             .as_mut()
-            .ok_or("Render data should be initialized")?;
+            .ok_or(RenderError::DataNotSet)?;
 
-        let Some(camera_rc) = world.active_camera.as_ref() else {
-            return Err("No camera set. Can't render".into())
-        };
+        let camera_rc = world
+            .active_camera
+            .as_ref()
+            .ok_or(RenderError::NoCameraSet)?;
 
         let camera = camera_rc;
-        let camera_comp: Option<Rc<RefCell<Box<CameraComponent>>>> =
-            camera.get_component::<CameraComponent>();
-        let Some(camera_comp) = camera_comp else {
-            return Err("Camera didn't have a camera component".into());
-        };
+        let camera_comp = camera
+            .get_component::<CameraComponent>()
+            .ok_or(RenderError::NoCameraComponentSet)?;
 
         let projection_matrix: &Perspective3<f32> = &camera_comp.borrow_mut().projection;
         let camera_transform = &camera.transform;
@@ -488,41 +569,44 @@ impl Renderer {
         self.state.queue.write_buffer(
             &render_data.camera_buffer,
             0,
-            bytemuck::bytes_of(render_data.camera_data.as_ref())
+            bytemuck::bytes_of(render_data.camera_data.as_ref()),
         );
 
         Ok(())
     }
 
-    fn update_system_data(&mut self, world: &World) -> Result<(), Box<dyn std::error::Error>> {
+    fn update_system_data(&mut self, world: &World) -> Result<()> {
         let render_data = self
             .render_uniform_data
             .as_mut()
-            .ok_or("Render data should be initialized")?;
+            .ok_or(RenderError::DataNotSet)?;
 
         let window_size = self.window.inner_size();
         let window_size = Vector2::new(window_size.width, window_size.height);
 
         render_data.system_data.screen_size = window_size;
-        render_data.system_data.time        = world.time().as_secs_f32();
-        render_data.system_data.delta_time  = world.get_delta_time().as_secs_f32();
+        render_data.system_data.time = world.time().as_secs_f32();
+        render_data.system_data.delta_time = world.get_delta_time().as_secs_f32();
 
         self.state.queue.write_buffer(
             &render_data.system_buffer,
             0,
-            bytemuck::bytes_of(render_data.system_data.as_ref())
+            bytemuck::bytes_of(render_data.system_data.as_ref()),
         );
 
         Ok(())
     }
 
-    fn setup_lights(&self, world: &World) -> Result<BindGroup, Box<dyn std::error::Error>> {
+    fn setup_lights(&self, world: &World) -> Result<BindGroup> {
         // TODO: cache this if light data doesn't change?
         let point_lights = World::instance().get_all_components_of_type::<PointLightComponent>();
         let point_light_count = point_lights.len();
 
-        let light_bgl = world.assets.bind_group_layouts.get_bind_group_layout(LIGHT_UBGL_ID)
-            .ok_or("Light UBGL should be engine-given")?;
+        let light_bgl = world
+            .assets
+            .bind_group_layouts
+            .get_bind_group_layout(LIGHT_UBGL_ID)
+            .ok_or(RenderError::NoLightUBGL)?;
         let point_light_buffer = self.make_point_light_buffer(point_light_count, &point_lights);
         let light_count_buffer = self.state.device.create_buffer_init(&BufferInitDescriptor {
             label: Some("Light Count Buffer"),
@@ -547,14 +631,18 @@ impl Renderer {
         Ok(light_bind_group)
     }
 
-    fn make_point_light_buffer(&self, point_light_count: usize, point_lights: &[Rc<RefCell<Box<PointLightComponent>>>]) -> Buffer {
+    fn make_point_light_buffer(
+        &self,
+        point_light_count: usize,
+        point_lights: &[Rc<RefCell<Box<PointLightComponent>>>],
+    ) -> Buffer {
         if point_light_count == 0 {
             let dummy_point_light: ShaderPointLight = ShaderPointLight::default();
             self.state.device.create_buffer_init(&BufferInitDescriptor {
                 label: Some("Empty Point Light Buffer"),
                 usage: BufferUsages::STORAGE,
                 contents: bytemuck::cast_slice(&[dummy_point_light]),
-            }) 
+            })
         } else {
             let light_data: Vec<ShaderPointLight> = point_lights
                 .iter()
@@ -573,7 +661,12 @@ impl Renderer {
         }
     }
 
-    fn prepare_render_pass<'a>(&self, ctx: &'a mut RenderContext, load_op_color: LoadOp<Color>, load_op_depth: LoadOp<f32>) -> RenderPass<'a> {
+    fn prepare_render_pass<'a>(
+        &self,
+        ctx: &'a mut RenderContext,
+        load_op_color: LoadOp<Color>,
+        load_op_depth: LoadOp<f32>,
+    ) -> RenderPass<'a> {
         ctx.encoder.begin_render_pass(&RenderPassDescriptor {
             label: Some("Offscreen Render Pass"),
             color_attachments: &[Some(RenderPassColorAttachment {
@@ -596,10 +689,8 @@ impl Renderer {
         })
     }
 
-    fn default_shader_id(&self, shader_override: Option<usize>) -> Result<usize, Box<dyn std::error::Error>> {
-        let Some(current_pipeline) = self.current_pipeline else {
-            return Err("No pipeline active. Can't render".into());
-        };
+    fn default_shader_id(&self, shader_override: Option<usize>) -> Result<usize> {
+        let current_pipeline = self.current_pipeline.ok_or(RenderError::NoRenderPipeline)?;
 
         let shader_id = shader_override.unwrap_or(current_pipeline);
         Ok(shader_id)
