@@ -16,24 +16,25 @@ edition = "2024"
 
 
 [dependencies]
-winit = { version = "0.30.9", features = ["x11"] }
-bytemuck = "1.23.0"
-log = "0.4.22"
-nalgebra = { version = "0.33.2" }
-num-traits = "0.2.19"
-itertools = "0.14.0"
-image = "0.25.6"
-rapier3d = "0.25.0"
-futures = "0.3.31"
-aligned = "0.4.2"
-static_assertions = "1.1.0"
+winit = { version = "0.30", features = ["x11"] }
+bytemuck = "1.23"
+log = "0.4"
+nalgebra = "0.33"
+num-traits = "0.2"
+itertools = "0.14"
+image = "0.25"
+rapier3d = "0.26"
+futures = "0.3"
+aligned = "0.4"
+static_assertions = "1.1"
+snafu = "0.8"
 
 [build-dependencies]
-chrono = "0.4.41"
+chrono = "0.4"
 
 [dev-dependencies]
-chrono = "0.4.41"
-env_logger = { version = "0.11.8", features = ["auto-color"] }
+chrono = "0.4"
+env_logger = { version = "0.11", features = ["auto-color"] }
 
 
 
@@ -44,7 +45,7 @@ env_logger = { version = "0.11.8", features = ["auto-color"] }
 
 
 [dependencies.wgpu]
-version = "25.0.0"
+version = "25.0"
 default-features = false
 features = [
   "vulkan-portability",
@@ -61,12 +62,12 @@ features = [
 ]
 
 [dependencies.tokio]
-version = "1.40.0"
+version = "1.40"
 features = ["rt", "rt-multi-thread", "macros", "sync"]
 
 [dependencies.russimp-ng]
 git = "https://github.com/Kek5chen/russimp-ng"
-features = ["static-link"]
+# features = ["static-link"]
 
 
 
