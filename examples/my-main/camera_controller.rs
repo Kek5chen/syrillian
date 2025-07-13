@@ -1,8 +1,8 @@
 use nalgebra::{UnitQuaternion, Vector3};
 use winit::window::CursorGrabMode;
 use syrillian::components::Component;
-use syrillian::object::GameObjectId;
-use syrillian::world::World;
+use syrillian::core::GameObjectId;
+use syrillian::World;
 
 pub struct CameraController {
 	parent: GameObjectId,
