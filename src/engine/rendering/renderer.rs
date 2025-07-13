@@ -5,7 +5,8 @@ use crate::asset_management::{
 };
 use crate::components::{CameraComponent, CameraUniform, PointLightComponent, PointLightUniform};
 use crate::core::GameObjectId;
-use crate::engine::rendering::post_process_pass::PostProcessPass;
+use crate::engine::rendering::offscreen_surface::OffscreenSurface;
+use crate::engine::rendering::post_process_pass::PostProcessData;
 use crate::engine::rendering::uniform::ShaderUniform;
 use crate::ensure_aligned;
 use crate::rendering::State;
@@ -16,10 +17,9 @@ use snafu::ResultExt;
 use std::fmt::Debug;
 use syrillian_macros::UniformIndex;
 use wgpu::{
-    Color, CommandEncoder, CommandEncoderDescriptor, Device, Extent3d, LoadOp, Operations,
+    Color, CommandEncoder, CommandEncoderDescriptor, LoadOp, Operations,
     RenderPass, RenderPassColorAttachment, RenderPassDepthStencilAttachment, RenderPassDescriptor,
-    StoreOp, SurfaceError, SurfaceTexture, Texture, TextureDescriptor, TextureDimension,
-    TextureFormat, TextureUsages, TextureView, TextureViewDescriptor,
+    StoreOp, SurfaceError, SurfaceTexture, TextureView, TextureViewDescriptor,
 };
 use winit::window::Window;
 
@@ -30,11 +30,8 @@ pub struct Renderer {
     pub current_pipeline: Option<ShaderId>,
     render_uniform_data: Option<RenderUniformData>,
 
-    // Offscreen texture for rendering the scene before post-processing
-    offscreen_texture: Texture,
-    offscreen_view: TextureView,
-
-    post_process_pass: Option<PostProcessPass>,
+    post_process_data: Option<PostProcessData>,
+    offscreen_surface: OffscreenSurface,
 
     pub debug: DebugRenderer,
 
@@ -87,48 +84,18 @@ impl Renderer {
     pub(crate) async fn new(window: Window) -> Result<Self> {
         let state = Box::new(State::new(&window).await.context(StateErr)?);
 
-        let (offscreen_texture, offscreen_view) = Self::create_offscreen_texture(
-            &state.device,
-            state.config.width,
-            state.config.height,
-            state.config.format,
-        );
+        let offscreen_view = OffscreenSurface::new(&state.device, &state.config);
 
         Ok(Renderer {
             state,
             window,
             current_pipeline: None,
             render_uniform_data: None,
-            offscreen_texture,
-            offscreen_view,
-            post_process_pass: None,
+            post_process_data: None,
+            offscreen_surface: offscreen_view,
             debug: DebugRenderer::default(),
             printed_errors: 0,
         })
-    }
-
-    fn create_offscreen_texture(
-        device: &Device,
-        width: u32,
-        height: u32,
-        format: TextureFormat,
-    ) -> (Texture, TextureView) {
-        let texture = device.create_texture(&TextureDescriptor {
-            label: Some("Offscreen Texture"),
-            size: Extent3d {
-                width,
-                height,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: TextureDimension::D2,
-            format,
-            usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
-            view_formats: &[],
-        });
-        let view = texture.create_view(&TextureViewDescriptor::default());
-        (texture, view)
     }
 
     pub fn init(&mut self) {
@@ -161,16 +128,18 @@ impl Renderer {
             .bind_group_layouts
             .get_bind_group_layout(POST_PROCESS_BGL_ID)
             .unwrap();
-        self.post_process_pass = Some(PostProcessPass::new(
+
+        self.post_process_data = Some(PostProcessData::new(
             &self.state.device,
             post_bgl,
-            &self.offscreen_view,
+            &self.offscreen_surface.view(),
         ));
 
         #[cfg(debug_assertions)]
         self.init_debug();
     }
 
+    #[inline]
     #[cfg(debug_assertions)]
     fn init_debug(&mut self) {
         self.debug.draw_edges = true;
@@ -218,25 +187,15 @@ impl Renderer {
     pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
         self.state.resize(new_size);
 
-        // Re-create the offscreen texture and post process bind group after resize
-        let (new_offscreen, new_offscreen_view) = Self::create_offscreen_texture(
-            &self.state.device,
-            self.state.config.width,
-            self.state.config.height,
-            self.state.config.format,
-        );
-        self.offscreen_texture = new_offscreen;
-        self.offscreen_view = new_offscreen_view;
+        let world = World::instance();
+        let post_bgl = world
+            .assets
+            .bind_group_layouts
+            .get_bind_group_layout(POST_PROCESS_BGL_ID)
+            .unwrap();
 
-        if let Some(pp) = &mut self.post_process_pass {
-            let world = World::instance();
-            let post_bgl = world
-                .assets
-                .bind_group_layouts
-                .get_bind_group_layout(POST_PROCESS_BGL_ID)
-                .unwrap();
-            *pp = PostProcessPass::new(&self.state.device, post_bgl, &self.offscreen_view);
-        }
+        self.offscreen_surface.recreate(&self.state.device, &self.state.config);
+        self.post_process_data = Some(PostProcessData::new(&self.state.device, post_bgl, self.offscreen_surface.view()));
     }
 
     fn begin_render(&mut self) -> Result<RenderContext> {
@@ -386,7 +345,7 @@ impl Renderer {
         rpass.set_pipeline(&post_shader.pipeline);
         rpass.set_bind_group(
             0,
-            self.post_process_pass
+            self.post_process_data
                 .as_ref()
                 .unwrap()
                 .uniform
@@ -522,7 +481,7 @@ impl Renderer {
         ctx.encoder.begin_render_pass(&RenderPassDescriptor {
             label: Some("Offscreen Render Pass"),
             color_attachments: &[Some(RenderPassColorAttachment {
-                view: &self.offscreen_view,
+                view: self.offscreen_surface.view(),
                 depth_slice: None,
                 resolve_target: None,
                 ops: Operations {

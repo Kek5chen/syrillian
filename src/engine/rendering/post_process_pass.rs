@@ -9,12 +9,16 @@ pub enum PostProcessUniformIndex {
     Sampler = 1,
 }
 
-pub struct PostProcessPass {
+pub struct PostProcessData {
     pub(crate) uniform: ShaderUniform<PostProcessUniformIndex>,
 }
 
-impl PostProcessPass {
-    pub(crate) fn new(device: &Device, layout: &BindGroupLayout, view: &TextureView) -> Self {
+impl PostProcessData {
+    pub(crate) fn new(
+        device: &Device,
+        layout: &BindGroupLayout,
+        offscreen_view: &TextureView,
+    ) -> Self {
         let sampler = device.create_sampler(&SamplerDescriptor {
             label: Some("PostProcess Sampler"),
             address_mode_u: AddressMode::ClampToEdge,
@@ -27,10 +31,19 @@ impl PostProcessPass {
         });
 
         let uniform = ShaderUniform::<PostProcessUniformIndex>::builder(layout)
-            .with_texture_view(view)
+            .with_texture_view(&offscreen_view)
             .with_sampler(&sampler)
             .build(device);
 
         Self { uniform }
+    }
+
+    pub(crate) fn recreate(
+        &mut self,
+        device: &Device,
+        layout: &BindGroupLayout,
+        surface: &TextureView,
+    ) {
+        *self = Self::new(device, layout, surface)
     }
 }
