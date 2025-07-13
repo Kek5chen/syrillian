@@ -14,7 +14,7 @@ use syrillian::world::World;
 
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
+async fn main() {
     env_logger::builder()
         .filter_level(LevelFilter::Info) // Use at least info level
         .parse_default_env()
@@ -27,8 +27,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
     if let Err(e) = app.run().await {
         error!("{e}");
     }
-
-    Ok(())
 }
 
 fn init(world: &mut World, _window: &Window) -> Result<(), Box<dyn Error>> {
