@@ -11,11 +11,9 @@ use crate::ensure_aligned;
 use crate::world::World;
 use log::{error, warn};
 use nalgebra::Vector3;
-use wgpu::util::{BufferInitDescriptor, DeviceExt};
-use wgpu::{
-    BindGroup, BindGroupDescriptor, BindGroupEntry, BindingResource, Buffer, BufferUsages, Device,
-    Queue,
-};
+use wgpu::{Device, Queue};
+use syrillian_macros::UniformIndex;
+use crate::engine::rendering::uniform::ShaderUniform;
 
 pub type MaterialId = usize;
 
@@ -41,6 +39,16 @@ pub struct MaterialItem {
     runtime: Option<RuntimeMaterial>,
 }
 
+#[repr(u8)]
+#[derive(Debug, Copy, Clone, UniformIndex)]
+pub(crate) enum MaterialUniformIndex {
+    Material = 0,
+    DiffuseView = 1,
+    DiffuseSampler = 2,
+    NormalView = 3,
+    NormalSampler = 4,
+}
+
 impl Material {
     pub(crate) fn init_runtime(
         &self,
@@ -57,14 +65,14 @@ impl Material {
             opacity: self.opacity,
         };
 
-        let material_buffer = device.create_buffer_init(&BufferInitDescriptor {
-            label: Some("Material Data Buffer"),
-            contents: bytemuck::bytes_of(&data),
-            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-        });
-
         let world: *mut World = world;
         unsafe {
+            let mat_bgl = (*world)
+                .assets
+                .bind_group_layouts
+                .get_bind_group_layout(MATERIAL_UBGL_ID)
+                .unwrap();
+
             let diffuse_texture_id = self.diffuse_texture.unwrap_or(FALLBACK_DIFFUSE_TEXTURE);
             let diffuse_texture = (*world)
                 .assets
@@ -87,43 +95,17 @@ impl Material {
                 .get_runtime_texture_ensure_init(shininess_texture_id)
                 .unwrap();
 
-            let mat_bgl = (*world)
-                .assets
-                .bind_group_layouts
-                .get_bind_group_layout(MATERIAL_UBGL_ID)
-                .unwrap();
-
-            let bind_group = device.create_bind_group(&BindGroupDescriptor {
-                label: Some("Material Bind Group"),
-                layout: mat_bgl,
-                entries: &[
-                    BindGroupEntry {
-                        binding: 0,
-                        resource: material_buffer.as_entire_binding(),
-                    },
-                    BindGroupEntry {
-                        binding: 1,
-                        resource: BindingResource::TextureView(&diffuse_texture.view),
-                    },
-                    BindGroupEntry {
-                        binding: 2,
-                        resource: BindingResource::Sampler(&diffuse_texture.sampler),
-                    },
-                    BindGroupEntry {
-                        binding: 3,
-                        resource: BindingResource::TextureView(&normal_texture.view),
-                    },
-                    BindGroupEntry {
-                        binding: 4,
-                        resource: BindingResource::Sampler(&normal_texture.sampler),
-                    },
-                ],
-            });
+            let uniform = ShaderUniform::<MaterialUniformIndex>::builder(&mat_bgl)
+                .with_buffer_data(&data)
+                .with_texture_view(&diffuse_texture.view)
+                .with_sampler(&diffuse_texture.sampler)
+                .with_texture_view(&normal_texture.view)
+                .with_sampler(&normal_texture.sampler)
+                .build(device);
 
             RuntimeMaterial {
                 data,
-                buffer: material_buffer,
-                bind_group,
+                uniform,
                 shader: self.shader,
             }
         }
@@ -147,8 +129,7 @@ ensure_aligned!(MaterialUniform { diffuse }, align <= 16 * 2 => size);
 #[derive(Debug)]
 pub struct RuntimeMaterial {
     pub(crate) data: MaterialUniform,
-    pub(crate) buffer: Buffer,
-    pub(crate) bind_group: BindGroup,
+    pub(crate) uniform: ShaderUniform<MaterialUniformIndex>,
     pub(crate) shader: Option<ShaderId>,
 }
 

@@ -12,6 +12,17 @@ pub(crate) struct PointLightUniform {
     pub(crate) intensity: f32,
 }
 
+impl PointLightUniform {
+    pub(crate) const fn zero() -> Self {
+        PointLightUniform {
+            pos: Vector3::new(0.0, 0.0, 0.0),
+            radius: 0.0,
+            color: Vector3::new(0.0, 0.0, 0.0),
+            intensity: 0.0,
+        }
+    }
+}
+
 ensure_aligned!(PointLightUniform { pos, color }, align <= 16 * 2 => size);
 
 pub struct PointLightComponent {
