@@ -217,6 +217,6 @@ impl ApplicationHandler for App {
     fn device_event(&mut self, _: &ActiveEventLoop, _: DeviceId, event: DeviceEvent) {
         let renderer =  self.renderer.as_mut().unwrap();
         let world = self.world.as_mut();
-        world.input.process_mouse_event(renderer.window_mut(), &event);
+        world.input.process_device_input_event(renderer.window_mut(), &event);
     }
 }

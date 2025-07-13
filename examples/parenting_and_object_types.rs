@@ -3,7 +3,6 @@ use std::collections::VecDeque;
 use std::error::Error;
 use std::sync::Mutex;
 
-use env_logger::Env;
 use log::{error, LevelFilter};
 use nalgebra::Vector3;
 use winit::window::Window;

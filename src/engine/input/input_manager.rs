@@ -16,7 +16,6 @@ pub struct InputManager {
     mouse_wheel_delta: f32,
     mouse_pos: PhysicalPosition<f32>,
     mouse_delta: Vector2<f32>, 
-    confined: bool,
     lock_on_next_frame: bool,
     unlock_on_next_frame: bool,
     current_mouse_mode: CursorGrabMode,
@@ -32,7 +31,6 @@ impl Default for InputManager {
             mouse_wheel_delta: 0.0,
             mouse_pos: PhysicalPosition::default(),
             mouse_delta: Vector2::zero(),
-            confined: false,
             lock_on_next_frame: true,
             unlock_on_next_frame: true,
             current_mouse_mode: CursorGrabMode::None
@@ -42,20 +40,39 @@ impl Default for InputManager {
 
 #[allow(unused)]
 impl InputManager {
-    pub(crate) fn process_mouse_event(&mut self, window: &Window, device_event: &DeviceEvent) {
+    pub(crate) fn process_device_input_event(&mut self, window: &Window, device_event: &DeviceEvent) {
         if let DeviceEvent::MouseMotion { delta } = device_event {
             self.mouse_delta = Vector2::new(-delta.0 as f32, -delta.1 as f32);
             self.mouse_pos.x += self.mouse_delta.x;
             self.mouse_pos.y += self.mouse_delta.y;
         }
     }
+    
+    #[inline]
+    pub(crate) fn process_mouse_event(&mut self, window: &Window, position: &PhysicalPosition<f64>) {
+        #[cfg(not(target_os = "macos"))]
+        {
+            self.mouse_delta += Vector2::new(self.mouse_pos.x - position.x as f32, self.mouse_pos.y - position.y as f32);
+            if self.is_cursor_locked() {
+                let size = window.inner_size();
+                let newpos = PhysicalPosition::new(size.width as f64 / 2f64, size.height as f64 / 2f64);
+                if newpos.x == position.x && newpos.y == position.y {
+                    return;
+                }
+                self.mouse_pos = PhysicalPosition::new(newpos.x as f32, newpos.y as f32);
+                window.set_cursor_position(newpos);
+            } else {
+                self.mouse_pos = PhysicalPosition::new(position.x as f32, position.y as f32);
+            }
+        }
+    }
 
     pub(crate) fn process_event(&mut self, window: &mut Window, window_event: &WindowEvent) {
         if self.lock_on_next_frame {
-            self._set_mouse_mode(window, true);
+            self._lock_cursor(window);
             self.lock_on_next_frame = false;
         } else if self.unlock_on_next_frame {
-            self._set_mouse_mode(window, false);
+            self._unlock_cursor(window);
             self.unlock_on_next_frame = false;
         }
         
@@ -69,20 +86,7 @@ impl InputManager {
                     self.key_states.insert(code, event.state);
                 }
             },
-            WindowEvent::CursorMoved { position, .. } => {
-                self.mouse_delta += Vector2::new(self.mouse_pos.x - position.x as f32, self.mouse_pos.y - position.y as f32);
-                if self.confined {
-                    let size = window.inner_size();
-                    let newpos = PhysicalPosition::new(size.width as f64 / 2f64, size.height as f64 / 2f64);
-                    if newpos.x == position.x && newpos.y == position.y {
-                        return;
-                    }
-                    self.mouse_pos = PhysicalPosition::new(newpos.x as f32, newpos.y as f32);
-                    window.set_cursor_position(newpos);
-                } else {
-                    self.mouse_pos = PhysicalPosition::new(position.x as f32, position.y as f32);
-                }
-            }
+            WindowEvent::CursorMoved { position, .. } => self.process_mouse_event(window, position),
             WindowEvent::MouseWheel { delta, .. } => {
                 let y = match delta {
                     MouseScrollDelta::LineDelta(_, y) => *y as f64,
@@ -151,24 +155,26 @@ impl InputManager {
     pub fn get_mouse_delta(&self) -> &Vector2<f32> {
         &self.mouse_delta
     }
-    
-    fn _set_mouse_mode(&mut self, window: &mut Window, locked: bool) {
-        if locked {
-            self.current_mouse_mode = CursorGrabMode::Confined;
-            self.confined = true;
-            if window.set_cursor_grab(CursorGrabMode::Confined).is_err() {
-                window.set_cursor_grab(CursorGrabMode::Locked).unwrap();
-                self.current_mouse_mode = CursorGrabMode::Locked;
-            }
-        } else {
-            self.current_mouse_mode = CursorGrabMode::None;
-            window.set_cursor_grab(CursorGrabMode::None).unwrap();
-            self.confined = false;
-        }
-        window.set_cursor_visible(!locked);
+
+    fn _set_cursor_grab(&mut self, window: &mut Window, mode: CursorGrabMode) -> Result<(), winit::error::ExternalError> {
+        window.set_cursor_grab(mode)?;
+        window.set_cursor_visible(mode == CursorGrabMode::None);
+        self.current_mouse_mode = mode;
+        Ok(())
     }
-    
-    pub fn set_mouse_mode(&mut self, locked: bool) {
+
+    fn _lock_cursor(&mut self, window: &mut Window) {
+        self._set_cursor_grab(window, CursorGrabMode::Locked)
+            .or_else(|_| self._set_cursor_grab(window, CursorGrabMode::Confined))
+            .expect("Couldn't lock or confine the cursor");
+    }
+
+    fn _unlock_cursor(&mut self, window: &mut Window) {
+        self._set_cursor_grab(window, CursorGrabMode::None)
+            .expect("Couldn't grab the cursor");
+    }
+
+    pub fn lock_cursor(&mut self, locked: bool) {
         if locked {
             self.lock_on_next_frame = true;
         } else {
@@ -176,8 +182,8 @@ impl InputManager {
         }
     }
 
-    pub fn get_mouse_mode(&self) -> CursorGrabMode {
-        self.current_mouse_mode
+    pub fn is_cursor_locked(&self) -> bool {
+        self.current_mouse_mode != CursorGrabMode::None
     }
     
     pub fn next_frame(&mut self) {
