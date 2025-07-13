@@ -1,4 +1,3 @@
-use env_logger::Env;
 use log::{error, LevelFilter};
 use nalgebra::Vector3;
 use rapier3d::prelude::*;
@@ -9,7 +8,7 @@ use std::error::Error;
 use std::sync::Mutex;
 use winit::event::MouseButton;
 use winit::keyboard::KeyCode;
-use winit::window::{CursorGrabMode, Window};
+use winit::window::Window;
 use syrillian::asset_management::{Material, Mesh, SceneLoader, DIM3_SHADER_ID};
 use syrillian::components::{Collider3D, MeshShapeExtra, PointLightComponent, RigidBodyComponent, RotateComponent};
 use syrillian::core::Bones;
@@ -88,7 +87,7 @@ fn funnyinit(world: &mut World, _window: &Window) -> Result<(), Box<dyn Error>> 
     char_controller.add_child(camera);
     world.add_child(char_controller);
 
-    world.input.set_mouse_mode(true);
+    world.input.lock_cursor(true);
 
     const NECO_ARC_JPG: &[u8; 1293] = include_bytes!("../neco.jpg");
 
@@ -157,17 +156,17 @@ fn update(world: &mut World, window: &Window) -> Result<(), Box<dyn Error>> {
     ));
 
     if world.input.is_key_down(KeyCode::Escape) {
-        if world.input.get_mouse_mode() == CursorGrabMode::None {
+        if !world.input.is_cursor_locked() {
             world.shutdown();
         } else {
-            world.input.set_mouse_mode(false);
+            world.input.lock_cursor(false);
         }
     }
 
     if world.input.is_button_pressed(MouseButton::Left)
         || world.input.is_button_pressed(MouseButton::Right)
     {
-        world.input.set_mouse_mode(true);
+        world.input.lock_cursor(true);
     }
 
     Ok(())

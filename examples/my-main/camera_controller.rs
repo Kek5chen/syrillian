@@ -1,5 +1,4 @@
 use nalgebra::{UnitQuaternion, Vector3};
-use winit::window::CursorGrabMode;
 use syrillian::components::Component;
 use syrillian::core::GameObjectId;
 use syrillian::World;
@@ -27,7 +26,7 @@ impl Component for CameraController {
 	fn update(&mut self) {
 		let input = &World::instance().input;
 
-		if input.get_mouse_mode() == CursorGrabMode::None {
+		if !input.is_cursor_locked() {
 			return;
 		}
 
