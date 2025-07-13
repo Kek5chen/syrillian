@@ -1,15 +1,15 @@
-use std::cell::RefCell;
-use std::collections::HashMap;
-use std::rc::Rc;
-use std::time::{Duration, Instant};
-use itertools::Itertools;
-use log::info;
 use crate::asset_management::AssetManager;
 use crate::components::{CameraComponent, Component};
 use crate::core::{GameObject, GameObjectId, Transform};
 use crate::engine::rendering::Renderer;
 use crate::input::InputManager;
 use crate::physics::PhysicsSimulator;
+use itertools::Itertools;
+use log::info;
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::rc::Rc;
+use std::time::{Duration, Instant};
 
 static mut G_WORLD: *mut World = std::ptr::null_mut();
 
@@ -119,9 +119,7 @@ impl World {
             let object_ptr = object;
             for comp in &object_ptr.components {
                 let comp_ptr = comp.as_ptr();
-                unsafe {
-                    func(&mut **comp_ptr)
-                }
+                unsafe { func(&mut **comp_ptr) }
             }
         }
     }
@@ -132,13 +130,13 @@ impl World {
         unsafe {
             self.execute_component_func(Component::update);
             self.execute_component_func(Component::late_update);
-            
+
             while self.physics.last_update.elapsed() > self.physics.timestep {
                 self.physics.last_update += self.physics.timestep;
                 self.physics.step();
                 self.execute_component_func(Component::post_update);
             }
-            
+
             self.input.next_frame();
         }
     }
@@ -161,11 +159,14 @@ impl World {
         collection
     }
 
-    fn get_components_of_children<C: Component + 'static>(collection: &mut Vec<Rc<RefCell<Box<C>>>>, obj: GameObjectId) {
+    fn get_components_of_children<C: Component + 'static>(
+        collection: &mut Vec<Rc<RefCell<Box<C>>>>,
+        obj: GameObjectId,
+    ) {
         for child in &obj.children {
             Self::get_components_of_children(collection, *child);
         }
-        
+
         collection.extend(obj.get_components::<C>());
     }
 
@@ -177,8 +178,16 @@ impl World {
     pub fn print_objects_rec(children: &Vec<GameObjectId>, i: i32) {
         for child in children {
             info!("{}- {}", "  ".repeat(i as usize), &child.name);
-            info!("{}-> Components: {}", "  ".repeat(i as usize + 1), child.components.len());
-            info!("{}-> Has Drawable: {}", "  ".repeat(i as usize + 1), child.drawable.is_some());
+            info!(
+                "{}-> Components: {}",
+                "  ".repeat(i as usize + 1),
+                child.components.len()
+            );
+            info!(
+                "{}-> Has Drawable: {}",
+                "  ".repeat(i as usize + 1),
+                child.drawable.is_some()
+            );
             Self::print_objects_rec(&child.children, i + 1);
         }
     }
@@ -205,10 +214,7 @@ impl World {
         unsafe {
             for obj in self.objects.values_mut() {
                 if let Some(ref mut drawable) = obj.drawable {
-                    drawable.setup(
-                        renderer,
-                        &mut *world_ptr,
-                    )
+                    drawable.setup(renderer, &mut *world_ptr)
                 }
             }
         }
@@ -219,9 +225,7 @@ impl World {
     }
 
     pub(crate) fn unlink_internal(&mut self, mut caller: GameObjectId) {
-        if let Some((id, _)) = self.children
-            .iter()
-            .find_position(|c| c.0 == caller.0) {
+        if let Some((id, _)) = self.children.iter().find_position(|c| c.0 == caller.0) {
             self.children.remove(id);
         }
 

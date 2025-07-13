@@ -1,9 +1,9 @@
 use crate::utils::math::QuaternionEuler;
 use rapier3d::prelude::*;
 
+use crate::World;
 use crate::components::Component;
 use crate::core::GameObjectId;
-use crate::World;
 
 pub struct RigidBodyComponent {
     parent: GameObjectId,
@@ -57,12 +57,12 @@ impl Component for RigidBodyComponent {
         let world = World::instance();
 
         world.physics.rigid_body_set.remove(
-            self.body_handle, 
-            &mut world.physics.island_manager, 
-            &mut world.physics.collider_set, 
-            &mut world.physics.impulse_joint_set, 
+            self.body_handle,
+            &mut world.physics.island_manager,
+            &mut world.physics.collider_set,
+            &mut world.physics.impulse_joint_set,
             &mut world.physics.multibody_joint_set,
-            true
+            true,
         );
     }
 

@@ -1,10 +1,10 @@
-use log::{debug, warn};
-use nalgebra::Vector3;
-use rapier3d::prelude::*;
+use crate::World;
 use crate::asset_management::MeshId;
 use crate::components::{Component, RigidBodyComponent};
 use crate::core::GameObjectId;
-use crate::World;
+use log::{debug, warn};
+use nalgebra::Vector3;
+use rapier3d::prelude::*;
 
 pub struct Collider3D {
     pub phys_handle: ColliderHandle,
@@ -37,8 +37,7 @@ impl Component for Collider3D {
         if let Some(body_comp) = body_comp {
             if self.linked_to_body.is_none() {
                 self.link_to_rigid_body(Some(body_comp.borrow().body_handle));
-                let coll = self.get_collider_mut()
-                    .unwrap();
+                let coll = self.get_collider_mut().unwrap();
                 coll.set_translation(Vector3::zeros());
                 coll.set_rotation(Rotation::identity());
                 // TODO: Sync Scale to coll
@@ -47,8 +46,7 @@ impl Component for Collider3D {
             // the collider just takes on the parent transformations
             let translation = self.parent.transform.position();
             let rotation = self.parent.transform.rotation();
-            let coll = self.get_collider_mut()
-                .unwrap();
+            let coll = self.get_collider_mut().unwrap();
             coll.set_translation(translation);
             coll.set_rotation(rotation);
             // TODO: Sync Scale to coll
@@ -59,10 +57,10 @@ impl Component for Collider3D {
         let world = World::instance();
 
         world.physics.collider_set.remove(
-            self.phys_handle, 
-            &mut world.physics.island_manager, 
-            &mut world.physics.rigid_body_set, 
-            true
+            self.phys_handle,
+            &mut world.physics.island_manager,
+            &mut world.physics.rigid_body_set,
+            true,
         );
     }
 
@@ -111,7 +109,10 @@ pub trait MeshShapeExtra<T> {
 impl MeshShapeExtra<SharedShape> for SharedShape {
     fn mesh(mesh: MeshId) -> Option<SharedShape> {
         let mesh = World::instance().assets.meshes.get_raw_mesh(mesh)?;
-        debug!("Loading collider mesh with {} vertices", mesh.data.vertices.len());
+        debug!(
+            "Loading collider mesh with {} vertices",
+            mesh.data.vertices.len()
+        );
         let vertices = mesh.data.make_point_cloud();
         let indices = mesh.data.make_triangle_indices();
         match SharedShape::trimesh(vertices, indices) {

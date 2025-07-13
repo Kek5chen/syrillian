@@ -1,13 +1,6 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use log::{error, warn};
-use nalgebra::Vector3;
-use wgpu::{
-    BindGroup, BindGroupDescriptor, BindGroupEntry, BindingResource, Buffer,
-    BufferUsages, Device, Queue,
-};
-use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use crate::asset_management::bindgroup_layout_manager::MATERIAL_UBGL_ID;
 use crate::asset_management::shadermanager;
 use crate::asset_management::shadermanager::ShaderId;
@@ -16,6 +9,13 @@ use crate::asset_management::texturemanager::{
 };
 use crate::ensure_aligned;
 use crate::world::World;
+use log::{error, warn};
+use nalgebra::Vector3;
+use wgpu::util::{BufferInitDescriptor, DeviceExt};
+use wgpu::{
+    BindGroup, BindGroupDescriptor, BindGroupEntry, BindingResource, Buffer, BufferUsages, Device,
+    Queue,
+};
 
 pub type MaterialId = usize;
 
@@ -87,7 +87,11 @@ impl Material {
                 .get_runtime_texture_ensure_init(shininess_texture_id)
                 .unwrap();
 
-            let mat_bgl = (*world).assets.bind_group_layouts.get_bind_group_layout(MATERIAL_UBGL_ID).unwrap();
+            let mat_bgl = (*world)
+                .assets
+                .bind_group_layouts
+                .get_bind_group_layout(MATERIAL_UBGL_ID)
+                .unwrap();
 
             let bind_group = device.create_bind_group(&BindGroupDescriptor {
                 label: Some("Material Bind Group"),
@@ -120,7 +124,7 @@ impl Material {
                 data,
                 buffer: material_buffer,
                 bind_group,
-                shader: self.shader
+                shader: self.shader,
             }
         }
     }
@@ -196,11 +200,7 @@ impl MaterialManager {
         self.queue = None;
     }
 
-    pub fn init_runtime(
-        &mut self,
-        device: Rc<Device>,
-        queue: Rc<Queue>,
-    ) {
+    pub fn init_runtime(&mut self, device: Rc<Device>, queue: Rc<Queue>) {
         self.device = Some(device.clone());
         self.queue = Some(queue.clone());
     }
@@ -232,10 +232,12 @@ impl MaterialManager {
     }
 
     pub fn get_runtime_material(&mut self, id: MaterialId) -> Option<&RuntimeMaterial> {
-        self.get_runtime_material_mut(id).map(|mat| &*mat).or_else(|| {
-            error!("Runtime Material not available.");
-            None
-        })
+        self.get_runtime_material_mut(id)
+            .map(|mat| &*mat)
+            .or_else(|| {
+                error!("Runtime Material not available.");
+                None
+            })
     }
 
     pub fn get_runtime_material_mut(&mut self, id: MaterialId) -> Option<&mut RuntimeMaterial> {
@@ -260,28 +262,42 @@ impl MaterialManager {
         device: &Device,
         queue: &Queue,
     ) -> Result<(), MaterialError> {
-        material.runtime = Some(material.raw.init_runtime(
-            world,
-            device,
-            queue,
-        ));
+        material.runtime = Some(material.raw.init_runtime(world, device, queue));
         Ok(())
     }
 
-    pub fn init_runtime_material(&self, world: &mut World, material: &mut MaterialItem) -> Result<(), MaterialError> {
-        let device = self.device.as_ref()
+    pub fn init_runtime_material(
+        &self,
+        world: &mut World,
+        material: &mut MaterialItem,
+    ) -> Result<(), MaterialError> {
+        let device = self
+            .device
+            .as_ref()
             .ok_or(MaterialError::DeviceNotInitialized)?;
-        let queue = self.queue.as_ref()
+        let queue = self
+            .queue
+            .as_ref()
             .ok_or(MaterialError::QueueNotInitialized)?;
         Self::init_runtime_material_internal(world, material, device, queue)
     }
-    
-    pub fn init_runtime_material_id(&mut self, world: &mut World, id: MaterialId) -> Result<(), MaterialError> {
-        let material = self.materials.get_mut(&id)
+
+    pub fn init_runtime_material_id(
+        &mut self,
+        world: &mut World,
+        id: MaterialId,
+    ) -> Result<(), MaterialError> {
+        let material = self
+            .materials
+            .get_mut(&id)
             .ok_or(MaterialError::MaterialNotFound)?;
-        let device = self.device.as_ref()
+        let device = self
+            .device
+            .as_ref()
             .ok_or(MaterialError::DeviceNotInitialized)?;
-        let queue = self.queue.as_ref()
+        let queue = self
+            .queue
+            .as_ref()
             .ok_or(MaterialError::QueueNotInitialized)?;
 
         Self::init_runtime_material_internal(world, material, device, queue)

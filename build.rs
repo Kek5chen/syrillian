@@ -20,5 +20,8 @@ fn main() {
     }
     let compile_time = Local::now();
     println!("cargo:rustc-env=BUILD_DATE={}", compile_time.date_naive());
-    println!("cargo:rustc-env=BUILD_TIME={}", compile_time.time().format("%H:%M"));
+    println!(
+        "cargo:rustc-env=BUILD_TIME={}",
+        compile_time.time().format("%H:%M")
+    );
 }

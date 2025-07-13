@@ -2,10 +2,10 @@ use std::rc::Rc;
 
 use wgpu::{Device, Queue};
 
-use crate::asset_management::{MaterialManager, TextureManager};
 use crate::asset_management::bindgroup_layout_manager::BindGroupLayoutManager;
 use crate::asset_management::meshmanager::MeshManager;
 use crate::asset_management::shadermanager::ShaderManager;
+use crate::asset_management::{MaterialManager, TextureManager};
 
 #[derive(Default)]
 pub struct AssetManager {

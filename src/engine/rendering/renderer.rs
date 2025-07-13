@@ -1,14 +1,18 @@
-use std::cell::RefCell;
-use std::fmt::Debug;
-use std::rc::Rc;
-use crate::asset_management::{RuntimeShader, ShaderId, DIM3_SHADER_ID, FALLBACK_SHADER_ID, LIGHT_UBGL_ID, POST_PROCESS_BGL_ID, POST_PROCESS_SHADER_ID, RENDER_UBGL_ID};
+use crate::asset_management::{
+    DIM3_SHADER_ID, FALLBACK_SHADER_ID, LIGHT_UBGL_ID, POST_PROCESS_BGL_ID, POST_PROCESS_SHADER_ID,
+    RENDER_UBGL_ID, RuntimeShader, ShaderId,
+};
 use crate::components::{CameraComponent, CameraUniform, PointLightComponent, PointLightUniform};
 use crate::core::GameObjectId;
+use crate::ensure_aligned;
 use crate::rendering::{State, StateError};
 use crate::world::World;
 use log::error;
 use nalgebra::{Matrix4, Perspective3, Vector2};
 use snafu::{ResultExt, Snafu};
+use std::cell::RefCell;
+use std::fmt::Debug;
+use std::rc::Rc;
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::{
     AddressMode, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindingResource,
@@ -19,7 +23,6 @@ use wgpu::{
     TextureDimension, TextureFormat, TextureUsages, TextureView, TextureViewDescriptor,
 };
 use winit::window::Window;
-use crate::ensure_aligned;
 
 struct PostProcessPass {
     bind_group: BindGroup,
@@ -424,10 +427,7 @@ impl Renderer {
         self.update_render_data(world)?;
 
         let shader_id = self.default_shader_id(shader_override)?;
-        let shader = world
-            .assets
-            .shaders
-            .get_shader(Some(shader_id));
+        let shader = world.assets.shaders.get_shader(Some(shader_id));
         let (load_op_color, load_op_depth) = determine_draw_over_color(shader);
 
         let light_bind_group = self.setup_lights(world)?;

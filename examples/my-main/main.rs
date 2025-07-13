@@ -1,4 +1,6 @@
-use log::{error, LevelFilter};
+use crate::camera_controller::CameraController;
+use crate::player_movement::PlayerMovement;
+use log::{LevelFilter, error};
 use nalgebra::Vector3;
 use rapier3d::prelude::*;
 use std::any::Any;
@@ -6,17 +8,17 @@ use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::error::Error;
 use std::sync::Mutex;
-use winit::event::MouseButton;
-use winit::keyboard::KeyCode;
-use winit::window::Window;
-use syrillian::asset_management::{Material, Mesh, SceneLoader, DIM3_SHADER_ID};
-use syrillian::components::{Collider3D, MeshShapeExtra, PointLightComponent, RigidBodyComponent, RotateComponent};
+use syrillian::asset_management::{DIM3_SHADER_ID, Material, Mesh, SceneLoader};
+use syrillian::components::{
+    Collider3D, MeshShapeExtra, PointLightComponent, RigidBodyComponent, RotateComponent,
+};
 use syrillian::core::Bones;
 use syrillian::drawables::MeshRenderer;
 use syrillian::utils::{CUBE, CUBE_INDICES};
 use syrillian::{App, World};
-use crate::camera_controller::CameraController;
-use crate::player_movement::PlayerMovement;
+use winit::event::MouseButton;
+use winit::keyboard::KeyCode;
+use winit::window::Window;
 
 mod camera_controller;
 mod player_movement;

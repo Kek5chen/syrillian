@@ -12,13 +12,13 @@ pub struct SimpleVertex3D {
 impl SimpleVertex3D {
     pub const fn upgrade(self) -> Vertex3D {
         Vertex3D {
-            position:  Vector3::new(self.position[0], self.position[1], self.position[2]),
+            position: Vector3::new(self.position[0], self.position[1], self.position[2]),
             tex_coord: Vector2::new(self.uv[0], self.uv[1]),
-            normal:    Vector3::new(self.normal[0], self.normal[1], self.normal[2]),
-            tangent:   Vector3::new(0.0, 0.0, 0.0),
+            normal: Vector3::new(self.normal[0], self.normal[1], self.normal[2]),
+            tangent: Vector3::new(0.0, 0.0, 0.0),
             bitangent: Vector3::new(0.0, 0.0, 0.0),
-            bone_indices: [ 0xFF, 0xFF, 0xFF, 0xFF ],
-            bone_weights:  [ 0.0, 0.0, 0.0, 0.0 ],
+            bone_indices: [0xFF, 0xFF, 0xFF, 0xFF],
+            bone_weights: [0.0, 0.0, 0.0, 0.0],
         }
     }
 }
@@ -26,24 +26,24 @@ impl SimpleVertex3D {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct Vertex3D {
-    pub position:      Vector3<f32>,
-    pub tex_coord:     Vector2<f32>,
-    pub normal:        Vector3<f32>,
-    pub tangent:       Vector3<f32>,
-    pub bitangent:     Vector3<f32>,
-    pub bone_indices:  [u32; 4],
-    pub bone_weights:  [f32; 4],
+    pub position: Vector3<f32>,
+    pub tex_coord: Vector2<f32>,
+    pub normal: Vector3<f32>,
+    pub tangent: Vector3<f32>,
+    pub bitangent: Vector3<f32>,
+    pub bone_indices: [u32; 4],
+    pub bone_weights: [f32; 4],
 }
 
 impl Vertex3D {
     pub fn new(
-        position:      Vector3<f32>,
-        tex_coord:     Vector2<f32>,
-        normal:        Vector3<f32>,
-        tangent:       Vector3<f32>,
-        bitangent:     Vector3<f32>,
+        position: Vector3<f32>,
+        tex_coord: Vector2<f32>,
+        normal: Vector3<f32>,
+        tangent: Vector3<f32>,
+        bitangent: Vector3<f32>,
         bone_indices: &[u32],
-        bone_weights:  &[f32],
+        bone_weights: &[f32],
     ) -> Self {
         Vertex3D {
             position,

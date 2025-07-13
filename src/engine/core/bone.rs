@@ -1,5 +1,5 @@
-use nalgebra::Matrix4;
 use crate::ensure_aligned;
+use nalgebra::Matrix4;
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Default, bytemuck::Pod, bytemuck::Zeroable)]
@@ -13,6 +13,7 @@ impl From<&russimp_ng::bone::Bone> for Bone {
     fn from(value: &russimp_ng::bone::Bone) -> Self {
         let m = value.offset_matrix;
         Bone {
+            #[rustfmt::skip]
             transform: Matrix4::new(
                 m.a1, m.a2, m.a3, m.a4,
                 m.b1, m.b2, m.b3, m.b4,

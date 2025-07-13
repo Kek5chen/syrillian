@@ -1,21 +1,23 @@
-use std::default::Default;
+use log::{error, trace, warn};
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::default::Default;
 use std::error::Error;
 use std::fs;
 use std::path::Path;
 use std::rc::Rc;
-use log::{error, trace, warn};
 use wgpu::*;
 
+use crate::World;
 use crate::asset_management::{MATERIAL_UBGL_ID, MODEL_UBGL_ID, POST_PROCESS_BGL_ID};
 use crate::core::Vertex3D;
-use crate::World;
 
 use super::bindgroup_layout_manager::{LIGHT_UBGL_ID, RENDER_UBGL_ID};
 
-const POST_PROCESS_SHADER_PRE_CONTEXT: &str = include_str!("../rendering/shaders/engine_reserved_groups/post_process.wgsl");
-const SHADER_PRE_CONTEXT: &str = include_str!("../rendering/shaders/engine_reserved_groups/basic.wgsl");
+const POST_PROCESS_SHADER_PRE_CONTEXT: &str =
+    include_str!("../rendering/shaders/engine_reserved_groups/post_process.wgsl");
+const SHADER_PRE_CONTEXT: &str =
+    include_str!("../rendering/shaders/engine_reserved_groups/basic.wgsl");
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum ShaderStage {
@@ -69,7 +71,10 @@ impl Shader {
     }
 
     pub fn make_post_process_shader_code(&self) -> Cow<'static, str> {
-        Cow::Owned(format!("{}\n{}", &self.code, POST_PROCESS_SHADER_PRE_CONTEXT))
+        Cow::Owned(format!(
+            "{}\n{}",
+            &self.code, POST_PROCESS_SHADER_PRE_CONTEXT
+        ))
     }
 
     pub fn initialize_default_runtime(
@@ -91,12 +96,14 @@ impl Shader {
                 render_uniform_bind_group_layout,
                 model_uniform_bind_group_layout,
                 material_uniform_bind_group_layout,
-                light_uniform_bind_group_layout
+                light_uniform_bind_group_layout,
             ],
             push_constant_ranges: &[],
         });
 
-        let pipeline = RenderPipelineBuilder::dim3(&self.name, &pipeline_layout, &shader, self.polygon_mode).build(&device);
+        let pipeline =
+            RenderPipelineBuilder::dim3(&self.name, &pipeline_layout, &shader, self.polygon_mode)
+                .build(&device);
 
         RuntimeShader {
             name: self.name.clone(),
@@ -123,7 +130,8 @@ impl Shader {
             push_constant_ranges: &[],
         });
 
-        let pipeline = RenderPipelineBuilder::post_process(&self.name, &pipeline_layout, &shader).build(&device);
+        let pipeline = RenderPipelineBuilder::post_process(&self.name, &pipeline_layout, &shader)
+            .build(&device);
 
         RuntimeShader {
             name: self.name.clone(),
@@ -259,10 +267,7 @@ impl ShaderManager {
 
         trace!("Added shader: {}", shader.name);
 
-        self.raw_shaders.insert(
-            self.next_id,
-            shader,
-        );
+        self.raw_shaders.insert(self.next_id, shader);
         self.next_id += 1;
 
         id
@@ -309,7 +314,9 @@ impl ShaderManager {
 
     fn _init_single_runtime_or_fallback(&mut self, id: ShaderId) -> &RuntimeShader {
         if !self.raw_shaders.contains_key(&id) {
-            error!("Requested shader with id #{id} does not exist. Replaced with a fallback shader");
+            error!(
+                "Requested shader with id #{id} does not exist. Replaced with a fallback shader"
+            );
 
             let fallback = self
                 .get_shader_opt(FALLBACK_SHADER_ID)
@@ -317,50 +324,60 @@ impl ShaderManager {
                 .clone();
 
             if let Some(bounced) = self.runtime_shaders.insert(id, fallback) {
-                warn!("Bounced shader {:?} from its slot at id #{id}", bounced.name);
+                warn!(
+                    "Bounced shader {:?} from its slot at id #{id}",
+                    bounced.name
+                );
             }
 
             self.runtime_shaders.get(&id).expect("Shader was inserted")
         } else {
-            self._init_single_runtime(id, None).expect("Raw Shader should exist")
+            self._init_single_runtime(id, None)
+                .expect("Raw Shader should exist")
         }
     }
 
-    fn _init_single_runtime(&mut self, raw_id: ShaderId, as_run_id: Option<ShaderId>) -> Option<&RuntimeShader> {
+    fn _init_single_runtime(
+        &mut self,
+        raw_id: ShaderId,
+        as_run_id: Option<ShaderId>,
+    ) -> Option<&RuntimeShader> {
         trace!("Initializing runtime shader with raw id: #{raw_id}");
 
         let raw_shader = self.raw_shaders.get(&raw_id)?;
         let world = World::instance();
         let bgls = &world.assets.bind_group_layouts;
 
-        let runtime_shader =
-            if raw_shader.stage == ShaderStage::PostProcess {
-                let post_process_ubgl = bgls.get_bind_group_layout(POST_PROCESS_BGL_ID).unwrap();
-                raw_shader.initialize_post_process_runtime(
-                    self.device.clone().unwrap().as_ref(),
-                    post_process_ubgl,
-                )
-            } else {
-                let render_ubgl   = bgls.get_bind_group_layout(RENDER_UBGL_ID).unwrap();
-                let model_ubgl    = bgls.get_bind_group_layout(MODEL_UBGL_ID).unwrap();
-                let material_ubgl = bgls.get_bind_group_layout(MATERIAL_UBGL_ID).unwrap();
-                let lighting_ubgl = bgls.get_bind_group_layout(LIGHT_UBGL_ID).unwrap();
+        let runtime_shader = if raw_shader.stage == ShaderStage::PostProcess {
+            let post_process_ubgl = bgls.get_bind_group_layout(POST_PROCESS_BGL_ID).unwrap();
+            raw_shader.initialize_post_process_runtime(
+                self.device.clone().unwrap().as_ref(),
+                post_process_ubgl,
+            )
+        } else {
+            let render_ubgl = bgls.get_bind_group_layout(RENDER_UBGL_ID).unwrap();
+            let model_ubgl = bgls.get_bind_group_layout(MODEL_UBGL_ID).unwrap();
+            let material_ubgl = bgls.get_bind_group_layout(MATERIAL_UBGL_ID).unwrap();
+            let lighting_ubgl = bgls.get_bind_group_layout(LIGHT_UBGL_ID).unwrap();
 
-                raw_shader.initialize_default_runtime(
-                    self.device.clone().unwrap().as_ref(),
-                    render_ubgl,
-                    model_ubgl,
-                    material_ubgl,
-                    lighting_ubgl
-                )
-            };
+            raw_shader.initialize_default_runtime(
+                self.device.clone().unwrap().as_ref(),
+                render_ubgl,
+                model_ubgl,
+                material_ubgl,
+                lighting_ubgl,
+            )
+        };
 
         let id = as_run_id.unwrap_or(raw_id);
         if let Some(bounced) = self.runtime_shaders.insert(id, runtime_shader) {
             warn!("Bounced shader {:?} from its slot at id#{id}", bounced.name);
         }
 
-        trace!("Initialized runtime shader {:?} with id #{raw_id} as runtime shader with id #{id}", raw_shader.name);
+        trace!(
+            "Initialized runtime shader {:?} with id #{raw_id} as runtime shader with id #{id}",
+            raw_shader.name
+        );
 
         self.runtime_shaders.get(&id)
     }
@@ -387,13 +404,14 @@ impl<'a> RenderPipelineBuilder<'a> {
         device.create_render_pipeline(&self.desc())
     }
     pub fn desc(&'a self) -> RenderPipelineDescriptor<'a> {
-        const DEFAULT_BUFFERS: [VertexBufferLayout; 1] = [ Vertex3D::continuous_descriptor() ];
+        const DEFAULT_BUFFERS: [VertexBufferLayout; 1] = [Vertex3D::continuous_descriptor()];
 
-        const DEFAULT_COLOR_TARGET_STATE: [Option<ColorTargetState>; 1] = [Some(ColorTargetState {
-            format: TextureFormat::Bgra8UnormSrgb,
-            blend: None,
-            write_mask: ColorWrites::all(),
-        })];
+        const DEFAULT_COLOR_TARGET_STATE: [Option<ColorTargetState>; 1] =
+            [Some(ColorTargetState {
+                format: TextureFormat::Bgra8UnormSrgb,
+                blend: None,
+                write_mask: ColorWrites::all(),
+            })];
 
         const DEFAULT_DEPTH_STENCIL: DepthStencilState = DepthStencilState {
             format: TextureFormat::Depth32Float,
@@ -412,7 +430,9 @@ impl<'a> RenderPipelineBuilder<'a> {
             },
         };
 
-        let buffers = (!self.is_post_process).then_some(DEFAULT_BUFFERS.as_ref()).unwrap_or(&[]);
+        let buffers = (!self.is_post_process)
+            .then_some(DEFAULT_BUFFERS.as_ref())
+            .unwrap_or(&[]);
         let depth_stencil = (!self.is_post_process).then_some(DEFAULT_DEPTH_STENCIL);
         let cull_mode = (!self.is_post_process).then_some(Face::Back);
 
@@ -429,7 +449,7 @@ impl<'a> RenderPipelineBuilder<'a> {
             primitive: PrimitiveState {
                 cull_mode,
                 polygon_mode: self.polygon_mode,
-                .. PrimitiveState::default()
+                ..PrimitiveState::default()
             },
             depth_stencil,
             multisample: MultisampleState::default(),
@@ -444,7 +464,11 @@ impl<'a> RenderPipelineBuilder<'a> {
         }
     }
 
-    pub fn post_process(name: &str, layout: &'a PipelineLayout, shader: &'a ShaderModule) -> RenderPipelineBuilder<'a> {
+    pub fn post_process(
+        name: &str,
+        layout: &'a PipelineLayout,
+        shader: &'a ShaderModule,
+    ) -> RenderPipelineBuilder<'a> {
         RenderPipelineBuilder {
             label: format!("{name} PostProcess Pipeline"),
             layout,
@@ -454,7 +478,12 @@ impl<'a> RenderPipelineBuilder<'a> {
         }
     }
 
-    pub fn dim3(name: &str, layout: &'a PipelineLayout, shader: &'a ShaderModule, polygon_mode: PolygonMode) -> RenderPipelineBuilder<'a> {
+    pub fn dim3(
+        name: &str,
+        layout: &'a PipelineLayout,
+        shader: &'a ShaderModule,
+        polygon_mode: PolygonMode,
+    ) -> RenderPipelineBuilder<'a> {
         RenderPipelineBuilder {
             label: format!("{name} Pipeline"),
             layout,

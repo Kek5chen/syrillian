@@ -1,8 +1,8 @@
 use nalgebra::{UnitQuaternion, Vector3};
 
+use crate::World;
 use crate::components::Component;
 use crate::core::GameObjectId;
-use crate::World;
 
 pub struct RotateComponent {
     rotate_speed: f32,
@@ -33,7 +33,7 @@ impl Component for RotateComponent {
 
         self.y_rot += self.rotate_speed.to_radians() * delta_time;
         let y_rotation = UnitQuaternion::from_axis_angle(&Vector3::y_axis(), self.y_rot);
-        
+
         let combined_rotation = y_rotation * x_rotation;
 
         transform.set_rotation(combined_rotation);

@@ -3,8 +3,12 @@ use std::error::Error;
 use std::fs;
 use std::rc::Rc;
 
-use wgpu::{AddressMode, Device, Extent3d, FilterMode, Queue, SamplerDescriptor, TextureAspect, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages, TextureViewDescriptor, TextureViewDimension};
 use wgpu::util::{DeviceExt, TextureDataOrder};
+use wgpu::{
+    AddressMode, Device, Extent3d, FilterMode, Queue, SamplerDescriptor, TextureAspect,
+    TextureDescriptor, TextureDimension, TextureFormat, TextureUsages, TextureViewDescriptor,
+    TextureViewDimension,
+};
 
 pub const FALLBACK_DIFFUSE_TEXTURE: TextureId = 0;
 pub const FALLBACK_NORMAL_TEXTURE: TextureId = 1;
@@ -81,7 +85,10 @@ impl TextureManager {
             FALLBACK_SIZE,
             FALLBACK_SIZE,
             TextureFormat::Bgra8UnormSrgb,
-            Some(Self::generate_new_fallback_diffuse_texture(FALLBACK_SIZE, FALLBACK_SIZE)),
+            Some(Self::generate_new_fallback_diffuse_texture(
+                FALLBACK_SIZE,
+                FALLBACK_SIZE,
+            )),
         );
         assert_eq!(id, FALLBACK_DIFFUSE_TEXTURE);
 
@@ -96,12 +103,10 @@ impl TextureManager {
         self.device = Some(device);
         self.queue = Some(queue);
     }
-    
+
     pub fn invalidate_runtime(&mut self) {
-        self.textures
-            .values_mut()
-            .for_each(|t| t.runtime = None);
-        
+        self.textures.values_mut().for_each(|t| t.runtime = None);
+
         self.device = None;
         self.queue = None;
     }
@@ -205,7 +210,7 @@ impl Texture {
             mip_level_count: None,
             base_array_layer: 0,
             array_layer_count: None,
-            usage: None
+            usage: None,
         });
         let sampler = device.create_sampler(&SamplerDescriptor {
             label: None,
@@ -230,8 +235,8 @@ impl Texture {
         self.runtime = Some(run_texture);
         self.runtime.as_ref().unwrap()
     }
-    
-    fn initialize_texture_descriptor(&self, raw: &RawTexture) -> TextureDescriptor{
+
+    fn initialize_texture_descriptor(&self, raw: &RawTexture) -> TextureDescriptor {
         TextureDescriptor {
             label: Some("Texture"),
             size: Extent3d {
@@ -247,8 +252,13 @@ impl Texture {
             view_formats: &[TextureFormat::Bgra8UnormSrgb],
         }
     }
-    
-    fn initialize_preset_texture(&self, device: &Device, queue: &Queue, raw: &RawTexture) -> wgpu::Texture {
+
+    fn initialize_preset_texture(
+        &self,
+        device: &Device,
+        queue: &Queue,
+        raw: &RawTexture,
+    ) -> wgpu::Texture {
         device.create_texture_with_data(
             queue,
             &self.initialize_texture_descriptor(raw),
@@ -256,10 +266,8 @@ impl Texture {
             raw.data.as_ref().expect("Data should be set."),
         )
     }
-    
+
     fn initialize_empty_texture(&self, device: &Device, raw: &RawTexture) -> wgpu::Texture {
-        device.create_texture(
-            &self.initialize_texture_descriptor(raw),
-        )
+        device.create_texture(&self.initialize_texture_descriptor(raw))
     }
 }

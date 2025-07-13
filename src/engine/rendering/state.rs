@@ -1,7 +1,10 @@
-use snafu::{ensure, ResultExt, Snafu};
+use snafu::{ResultExt, Snafu, ensure};
 use std::rc::Rc;
 use wgpu::{
-    Adapter, CompositeAlphaMode, CreateSurfaceError, Device, DeviceDescriptor, Extent3d, Features, Instance, Limits, MemoryHints, PowerPreference, PresentMode, Queue, RequestAdapterOptions, RequestDeviceError, Surface, SurfaceConfiguration, Texture, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages
+    Adapter, CompositeAlphaMode, CreateSurfaceError, Device, DeviceDescriptor, Extent3d, Features,
+    Instance, Limits, MemoryHints, PowerPreference, PresentMode, Queue, RequestAdapterOptions,
+    RequestDeviceError, Surface, SurfaceConfiguration, Texture, TextureDescriptor,
+    TextureDimension, TextureFormat, TextureUsages,
 };
 use winit::dpi::PhysicalSize;
 use winit::window::Window;
@@ -12,19 +15,15 @@ type Result<T, E = StateError> = std::result::Result<T, E>;
 #[snafu(context(suffix(Err)))]
 pub enum StateError {
     #[snafu(display("Unable to get device: {source}"))]
-    RequestDevice {
-        source: RequestDeviceError,
-    },
+    RequestDevice { source: RequestDeviceError },
 
-    #[snafu(display("Can only run on Bgra8UnormSrgb currently, but it's not supported by your GPU. Available: {formats:?}"))]
-    ColorFormatNotAvailable {
-        formats: Vec<TextureFormat>,
-    },
+    #[snafu(display(
+        "Can only run on Bgra8UnormSrgb currently, but it's not supported by your GPU. Available: {formats:?}"
+    ))]
+    ColorFormatNotAvailable { formats: Vec<TextureFormat> },
 
     #[snafu(display("Failed to create surface: {source}"))]
-    CreateSurface {
-        source: CreateSurfaceError,
-    },
+    CreateSurface { source: CreateSurfaceError },
 }
 
 #[allow(unused)]
