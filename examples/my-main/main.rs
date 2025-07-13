@@ -113,10 +113,12 @@ fn funnyinit(world: &mut World, _window: &Window) -> Result<(), Box<dyn Error>> 
 
     let mut cube = world.new_object("Cube");
     let _ = cube.drawable.insert(MeshRenderer::new(cube_mesh));
-    cube.transform.set_position(Vector3::new(20.0, -3.9, -40.0));
+    cube.transform.set_position(Vector3::new(20.0, 100.9, -40.0));
 
     cube.add_component::<RotateComponent>();
     cube.add_component::<PointLightComponent>();
+    cube.add_component::<Collider3D>();
+    cube.add_component::<RigidBodyComponent>();
 
     world.add_child(cube);
 
