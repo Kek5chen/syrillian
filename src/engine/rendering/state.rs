@@ -30,9 +30,9 @@ pub enum StateError {
 pub struct State {
     pub(crate) instance: Instance,
     pub(crate) surface: Surface<'static>,
+    pub(crate) config: SurfaceConfiguration,
     pub(crate) device: Rc<Device>,
     pub(crate) queue: Rc<Queue>,
-    pub(crate) config: SurfaceConfiguration,
     pub(crate) size: PhysicalSize<u32>,
     pub(crate) depth_texture: Texture,
 }
@@ -158,7 +158,6 @@ impl State {
         let adapter = Self::setup_adapter(&instance, &surface).await;
         let (device, queue) = Self::get_device_and_queue(&adapter).await?;
         let config = Self::configure_surface(&size, &surface, &adapter, &device)?;
-
         let depth_texture = Self::setup_depth_texture(&size, &device);
 
         Ok(State {
