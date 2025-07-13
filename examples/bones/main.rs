@@ -1,15 +1,13 @@
 use std::error::Error;
 
 use nalgebra::Vector3;
-use winit::window::Window;
-use syrillian::asset_management::SceneLoader;
 use syrillian::World;
+use syrillian::asset_management::SceneLoader;
+use winit::window::Window;
 
 #[tokio::main]
 async fn main() {
-    env_logger::builder()
-        .parse_default_env()
-        .init();
+    env_logger::builder().parse_default_env().init();
 
     let exit_result = syrillian::App::create("Bones Example", 800, 600)
         .with_init(Some(init))
@@ -28,9 +26,11 @@ fn init(world: &mut World, _window: &Window) -> Result<(), Box<dyn Error>> {
     boney_obj.name = "Boney thing".to_owned();
 
     boney_obj.transform.set_uniform_scale(0.01);
-    boney_obj.transform.set_position(Vector3::new(0.0, -5.0, -20.0));
+    boney_obj
+        .transform
+        .set_position(Vector3::new(0.0, -5.0, -20.0));
 
     world.add_child(boney_obj);
-    
+
     Ok(())
 }

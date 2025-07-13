@@ -1,6 +1,10 @@
 use std::collections::HashMap;
 use std::rc::Rc;
-use wgpu::{BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType, BufferBindingType, Device, SamplerBindingType, ShaderStages, TextureSampleType, TextureViewDimension};
+use wgpu::{
+    BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType,
+    BufferBindingType, Device, SamplerBindingType, ShaderStages, TextureSampleType,
+    TextureViewDimension,
+};
 
 pub type BGLId = usize;
 
@@ -12,11 +16,10 @@ pub struct LayoutDescriptor {
 
 impl LayoutDescriptor {
     pub fn init_runtime(&self, device: &Rc<Device>) -> BindGroupLayout {
-        device
-            .create_bind_group_layout(&BindGroupLayoutDescriptor {
-                label: self.label,
-                entries: self.entries.as_slice(),
-            })
+        device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+            label: self.label,
+            entries: self.entries.as_slice(),
+        })
     }
 }
 
@@ -25,7 +28,7 @@ pub struct BindGroupLayoutManager {
     raw_layouts: HashMap<usize, LayoutDescriptor>,
     runtime_layouts: HashMap<usize, BindGroupLayout>,
     next_id: BGLId,
-    device: Option<Rc<Device>>
+    device: Option<Rc<Device>>,
 }
 
 pub const RENDER_UBGL_ID: BGLId = 0;
@@ -42,7 +45,7 @@ impl Default for BindGroupLayoutManager {
             next_id: 0,
             device: None,
         };
-        
+
         let two_entries = vec![
             BindGroupLayoutEntry {
                 binding: 0,
@@ -63,59 +66,66 @@ impl Default for BindGroupLayoutManager {
                     min_binding_size: None,
                 },
                 count: None,
-            }
+            },
         ];
 
-        let id = manager.add_bind_group_layout(Some("Render Uniform Bind Group Layout"), two_entries.clone());
+        let id = manager.add_bind_group_layout(
+            Some("Render Uniform Bind Group Layout"),
+            two_entries.clone(),
+        );
         assert_eq!(id, RENDER_UBGL_ID);
 
-        let id = manager.add_bind_group_layout(Some("Model Uniform Bind Group Layout"), two_entries);
+        let id =
+            manager.add_bind_group_layout(Some("Model Uniform Bind Group Layout"), two_entries);
         assert_eq!(id, MODEL_UBGL_ID);
 
-        let id = manager.add_bind_group_layout(Some("Material Uniform Bind Group Layout"), vec![
-            BindGroupLayoutEntry {
-                binding: 0,
-                visibility: ShaderStages::FRAGMENT,
-                ty: BindingType::Buffer {
-                    ty: BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
+        let id = manager.add_bind_group_layout(
+            Some("Material Uniform Bind Group Layout"),
+            vec![
+                BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: ShaderStages::FRAGMENT,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
                 },
-                count: None,
-            },
-            BindGroupLayoutEntry {
-                binding: 1,
-                visibility: ShaderStages::FRAGMENT,
-                ty: BindingType::Texture {
-                    sample_type: TextureSampleType::Float { filterable: true },
-                    view_dimension: TextureViewDimension::D2,
-                    multisampled: false,
+                BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: ShaderStages::FRAGMENT,
+                    ty: BindingType::Texture {
+                        sample_type: TextureSampleType::Float { filterable: true },
+                        view_dimension: TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
                 },
-                count: None,
-            },
-            BindGroupLayoutEntry {
-                binding: 2,
-                visibility: ShaderStages::FRAGMENT,
-                ty: BindingType::Sampler(SamplerBindingType::NonFiltering),
-                count: None,
-            },
-            BindGroupLayoutEntry {
-                binding: 3,
-                visibility: ShaderStages::FRAGMENT,
-                ty: BindingType::Texture {
-                    sample_type: TextureSampleType::Float { filterable: true },
-                    view_dimension: TextureViewDimension::D2,
-                    multisampled: false,
+                BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: ShaderStages::FRAGMENT,
+                    ty: BindingType::Sampler(SamplerBindingType::NonFiltering),
+                    count: None,
                 },
-                count: None,
-            },
-            BindGroupLayoutEntry {
-                binding: 4,
-                visibility: ShaderStages::FRAGMENT,
-                ty: BindingType::Sampler(SamplerBindingType::NonFiltering),
-                count: None,
-            },
-        ]);
+                BindGroupLayoutEntry {
+                    binding: 3,
+                    visibility: ShaderStages::FRAGMENT,
+                    ty: BindingType::Texture {
+                        sample_type: TextureSampleType::Float { filterable: true },
+                        view_dimension: TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                BindGroupLayoutEntry {
+                    binding: 4,
+                    visibility: ShaderStages::FRAGMENT,
+                    ty: BindingType::Sampler(SamplerBindingType::NonFiltering),
+                    count: None,
+                },
+            ],
+        );
         assert_eq!(id, MATERIAL_UBGL_ID);
 
         let id = manager.add_bind_group_layout(
@@ -129,42 +139,43 @@ impl Default for BindGroupLayoutManager {
                         has_dynamic_offset: false,
                         min_binding_size: None,
                     },
-                    count: None
+                    count: None,
                 },
                 BindGroupLayoutEntry {
                     binding: 1,
                     visibility: ShaderStages::VERTEX_FRAGMENT,
-                    ty: BindingType::Buffer { 
-                        ty: BufferBindingType::Storage { 
-                            read_only: true,
-                        },
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Storage { read_only: true },
                         has_dynamic_offset: false,
                         min_binding_size: None,
                     },
                     count: None,
                 },
-            ]
+            ],
         );
         assert_eq!(id, LIGHT_UBGL_ID);
 
-        let id = manager.add_bind_group_layout(Some("Post-Processing Bind Group Layout"), vec![
-            BindGroupLayoutEntry {
-                binding: 0,
-                visibility: ShaderStages::FRAGMENT,
-                ty: BindingType::Texture {
-                    sample_type: TextureSampleType::Float { filterable: true },
-                    view_dimension: TextureViewDimension::D2,
-                    multisampled: false,
+        let id = manager.add_bind_group_layout(
+            Some("Post-Processing Bind Group Layout"),
+            vec![
+                BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: ShaderStages::FRAGMENT,
+                    ty: BindingType::Texture {
+                        sample_type: TextureSampleType::Float { filterable: true },
+                        view_dimension: TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
                 },
-                count: None,
-            },
-            BindGroupLayoutEntry {
-                binding: 1,
-                visibility: ShaderStages::FRAGMENT,
-                ty: BindingType::Sampler(SamplerBindingType::Filtering),
-                count: None,
-            },
-        ]);
+                BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: ShaderStages::FRAGMENT,
+                    ty: BindingType::Sampler(SamplerBindingType::Filtering),
+                    count: None,
+                },
+            ],
+        );
         assert_eq!(id, POST_PROCESS_BGL_ID);
 
         manager
@@ -175,7 +186,6 @@ impl BindGroupLayoutManager {
     pub fn init_runtime(&mut self, device: Rc<Device>) {
         self.device = Some(device);
         self.runtime_layouts.clear();
-
 
         self.init_all_runtime();
     }
@@ -201,13 +211,14 @@ impl BindGroupLayoutManager {
         self.runtime_layouts.get_mut(&id)
     }
 
-    pub fn add_bind_group_layout(&mut self, label: Option<&'static str>, entries: Vec<BindGroupLayoutEntry>) -> BGLId {
-        let descriptor = LayoutDescriptor {
-            label,
-            entries,
-        };
+    pub fn add_bind_group_layout(
+        &mut self,
+        label: Option<&'static str>,
+        entries: Vec<BindGroupLayoutEntry>,
+    ) -> BGLId {
+        let descriptor = LayoutDescriptor { label, entries };
 
-        // init right away if a device already exists 
+        // init right away if a device already exists
         if let Some(device) = &self.device {
             let runtime = descriptor.init_runtime(device);
             self.runtime_layouts.insert(self.next_id, runtime);

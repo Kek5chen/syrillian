@@ -1,7 +1,7 @@
-use nalgebra::{Matrix4, Perspective3, Vector3};
 use crate::components::Component;
 use crate::core::{GameObjectId, Transform};
 use crate::ensure_aligned;
+use nalgebra::{Matrix4, Perspective3, Vector3};
 
 pub struct CameraComponent {
     pub projection: Perspective3<f32>,
@@ -56,7 +56,10 @@ impl CameraUniform {
 
     pub fn update(&mut self, proj_matrix: &Perspective3<f32>, cam_transform: &Transform) {
         self.pos = cam_transform.position();
-        self.view_mat = cam_transform.get_global_transform_matrix_ext(true).inverse().to_homogeneous();
+        self.view_mat = cam_transform
+            .get_global_transform_matrix_ext(true)
+            .inverse()
+            .to_homogeneous();
         self.projection_mat = proj_matrix.to_homogeneous();
         self.proj_view_mat = self.projection_mat * self.view_mat;
     }

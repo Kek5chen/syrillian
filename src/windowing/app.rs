@@ -1,6 +1,6 @@
-use std::error::Error;
 use futures::executor::block_on;
 use log::{error, info};
+use std::error::Error;
 use winit::application::ApplicationHandler;
 use winit::dpi::{PhysicalSize, Size};
 use winit::error::EventLoopError;
@@ -67,12 +67,12 @@ impl PrematureApp {
     async fn init_state(&mut self) -> Result<(EventLoop<()>, App), Box<dyn Error>> {
         let event_loop = match EventLoop::new() {
             Err(EventLoopError::NotSupported(_)) => {
-                return Err("No graphics backend found that could be used.".into())
+                return Err("No graphics backend found that could be used.".into());
             }
             e => e?,
         };
         event_loop.set_control_flow(ControlFlow::Poll);
-        
+
         let world = unsafe { World::new() };
 
         let app = App {
@@ -83,7 +83,7 @@ impl PrematureApp {
                 init: self.init_cb,
                 update: self.update_cb,
                 deinit: self.deinit_cb,
-            }
+            },
         };
 
         Ok((event_loop, app))
@@ -93,7 +93,7 @@ impl PrematureApp {
         self.init_cb = init;
         self
     }
-    
+
     pub fn with_update(mut self, update: Option<HookFunc>) -> Self {
         self.update_cb = update;
         self
@@ -103,7 +103,7 @@ impl PrematureApp {
         self.deinit_cb = deinit;
         self
     }
-    
+
     pub async fn run(mut self) -> Result<(), Box<dyn Error>> {
         let (event_loop, app) = self.init_state().await?;
         app.run(event_loop).await
@@ -111,10 +111,7 @@ impl PrematureApp {
 }
 
 impl App {
-    pub async fn run(
-        mut self,
-        event_loop: EventLoop<()>,
-    ) -> Result<(), Box<dyn Error>> {
+    pub async fn run(mut self, event_loop: EventLoop<()>) -> Result<(), Box<dyn Error>> {
         event_loop.run_app(&mut self).unwrap();
 
         Ok(())
@@ -141,7 +138,9 @@ impl ApplicationHandler for App {
 
         let state = &renderer.state;
 
-        self.world.assets.init_runtime(state.device.clone(), state.queue.clone());
+        self.world
+            .assets
+            .init_runtime(state.device.clone(), state.queue.clone());
 
         renderer.init();
 
@@ -166,7 +165,7 @@ impl ApplicationHandler for App {
             return;
         }
 
-        let Some(renderer) =  self.renderer.as_mut() else {
+        let Some(renderer) = self.renderer.as_mut() else {
             error!("No renderer.");
             return;
         };
@@ -215,8 +214,10 @@ impl ApplicationHandler for App {
     }
 
     fn device_event(&mut self, _: &ActiveEventLoop, _: DeviceId, event: DeviceEvent) {
-        let renderer =  self.renderer.as_mut().unwrap();
+        let renderer = self.renderer.as_mut().unwrap();
         let world = self.world.as_mut();
-        world.input.process_device_input_event(renderer.window_mut(), &event);
+        world
+            .input
+            .process_device_input_event(renderer.window_mut(), &event);
     }
 }

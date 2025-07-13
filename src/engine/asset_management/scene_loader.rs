@@ -3,19 +3,21 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::rc::Rc;
 
-use itertools::{izip, Itertools};
-use log::warn;
-use nalgebra::{Matrix4, Vector2, Vector3};
-use num_traits::{ToPrimitive, Zero};
-use russimp_ng::material::{DataContent, MaterialProperty, PropertyTypeInfo, TextureType};
-use russimp_ng::node::Node;
-use russimp_ng::scene::{PostProcess, Scene};
-use russimp_ng::Vector3D;
-use crate::asset_management::{Material, MaterialId, Mesh, ShaderId, TextureId, DIM3_SHADER_ID, FALLBACK_DIFFUSE_TEXTURE};
+use crate::World;
+use crate::asset_management::{
+    DIM3_SHADER_ID, FALLBACK_DIFFUSE_TEXTURE, Material, MaterialId, Mesh, ShaderId, TextureId,
+};
 use crate::core::{Bones, GameObjectId, Vertex3D};
 use crate::drawables::MeshRenderer;
 use crate::utils::ExtraMatrixMath;
-use crate::World;
+use itertools::{Itertools, izip};
+use log::warn;
+use nalgebra::{Matrix4, Vector2, Vector3};
+use num_traits::{ToPrimitive, Zero};
+use russimp_ng::Vector3D;
+use russimp_ng::material::{DataContent, MaterialProperty, PropertyTypeInfo, TextureType};
+use russimp_ng::node::Node;
+use russimp_ng::scene::{PostProcess, Scene};
 
 #[allow(dead_code)]
 pub struct SceneLoader;
@@ -117,13 +119,13 @@ impl SceneLoader {
 
         let mut bones = Bones::default();
 
-        let mut positions:    Vec<Vector3<f32>>  = Vec::new();
-        let mut tex_coords:   Vec<Vector2<f32>>  = Vec::new();
-        let mut normals:      Vec<Vector3<f32>>  = Vec::new();
-        let mut tangents:     Vec<Vector3<f32>>  = Vec::new();
-        let mut bitangents:   Vec<Vector3<f32>>  = Vec::new();
-        let mut bone_idxs:    Vec<Vec<u32>>      = Vec::new();
-        let mut bone_weights: Vec<Vec<f32>>      = Vec::new();
+        let mut positions: Vec<Vector3<f32>> = Vec::new();
+        let mut tex_coords: Vec<Vector2<f32>> = Vec::new();
+        let mut normals: Vec<Vector3<f32>> = Vec::new();
+        let mut tangents: Vec<Vector3<f32>> = Vec::new();
+        let mut bitangents: Vec<Vector3<f32>> = Vec::new();
+        let mut bone_idxs: Vec<Vec<u32>> = Vec::new();
+        let mut bone_weights: Vec<Vec<f32>> = Vec::new();
 
         const VEC3_FROM_VEC3D: fn(&Vector3D) -> Vector3<f32> =
             |v: &Vector3D| Vector3::new(v.x, v.y, v.z);
@@ -132,7 +134,6 @@ impl SceneLoader {
 
         let mut material_ranges = Vec::new();
         let mut mesh_vertex_count_start: usize = 0;
-
 
         for mesh in scene.meshes.iter() {
             let mut mesh_vertex_count = mesh_vertex_count_start;
@@ -160,9 +161,14 @@ impl SceneLoader {
                     );
                 }
 
-                Self::extend_data(&mut normals,    face_indices, &mesh.normals,    VEC3_FROM_VEC3D);
-                Self::extend_data(&mut tangents,   face_indices, &mesh.tangents,   VEC3_FROM_VEC3D);
-                Self::extend_data(&mut bitangents, face_indices, &mesh.bitangents, VEC3_FROM_VEC3D);
+                Self::extend_data(&mut normals, face_indices, &mesh.normals, VEC3_FROM_VEC3D);
+                Self::extend_data(&mut tangents, face_indices, &mesh.tangents, VEC3_FROM_VEC3D);
+                Self::extend_data(
+                    &mut bitangents,
+                    face_indices,
+                    &mesh.bitangents,
+                    VEC3_FROM_VEC3D,
+                );
 
                 mesh_vertex_count += 3;
             }
@@ -196,12 +202,29 @@ impl SceneLoader {
             &mut bitangents,
         );
 
-        let vertices: Vec<Vertex3D> = izip!(positions, tex_coords, normals, tangents, bitangents, bone_idxs, bone_weights)
-            .map(
-                |(position, tex_coord, normal, tangent, bitangent, bone_indicies, bone_weights)|
-                    Vertex3D::new(position, tex_coord, normal, tangent, bitangent, &bone_indicies, &bone_weights),
-            )
-            .collect();
+        let vertices: Vec<Vertex3D> = izip!(
+            positions,
+            tex_coords,
+            normals,
+            tangents,
+            bitangents,
+            bone_idxs,
+            bone_weights
+        )
+        .map(
+            |(position, tex_coord, normal, tangent, bitangent, bone_indicies, bone_weights)| {
+                Vertex3D::new(
+                    position,
+                    tex_coord,
+                    normal,
+                    tangent,
+                    bitangent,
+                    &bone_indicies,
+                    &bone_weights,
+                )
+            },
+        )
+        .collect();
 
         if !vertices.is_empty() {
             let mesh = Mesh::new(vertices, None, Some(material_ranges), bones);
@@ -224,13 +247,13 @@ impl SceneLoader {
         node_obj.transform.set_local_rotation(rotation);
         node_obj.transform.set_nonuniform_local_scale(scale);
     }
-    
+
     fn map_bones<'a>(
-        indices: &mut [Vec<u32>],                                     // start from 0 to how many were defined in the raw mesh, not including point or line "faces"
-        weights: &mut [Vec<f32>],                                     // "
-        mapped:  &mut Bones,                                          // are the total bones that this merged mesh will have, mapped to the merged vertices
-        raw:     &'a russimp_ng::mesh::Mesh,                          // the raw bones for this specific mesh part
-        faces:   impl Iterator<Item = &'a russimp_ng::face::Face>,    // the faces that need to be mapped
+        indices: &mut [Vec<u32>], // start from 0 to how many were defined in the raw mesh, not including point or line "faces"
+        weights: &mut [Vec<f32>], // "
+        mapped: &mut Bones, // are the total bones that this merged mesh will have, mapped to the merged vertices
+        raw: &'a russimp_ng::mesh::Mesh, // the raw bones for this specific mesh part
+        faces: impl Iterator<Item = &'a russimp_ng::face::Face>, // the faces that need to be mapped
     ) {
         // grab bones length before so we know where we base our ids off of. the new indices should
         // now be bones_base + raw id
@@ -243,13 +266,14 @@ impl SceneLoader {
         }
 
         // transpose the mapping from `Vec<weights.vertex ids>` to `vertex ids -> Vec<weights>`
-        let mapped_indices: HashMap<u32, Vec<(usize, f32)>> = raw.bones
+        let mapped_indices: HashMap<u32, Vec<(usize, f32)>> = raw
+            .bones
             .iter()
             .enumerate()
             .flat_map(|(i, b)| {
-                b.weights.iter().map(move |w| {
-                    (w.vertex_id, (i + original_bone_count, w.weight))
-                })
+                b.weights
+                    .iter()
+                    .map(move |w| (w.vertex_id, (i + original_bone_count, w.weight)))
             })
             .into_group_map();
 
@@ -290,7 +314,10 @@ impl SceneLoader {
             mesh.material_index = intermediate_idx.to_u32().unwrap_or_default();
 
             if intermediate_idx != mesh.material_index as usize {
-                warn!("Scene tried to use more than {} materials. That's crazy and I thought you wanted to know that.", u32::MAX);
+                warn!(
+                    "Scene tried to use more than {} materials. That's crazy and I thought you wanted to know that.",
+                    u32::MAX
+                );
             }
         }
     }
@@ -303,12 +330,14 @@ impl SceneLoader {
         let texture = texture.borrow();
         match &texture.data {
             DataContent::Texel(_) => panic!("I CAN'T ADD TEXLESLSSE YET PLS HELP"),
-            DataContent::Bytes(data) => {
-                world.assets.textures.load_image_from_memory(data).unwrap_or_else(|e| {
+            DataContent::Bytes(data) => world
+                .assets
+                .textures
+                .load_image_from_memory(data)
+                .unwrap_or_else(|e| {
                     warn!("Failed to load texture: {e}. Using fallback texture.");
                     FALLBACK_DIFFUSE_TEXTURE
-                })
-            }
+                }),
         }
     }
 

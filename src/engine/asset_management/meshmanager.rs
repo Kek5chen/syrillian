@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use wgpu::Device;
 use crate::asset_management::mesh::{Mesh, RuntimeMesh};
+use wgpu::Device;
 
 pub type MeshId = usize;
 
@@ -22,9 +22,7 @@ pub struct MeshManager {
 #[allow(dead_code)]
 impl MeshManager {
     pub fn invalidate_runtime(&mut self) {
-        self.meshes
-            .values_mut()
-            .for_each(|m| m.runtime = None);
+        self.meshes.values_mut().for_each(|m| m.runtime = None);
 
         self.device = None;
     }
@@ -74,9 +72,10 @@ impl MeshManager {
             return mesh.runtime.as_ref();
         }
 
-        let runtime_mesh = mesh.raw.as_mut().init_runtime(
-            self.device.as_ref().unwrap(),
-        );
+        let runtime_mesh = mesh
+            .raw
+            .as_mut()
+            .init_runtime(self.device.as_ref().unwrap());
         mesh.runtime = Some(runtime_mesh);
         mesh.runtime.as_ref()
     }
@@ -87,9 +86,10 @@ impl MeshManager {
             return mesh.runtime.as_mut();
         }
 
-        let runtime_mesh = mesh.raw.as_mut().init_runtime(
-            self.device.as_ref().unwrap(),
-        );
+        let runtime_mesh = mesh
+            .raw
+            .as_mut()
+            .init_runtime(self.device.as_ref().unwrap());
         mesh.runtime = Some(runtime_mesh);
         mesh.runtime.as_mut()
     }

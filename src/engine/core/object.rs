@@ -9,8 +9,8 @@ use nalgebra::Matrix4;
 
 use crate::components::Component;
 use crate::drawables::drawable::Drawable;
-use crate::{ensure_aligned, utils};
 use crate::world::World;
+use crate::{ensure_aligned, utils};
 
 use crate::components::InternalComponentDeletion;
 use crate::core::Transform;
@@ -55,7 +55,11 @@ pub struct GameObject {
 impl GameObject {
     pub fn unlink(&mut self) {
         if let Some(mut parent) = self.parent.take() {
-            let pos_opt = parent.children.iter().find_position(|other| self.id.0 == other.0).map(|(id, _)| id);
+            let pos_opt = parent
+                .children
+                .iter()
+                .find_position(|other| self.id.0 == other.0)
+                .map(|(id, _)| id);
             if let Some(pos) = pos_opt {
                 parent.children.remove(pos);
             }
@@ -119,7 +123,10 @@ impl GameObject {
             if type_id == TypeId::of::<C>() {
                 unsafe {
                     let rc_clone = Rc::clone(component);
-                    let component = mem::transmute::<Rc<RefCell<Box<dyn Component>>>, Rc<RefCell<Box<C>>>>(rc_clone);
+                    let component = mem::transmute::<
+                        Rc<RefCell<Box<dyn Component>>>,
+                        Rc<RefCell<Box<C>>>,
+                    >(rc_clone);
                     components.push(component);
                 }
             }
@@ -159,7 +166,6 @@ impl ModelUniform {
     }
 
     pub fn update(&mut self, object: GameObjectId, outer_transform: &Matrix4<f32>) {
-        self.model_mat =
-            outer_transform * object.transform.full_matrix().to_homogeneous();
+        self.model_mat = outer_transform * object.transform.full_matrix().to_homogeneous();
     }
 }

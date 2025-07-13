@@ -1,7 +1,7 @@
-use nalgebra::Vector3;
-use crate::core::GameObjectId;
 use crate::components::Component;
+use crate::core::GameObjectId;
 use crate::ensure_aligned;
+use nalgebra::Vector3;
 
 #[repr(C)]
 #[derive(Copy, Clone, Default, bytemuck::Pod, bytemuck::Zeroable)]
@@ -22,16 +22,17 @@ pub struct PointLightComponent {
 impl Component for PointLightComponent {
     fn new(parent: GameObjectId) -> Self
     where
-        Self: Sized {
-            PointLightComponent {
-                parent,
-                inner: PointLightUniform {
-                    pos: parent.transform.position(),
-                    radius: 100.0,
-                    color: Vector3::new(1.0, 1.0, 1.0),
-                    intensity: 1.0,
-                }
-            }
+        Self: Sized,
+    {
+        PointLightComponent {
+            parent,
+            inner: PointLightUniform {
+                pos: parent.transform.position(),
+                radius: 100.0,
+                color: Vector3::new(1.0, 1.0, 1.0),
+                intensity: 1.0,
+            },
+        }
     }
 
     fn update(&mut self) {

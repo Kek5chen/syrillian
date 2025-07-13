@@ -1,11 +1,11 @@
-use nalgebra::Matrix4;
-use wgpu::util::{BufferInitDescriptor, DeviceExt};
-use wgpu::{BindGroupDescriptor, BindGroupEntry, BufferUsages, IndexFormat, RenderPass};
-use crate::asset_management::{MaterialId, MeshId, ShaderId, FALLBACK_MATERIAL_ID, MODEL_UBGL_ID};
+use crate::World;
+use crate::asset_management::{FALLBACK_MATERIAL_ID, MODEL_UBGL_ID, MaterialId, MeshId, ShaderId};
 use crate::core::{Bone, GameObjectId, ModelUniform};
 use crate::drawables::Drawable;
 use crate::engine::rendering::Renderer;
-use crate::World;
+use nalgebra::Matrix4;
+use wgpu::util::{BufferInitDescriptor, DeviceExt};
+use wgpu::{BindGroupDescriptor, BindGroupEntry, BufferUsages, IndexFormat, RenderPass};
 
 #[derive(Debug, Default, Clone)]
 pub struct BoneData {
@@ -14,6 +14,7 @@ pub struct BoneData {
 
 impl BoneData {
     pub fn as_bytes(&self) -> &[u8] {
+        #[rustfmt::skip]
         const DUMMY_BONE: Bone = Bone {
             transform: Matrix4::new(
                 1.0, 0.0, 0.0, 0.0,
@@ -35,12 +36,11 @@ pub struct RuntimeMeshData {
     mesh_data: ModelUniform,
     mesh_data_buffer: wgpu::Buffer,
 
-    bone_data:        BoneData,
+    bone_data: BoneData,
     bone_data_buffer: wgpu::Buffer,
 
     model_bind_group: wgpu::BindGroup,
 }
-
 
 pub struct MeshRenderer {
     mesh: MeshId,
@@ -49,23 +49,19 @@ pub struct MeshRenderer {
 
 impl MeshRenderer {
     pub fn new(mesh: MeshId) -> Box<MeshRenderer> {
-        Box::new(MeshRenderer { 
+        Box::new(MeshRenderer {
             mesh,
             runtime_data: None,
         })
     }
-    
+
     pub fn mesh(&self) -> MeshId {
         self.mesh
     }
 }
 
 impl Drawable for MeshRenderer {
-    fn setup(
-        &mut self,
-        renderer: &Renderer,
-        world: &mut World,
-    ) {
+    fn setup(&mut self, renderer: &Renderer, world: &mut World) {
         world.assets.meshes.init_runtime_mesh(self.mesh);
 
         let material_ids: Vec<MaterialId> = world
@@ -84,7 +80,7 @@ impl Drawable for MeshRenderer {
                 (*world)
                     .assets
                     .materials
-                    .init_runtime_material_id(&mut (*world), mat_id,)
+                    .init_runtime_material_id(&mut (*world), mat_id)
                     .expect("Runtime material should be initialized..");
             }
         }
@@ -98,24 +94,26 @@ impl Drawable for MeshRenderer {
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
         });
 
-        let bones = world.assets.meshes
+        let bones = world
+            .assets
+            .meshes
             .get_raw_mesh(self.mesh)
             .expect("Mesh must exist")
             .bones
             .bones()
             .to_vec();
 
-        let bone_data = BoneData {
-            bones,
-        };
-        
+        let bone_data = BoneData { bones };
+
         let bone_data_buffer = device.create_buffer_init(&BufferInitDescriptor {
             label: Some("Model Bone Data"),
             contents: bone_data.as_bytes(),
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
         });
 
-        let model_bind_group_layout = world.assets.bind_group_layouts
+        let model_bind_group_layout = world
+            .assets
+            .bind_group_layouts
             .get_bind_group_layout(MODEL_UBGL_ID)
             .expect("Model BGL should exist");
 
@@ -130,11 +128,11 @@ impl Drawable for MeshRenderer {
                 BindGroupEntry {
                     binding: 1,
                     resource: bone_data_buffer.as_entire_binding(),
-                }
+                },
             ],
         });
 
-       let runtime_data = RuntimeMeshData {
+        let runtime_data = RuntimeMeshData {
             mesh_data,
             mesh_data_buffer,
 
@@ -144,7 +142,7 @@ impl Drawable for MeshRenderer {
             model_bind_group,
         };
 
-       self.runtime_data = Some(runtime_data);
+        self.runtime_data = Some(runtime_data);
     }
 
     fn update(
@@ -154,11 +152,12 @@ impl Drawable for MeshRenderer {
         renderer: &Renderer,
         outer_transform: &Matrix4<f32>,
     ) {
-        let runtime_data = self.runtime_data.as_mut().expect("Should be initialized in init");
+        let runtime_data = self
+            .runtime_data
+            .as_mut()
+            .expect("Should be initialized in init");
 
-        runtime_data
-            .mesh_data
-            .update(parent, outer_transform);
+        runtime_data.mesh_data.update(parent, outer_transform);
 
         renderer.state.queue.write_buffer(
             &runtime_data.mesh_data_buffer,
@@ -175,7 +174,13 @@ impl Drawable for MeshRenderer {
         }
     }
 
-    fn draw(&self, world: &mut World, rpass: &mut RenderPass, renderer: &Renderer, shader_override: Option<ShaderId>) {
+    fn draw(
+        &self,
+        world: &mut World,
+        rpass: &mut RenderPass,
+        renderer: &Renderer,
+        shader_override: Option<ShaderId>,
+    ) {
         unsafe {
             let world = world as *mut World;
 
@@ -196,7 +201,10 @@ impl Drawable for MeshRenderer {
                 .shaders
                 .get_shader(renderer.current_pipeline);
 
-            let runtime_data = self.runtime_data.as_ref().expect("Should be initialized in init");
+            let runtime_data = self
+                .runtime_data
+                .as_ref()
+                .expect("Should be initialized in init");
 
             rpass.set_vertex_buffer(0, runtime_mesh.data.vertices_buf.slice(..));
             rpass.set_bind_group(1, &runtime_data.model_bind_group, &[]);
@@ -209,17 +217,17 @@ impl Drawable for MeshRenderer {
                     .materials
                     .get_runtime_material(*mat_id)
                     .unwrap_or_else(|| {
-                        (*world).assets.materials.get_runtime_material(FALLBACK_MATERIAL_ID).unwrap()
-                });
+                        (*world)
+                            .assets
+                            .materials
+                            .get_runtime_material(FALLBACK_MATERIAL_ID)
+                            .unwrap()
+                    });
 
                 let shader = shader_override
                     .or(runtime_material.shader)
-                    .map(|id| {
-                        (*world)
-                            .assets
-                            .shaders
-                            .get_shader(Some(id))
-                }).unwrap_or(default_shader);
+                    .map(|id| (*world).assets.shaders.get_shader(Some(id)))
+                    .unwrap_or(default_shader);
 
                 rpass.set_pipeline(&shader.pipeline);
                 rpass.set_bind_group(2, &runtime_material.bind_group, &[]);

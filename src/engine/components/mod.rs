@@ -1,34 +1,33 @@
 mod camera;
 mod collider;
+mod freecam;
 mod gravity;
+mod light;
 mod rigid_body;
 mod rotate;
-mod freecam;
-mod light;
 
 pub use camera::*;
 pub use collider::*;
+pub use freecam::*;
 pub use gravity::*;
+pub use light::*;
 pub use rigid_body::*;
 pub use rotate::*;
-pub use freecam::*;
-pub use light::*;
 
 use crate::core::GameObjectId;
 use std::any::Any;
-
 
 pub trait Component: Any {
     fn new(parent: GameObjectId) -> Self
     where
         Self: Sized;
-    
+
     // Gets called when the game object is created directly after new
     fn init(&mut self) {}
-    
+
     // Gets called when the component should update anything state related
     fn update(&mut self) {}
-    
+
     // Gets called when the component should update any state that's necessary for physics
     fn late_update(&mut self) {}
 

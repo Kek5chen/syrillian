@@ -1,10 +1,10 @@
-pub mod core;
 pub mod asset_management;
 pub mod components;
+pub mod core;
+pub mod drawables;
+pub mod input;
 pub mod physics;
 pub mod world;
-pub mod input;
-pub mod drawables;
 
 pub(crate) mod rendering;
 

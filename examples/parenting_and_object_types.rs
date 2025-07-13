@@ -3,7 +3,7 @@ use std::collections::VecDeque;
 use std::error::Error;
 use std::sync::Mutex;
 
-use log::{error, LevelFilter};
+use log::{LevelFilter, error};
 use nalgebra::Vector3;
 use winit::window::Window;
 
@@ -11,7 +11,6 @@ use syrillian::app::App;
 use syrillian::asset_management::SceneLoader;
 use syrillian::components::RotateComponent;
 use syrillian::world::World;
-
 
 #[tokio::main]
 async fn main() {
@@ -23,7 +22,7 @@ async fn main() {
     let app = App::create("SYRILLIAN", 800, 600)
         .with_init(Some(init))
         .with_update(Some(update));
-    
+
     if let Err(e) = app.run().await {
         error!("{e}");
     }
@@ -34,9 +33,7 @@ fn init(world: &mut World, _window: &Window) -> Result<(), Box<dyn Error>> {
     let mut obj1 = world.new_object("Mow");
     let mut camera = world.new_camera();
 
-    camera
-        .transform
-        .set_position(Vector3::new(0.0, 1.0, 50.0));
+    camera.transform.set_position(Vector3::new(0.0, 1.0, 50.0));
 
     obj2.transform.set_uniform_scale(0.03);
     obj2.add_component::<RotateComponent>();

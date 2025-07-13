@@ -9,12 +9,9 @@ use crate::rendering::Renderer;
 use crate::world::World;
 
 #[allow(unused_variables)]
+#[rustfmt::skip]
 pub trait Drawable: Any {
-    fn setup(
-        &mut self,
-        renderer: &Renderer,
-        world: &mut World,
-    ) {}
+    fn setup(&mut self, renderer: &Renderer, world: &mut World) {}
     fn update(
         &mut self,
         world: &mut World,

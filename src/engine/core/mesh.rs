@@ -1,5 +1,5 @@
-use nalgebra::Point;
 use crate::core::Vertex3D;
+use nalgebra::Point;
 
 #[derive(Debug)]
 pub struct MeshVertexData<T> {
@@ -31,4 +31,3 @@ impl MeshVertexData<Vertex3D> {
             .collect()
     }
 }
-

@@ -1,5 +1,5 @@
-use nalgebra::{Affine3, Scale3, Translation3, UnitQuaternion, Vector3};
 use crate::core::GameObjectId;
+use nalgebra::{Affine3, Scale3, Translation3, UnitQuaternion, Vector3};
 
 #[repr(C)]
 pub struct Transform {

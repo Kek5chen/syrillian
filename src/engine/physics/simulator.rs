@@ -1,6 +1,6 @@
-use std::time::{Duration, Instant};
 use nalgebra::Vector3;
 use rapier3d::prelude::*;
+use std::time::{Duration, Instant};
 
 pub struct PhysicsSimulator {
     pub gravity: Vector3<Real>,
@@ -61,7 +61,7 @@ impl PhysicsSimulator {
             &mut self.ccd_solver,
             Some(&mut self.query_pipeline),
             &(), // no hooks yet
-           &(), // no events yet
+            &(), // no events yet
         );
         self.query_pipeline.update(&self.collider_set)
     }
