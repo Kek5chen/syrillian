@@ -3,9 +3,17 @@ use crate::asset_management::{FALLBACK_MATERIAL_ID, MODEL_UBGL_ID, MaterialId, M
 use crate::core::{Bone, GameObjectId, ModelUniform};
 use crate::drawables::Drawable;
 use crate::engine::rendering::Renderer;
+use crate::engine::rendering::uniform::ShaderUniform;
 use nalgebra::Matrix4;
-use wgpu::util::{BufferInitDescriptor, DeviceExt};
-use wgpu::{BindGroupDescriptor, BindGroupEntry, BufferUsages, IndexFormat, RenderPass};
+use syrillian_macros::UniformIndex;
+use wgpu::{IndexFormat, RenderPass};
+
+#[repr(u8)]
+#[derive(Copy, Clone, Debug, UniformIndex)]
+pub enum MeshUniformIndex {
+    MeshData = 0,
+    BoneData = 1,
+}
 
 #[derive(Debug, Default, Clone)]
 pub struct BoneData {
@@ -13,33 +21,33 @@ pub struct BoneData {
 }
 
 impl BoneData {
-    pub fn as_bytes(&self) -> &[u8] {
-        #[rustfmt::skip]
-        const DUMMY_BONE: Bone = Bone {
-            transform: Matrix4::new(
-                1.0, 0.0, 0.0, 0.0,
-                0.0, 1.0, 0.0, 0.0,
-                0.0, 0.0, 1.0, 0.0,
-                0.0, 0.0, 0.0, 1.0
-            )
-        };
+    #[rustfmt::skip]
+    pub const DUMMY_BONE: [Bone; 1] = [Bone {
+        transform: Matrix4::new(
+            1.0, 0.0, 0.0, 0.0,
+            0.0, 1.0, 0.0, 0.0,
+            0.0, 0.0, 1.0, 0.0,
+            0.0, 0.0, 0.0, 1.0
+        )
+    }];
 
+    pub fn as_bytes(&self) -> &[u8] {
+        bytemuck::cast_slice(self.as_slice())
+    }
+
+    pub fn as_slice(&self) -> &[Bone] {
         if self.bones.is_empty() {
-            bytemuck::bytes_of(&DUMMY_BONE)
+            &Self::DUMMY_BONE
         } else {
-            bytemuck::cast_slice(&self.bones[..])
+            &self.bones[..]
         }
     }
 }
 
 pub struct RuntimeMeshData {
     mesh_data: ModelUniform,
-    mesh_data_buffer: wgpu::Buffer,
-
     bone_data: BoneData,
-    bone_data_buffer: wgpu::Buffer,
-
-    model_bind_group: wgpu::BindGroup,
+    uniform: ShaderUniform<MeshUniformIndex>,
 }
 
 pub struct MeshRenderer {
@@ -87,12 +95,13 @@ impl Drawable for MeshRenderer {
 
         let device = renderer.state.device.as_ref();
 
+        let model_bgl = world
+            .assets
+            .bind_group_layouts
+            .get_bind_group_layout(MODEL_UBGL_ID)
+            .expect("Model BGL should exist");
+
         let mesh_data = ModelUniform::empty();
-        let mesh_data_buffer = device.create_buffer_init(&BufferInitDescriptor {
-            label: Some("Model Buffer"),
-            contents: bytemuck::bytes_of(&mesh_data),
-            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-        });
 
         let bones = world
             .assets
@@ -105,41 +114,15 @@ impl Drawable for MeshRenderer {
 
         let bone_data = BoneData { bones };
 
-        let bone_data_buffer = device.create_buffer_init(&BufferInitDescriptor {
-            label: Some("Model Bone Data"),
-            contents: bone_data.as_bytes(),
-            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-        });
-
-        let model_bind_group_layout = world
-            .assets
-            .bind_group_layouts
-            .get_bind_group_layout(MODEL_UBGL_ID)
-            .expect("Model BGL should exist");
-
-        let model_bind_group = device.create_bind_group(&BindGroupDescriptor {
-            label: Some("Model Bind Group"),
-            layout: model_bind_group_layout,
-            entries: &[
-                BindGroupEntry {
-                    binding: 0,
-                    resource: mesh_data_buffer.as_entire_binding(),
-                },
-                BindGroupEntry {
-                    binding: 1,
-                    resource: bone_data_buffer.as_entire_binding(),
-                },
-            ],
-        });
+        let uniform = ShaderUniform::<MeshUniformIndex>::builder(model_bgl)
+            .with_buffer_data(&mesh_data)
+            .with_buffer_data_slice(bone_data.as_slice())
+            .build(device);
 
         let runtime_data = RuntimeMeshData {
             mesh_data,
-            mesh_data_buffer,
-
             bone_data,
-            bone_data_buffer,
-
-            model_bind_group,
+            uniform,
         };
 
         self.runtime_data = Some(runtime_data);
@@ -160,14 +143,14 @@ impl Drawable for MeshRenderer {
         runtime_data.mesh_data.update(parent, outer_transform);
 
         renderer.state.queue.write_buffer(
-            &runtime_data.mesh_data_buffer,
+            &runtime_data.uniform.buffer(MeshUniformIndex::MeshData),
             0,
             bytemuck::bytes_of(&runtime_data.mesh_data),
         );
 
         if !runtime_data.bone_data.bones.is_empty() {
             renderer.state.queue.write_buffer(
-                &runtime_data.bone_data_buffer,
+                &runtime_data.uniform.buffer(MeshUniformIndex::BoneData),
                 0,
                 runtime_data.bone_data.as_bytes(),
             );
@@ -207,7 +190,7 @@ impl Drawable for MeshRenderer {
                 .expect("Should be initialized in init");
 
             rpass.set_vertex_buffer(0, runtime_mesh.data.vertices_buf.slice(..));
-            rpass.set_bind_group(1, &runtime_data.model_bind_group, &[]);
+            rpass.set_bind_group(1, runtime_data.uniform.bind_group(), &[]);
 
             let i_buffer = &runtime_mesh.data.indices_buf.as_ref();
 
@@ -230,7 +213,7 @@ impl Drawable for MeshRenderer {
                     .unwrap_or(default_shader);
 
                 rpass.set_pipeline(&shader.pipeline);
-                rpass.set_bind_group(2, &runtime_material.bind_group, &[]);
+                rpass.set_bind_group(2, runtime_material.uniform.bind_group(), &[]);
 
                 if let Some(i_buffer) = i_buffer {
                     rpass.set_index_buffer(i_buffer.slice(..), IndexFormat::Uint32);

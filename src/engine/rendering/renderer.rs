@@ -1,90 +1,44 @@
+use super::error::*;
 use crate::asset_management::{
     DIM3_SHADER_ID, FALLBACK_SHADER_ID, LIGHT_UBGL_ID, POST_PROCESS_BGL_ID, POST_PROCESS_SHADER_ID,
     RENDER_UBGL_ID, RuntimeShader, ShaderId,
 };
 use crate::components::{CameraComponent, CameraUniform, PointLightComponent, PointLightUniform};
 use crate::core::GameObjectId;
+use crate::engine::rendering::post_process_pass::PostProcessPass;
+use crate::engine::rendering::uniform::ShaderUniform;
 use crate::ensure_aligned;
-use crate::rendering::{State, StateError};
+use crate::rendering::State;
 use crate::world::World;
 use log::error;
 use nalgebra::{Matrix4, Perspective3, Vector2};
-use snafu::{ResultExt, Snafu};
-use std::cell::RefCell;
+use snafu::ResultExt;
 use std::fmt::Debug;
-use std::rc::Rc;
-use wgpu::util::{BufferInitDescriptor, DeviceExt};
+use syrillian_macros::UniformIndex;
 use wgpu::{
-    AddressMode, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindingResource,
-    Buffer, BufferAddress, BufferDescriptor, BufferUsages, Color, CommandEncoder,
-    CommandEncoderDescriptor, Device, Extent3d, FilterMode, LoadOp, Operations, RenderPass,
-    RenderPassColorAttachment, RenderPassDepthStencilAttachment, RenderPassDescriptor,
-    SamplerDescriptor, StoreOp, SurfaceError, SurfaceTexture, Texture, TextureDescriptor,
-    TextureDimension, TextureFormat, TextureUsages, TextureView, TextureViewDescriptor,
+    Color, CommandEncoder, CommandEncoderDescriptor, Device, Extent3d, LoadOp, Operations,
+    RenderPass, RenderPassColorAttachment, RenderPassDepthStencilAttachment, RenderPassDescriptor,
+    StoreOp, SurfaceError, SurfaceTexture, Texture, TextureDescriptor, TextureDimension,
+    TextureFormat, TextureUsages, TextureView, TextureViewDescriptor,
 };
 use winit::window::Window;
 
-struct PostProcessPass {
-    bind_group: BindGroup,
-}
+#[allow(dead_code)]
+pub struct Renderer {
+    pub state: Box<State>,
+    pub window: Window,
+    pub current_pipeline: Option<ShaderId>,
+    render_uniform_data: Option<RenderUniformData>,
 
-type Result<T, E = RenderError> = std::result::Result<T, E>;
+    // Offscreen texture for rendering the scene before post-processing
+    offscreen_texture: Texture,
+    offscreen_view: TextureView,
 
-#[derive(Debug, Snafu)]
-#[snafu(context(suffix(Err)))]
-pub enum RenderError {
-    #[snafu(display("Render data should've been set"))]
-    DataNotSet,
+    post_process_pass: Option<PostProcessPass>,
 
-    #[snafu(display("Render pipeline is not set"))]
-    NoRenderPipeline,
+    pub debug: DebugRenderer,
 
-    #[snafu(display("No camera set for rendering"))]
-    NoCameraSet,
-
-    #[snafu(display("Rendering camera doesn't have a camera component"))]
-    NoCameraComponentSet,
-
-    #[snafu(display("Light UBGL was not created"))]
-    NoLightUBGL,
-
-    #[snafu(display("Error with current render surface: {source}"))]
-    Surface { source: SurfaceError },
-
-    #[snafu(display("Failed to create render state: {source}"))]
-    State { source: StateError },
-}
-
-impl PostProcessPass {
-    fn new(device: &Device, layout: &BindGroupLayout, view: &TextureView) -> Self {
-        let sampler = device.create_sampler(&SamplerDescriptor {
-            label: Some("PostProcess Sampler"),
-            address_mode_u: AddressMode::ClampToEdge,
-            address_mode_v: AddressMode::ClampToEdge,
-            address_mode_w: AddressMode::ClampToEdge,
-            mag_filter: FilterMode::Linear,
-            min_filter: FilterMode::Linear,
-            mipmap_filter: FilterMode::Linear,
-            ..SamplerDescriptor::default()
-        });
-
-        let bind_group = device.create_bind_group(&BindGroupDescriptor {
-            label: Some("PostProcess Bind Group"),
-            layout,
-            entries: &[
-                BindGroupEntry {
-                    binding: 0,
-                    resource: BindingResource::TextureView(view),
-                },
-                BindGroupEntry {
-                    binding: 1,
-                    resource: BindingResource::Sampler(&sampler),
-                },
-            ],
-        });
-
-        Self { bind_group }
-    }
+    printed_errors: u32,
 }
 
 pub struct RenderContext {
@@ -106,10 +60,8 @@ ensure_aligned!(SystemUniform { screen_size }, align <= 8 * 2 => size);
 
 pub struct RenderUniformData {
     camera_data: Box<CameraUniform>,
-    camera_buffer: Buffer,
     system_data: Box<SystemUniform>,
-    system_buffer: Buffer,
-    bind_group: BindGroup,
+    uniform: ShaderUniform<RenderUniformIndex>,
 }
 
 #[derive(Debug, Default)]
@@ -117,72 +69,21 @@ pub struct DebugRenderer {
     pub draw_edges: bool,
 }
 
-#[allow(dead_code)]
-pub struct Renderer {
-    pub state: Box<State>,
-    pub window: Window,
-    pub current_pipeline: Option<ShaderId>,
-    render_uniform_data: Option<RenderUniformData>,
+#[repr(u8)]
+#[derive(Copy, Clone, Debug, UniformIndex)]
+pub enum RenderUniformIndex {
+    Camera = 0,
+    System = 1,
+}
 
-    // Offscreen texture for rendering the scene before post-processing
-    offscreen_texture: Texture,
-    offscreen_view: TextureView,
-
-    post_process_pass: Option<PostProcessPass>,
-
-    pub debug: DebugRenderer,
-
-    printed_errors: u32,
+#[repr(u8)]
+#[derive(Copy, Clone, Debug, UniformIndex)]
+pub enum PointLightUniformIndex {
+    Count = 0,
+    Lights = 1,
 }
 
 impl Renderer {
-    pub fn create_uniform_init(
-        bind_group_layout: &BindGroupLayout,
-        state: &State,
-        data: &'_ [u8],
-    ) -> (Buffer, BindGroup) {
-        let uniform_buffer = state.device.create_buffer_init(&BufferInitDescriptor {
-            label: Some("Uniform Buffer"),
-            contents: data,
-            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-        });
-
-        let uniform_bind_group = state.device.create_bind_group(&BindGroupDescriptor {
-            label: Some("Uniform Bind Group"),
-            layout: bind_group_layout,
-            entries: &[BindGroupEntry {
-                binding: 0,
-                resource: uniform_buffer.as_entire_binding(),
-            }],
-        });
-
-        (uniform_buffer, uniform_bind_group)
-    }
-
-    pub fn create_uniform_buffer(
-        bind_group_layout: &BindGroupLayout,
-        state: &State,
-        data_size: usize,
-    ) -> (Buffer, BindGroup) {
-        let uniform_buffer = state.device.create_buffer(&BufferDescriptor {
-            label: Some("Uniform Buffer"),
-            size: data_size as BufferAddress,
-            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-            mapped_at_creation: true,
-        });
-
-        let uniform_bind_group = state.device.create_bind_group(&BindGroupDescriptor {
-            label: Some("Uniform Bind Group"),
-            layout: bind_group_layout,
-            entries: &[BindGroupEntry {
-                binding: 0,
-                resource: uniform_buffer.as_entire_binding(),
-            }],
-        });
-
-        (uniform_buffer, uniform_bind_group)
-    }
-
     pub(crate) async fn new(window: Window) -> Result<Self> {
         let state = Box::new(State::new(&window).await.context(StateErr)?);
 
@@ -234,46 +135,24 @@ impl Renderer {
         // TODO: Make it possible to pick a shader
         self.current_pipeline = Some(DIM3_SHADER_ID);
 
-        let camera_data = Box::<CameraUniform>::default();
-        let system_data = Box::<SystemUniform>::default();
-
-        let camera_buffer = self.state.device.create_buffer_init(&BufferInitDescriptor {
-            label: Some("Camera Uniform Buffer"),
-            contents: bytemuck::bytes_of(camera_data.as_ref()),
-            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-        });
-        let system_buffer = self.state.device.create_buffer_init(&BufferInitDescriptor {
-            label: Some("System Uniform Buffer"),
-            contents: bytemuck::bytes_of(system_data.as_ref()),
-            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-        });
-
         let render_data_bgl = World::instance()
             .assets
             .bind_group_layouts
             .get_bind_group_layout(RENDER_UBGL_ID)
             .unwrap();
-        let bind_group = self.state.device.create_bind_group(&BindGroupDescriptor {
-            label: Some("Render Uniform Bind Group"),
-            layout: render_data_bgl,
-            entries: &[
-                BindGroupEntry {
-                    binding: 0,
-                    resource: camera_buffer.as_entire_binding(),
-                },
-                BindGroupEntry {
-                    binding: 1,
-                    resource: system_buffer.as_entire_binding(),
-                },
-            ],
-        });
+
+        let camera_data = Box::<CameraUniform>::default();
+        let system_data = Box::<SystemUniform>::default();
+
+        let render_uniform = ShaderUniform::<RenderUniformIndex>::builder(render_data_bgl)
+            .with_buffer_data(camera_data.as_ref())
+            .with_buffer_data(system_data.as_ref())
+            .build(&self.state.device);
 
         self.render_uniform_data = Some(RenderUniformData {
             camera_data,
-            camera_buffer,
             system_data,
-            system_buffer,
-            bind_group,
+            uniform: render_uniform,
         });
 
         let world = World::instance();
@@ -430,7 +309,7 @@ impl Renderer {
         let shader = world.assets.shaders.get_shader(Some(shader_id));
         let (load_op_color, load_op_depth) = determine_draw_over_color(shader);
 
-        let light_bind_group = self.setup_lights(world)?;
+        let light_uniform = self.setup_lights(world)?;
 
         let mut rpass = self.prepare_render_pass(ctx, load_op_color, load_op_depth);
 
@@ -439,8 +318,8 @@ impl Renderer {
             .as_mut()
             .ok_or(RenderError::DataNotSet)?;
 
-        rpass.set_bind_group(0, &render_data.bind_group, &[]);
-        rpass.set_bind_group(3, &light_bind_group, &[]);
+        rpass.set_bind_group(0, render_data.uniform.bind_group(), &[]);
+        rpass.set_bind_group(3, light_uniform.bind_group(), &[]);
 
         let world_ptr = world as *mut World;
         unsafe {
@@ -505,7 +384,15 @@ impl Renderer {
             .get_shader_opt(POST_PROCESS_SHADER_ID)
             .expect("PostProcess shader should be initialized");
         rpass.set_pipeline(&post_shader.pipeline);
-        rpass.set_bind_group(0, &self.post_process_pass.as_ref().unwrap().bind_group, &[]);
+        rpass.set_bind_group(
+            0,
+            self.post_process_pass
+                .as_ref()
+                .unwrap()
+                .uniform
+                .bind_group(),
+            &[],
+        );
         rpass.draw(0..6, 0..1);
     }
 
@@ -556,7 +443,7 @@ impl Renderer {
             .update(projection_matrix, camera_transform);
 
         self.state.queue.write_buffer(
-            &render_data.camera_buffer,
+            &render_data.uniform.buffer(RenderUniformIndex::Camera),
             0,
             bytemuck::bytes_of(render_data.camera_data.as_ref()),
         );
@@ -578,7 +465,7 @@ impl Renderer {
         render_data.system_data.delta_time = world.get_delta_time().as_secs_f32();
 
         self.state.queue.write_buffer(
-            &render_data.system_buffer,
+            &render_data.uniform.buffer(RenderUniformIndex::System),
             0,
             bytemuck::bytes_of(render_data.system_data.as_ref()),
         );
@@ -586,52 +473,28 @@ impl Renderer {
         Ok(())
     }
 
-    fn setup_lights(&self, world: &World) -> Result<BindGroup> {
+    fn setup_lights(&self, world: &World) -> Result<ShaderUniform<PointLightUniformIndex>> {
         // TODO: cache this if light data doesn't change?
         let point_lights = World::instance().get_all_components_of_type::<PointLightComponent>();
-        let point_light_count = point_lights.len();
+        let point_light_count = point_lights.len() as u32;
 
         let light_bgl = world
             .assets
             .bind_group_layouts
             .get_bind_group_layout(LIGHT_UBGL_ID)
             .ok_or(RenderError::NoLightUBGL)?;
-        let point_light_buffer = self.make_point_light_buffer(point_light_count, &point_lights);
-        let light_count_buffer = self.state.device.create_buffer_init(&BufferInitDescriptor {
-            label: Some("Light Count Buffer"),
-            contents: bytemuck::bytes_of(&(point_light_count as u32)),
-            usage: BufferUsages::UNIFORM,
-        });
-        let light_bind_group = self.state.device.create_bind_group(&BindGroupDescriptor {
-            label: Some("Light Bind Group"),
-            layout: light_bgl,
-            entries: &[
-                BindGroupEntry {
-                    binding: 0,
-                    resource: light_count_buffer.as_entire_binding(),
-                },
-                BindGroupEntry {
-                    binding: 1,
-                    resource: point_light_buffer.as_entire_binding(),
-                },
-            ],
-        });
 
-        Ok(light_bind_group)
-    }
+        const DUMMY_POINT_LIGHT: PointLightUniform = PointLightUniform::zero();
 
-    fn make_point_light_buffer(
-        &self,
-        point_light_count: usize,
-        point_lights: &[Rc<RefCell<Box<PointLightComponent>>>],
-    ) -> Buffer {
+        let builder = ShaderUniform::<PointLightUniformIndex>::builder(&light_bgl)
+            .with_buffer_data(&point_light_count);
+
+        let uniform;
+
         if point_light_count == 0 {
-            let dummy_point_light: PointLightUniform = PointLightUniform::default();
-            self.state.device.create_buffer_init(&BufferInitDescriptor {
-                label: Some("Empty Point Light Buffer"),
-                usage: BufferUsages::STORAGE,
-                contents: bytemuck::cast_slice(&[dummy_point_light]),
-            })
+            uniform = builder
+                .with_buffer_storage(&[DUMMY_POINT_LIGHT])
+                .build(&self.state.device);
         } else {
             let light_data: Vec<PointLightUniform> = point_lights
                 .iter()
@@ -641,13 +504,13 @@ impl Renderer {
                     *light.inner()
                 })
                 .collect();
-            let light_bytes = bytemuck::cast_slice(&light_data);
-            self.state.device.create_buffer_init(&BufferInitDescriptor {
-                label: Some("Point Light Buffer"),
-                contents: light_bytes,
-                usage: BufferUsages::STORAGE,
-            })
-        }
+
+            uniform = builder
+                .with_buffer_storage(light_data.as_slice())
+                .build(&self.state.device);
+        };
+
+        Ok(uniform)
     }
 
     fn prepare_render_pass<'a>(

@@ -50,34 +50,60 @@ impl Mesh {
         })
     }
 
+    #[inline]
+    pub fn vertex_count(&self) -> usize {
+        self.data.vertices.len()
+    }
+
+    #[inline]
+    pub fn indices_count(&self) -> usize {
+        self
+            .indices()
+            .map(<[u32]>::len)
+            .unwrap_or(0)
+    }
+
+    #[inline]
+    pub fn vertices(&self) -> &[Vertex3D] {
+        &self.data.vertices
+    }
+
+    #[inline]
+    pub fn indices(&self) -> Option<&[u32]> {
+        self.data.indices.as_ref().map(|i| i.as_slice())
+    }
+
     pub(crate) fn init_runtime(&mut self, device: &Device) -> RuntimeMesh {
-        let v_buffer = device.create_buffer_init(&BufferInitDescriptor {
+        RuntimeMesh {
+            data: RuntimeMeshData::new(self, device),
+        }
+    }
+}
+
+impl RuntimeMeshData {
+    fn new(mesh: &Mesh, device: &Device) -> Self {
+        let vertices_num = mesh.vertex_count();
+        let indices_num = mesh.indices_count();
+
+        let vertices_buf = device.create_buffer_init(&BufferInitDescriptor {
             label: Some("3D Object Vertex Buffer"),
-            contents: bytemuck::cast_slice(self.data.vertices.as_slice()),
+            contents: bytemuck::cast_slice(mesh.vertices()),
             usage: BufferUsages::VERTEX,
         });
-        let i_buffer = self.data.indices.as_ref().map(|indices| {
+
+        let indices_buf = mesh.indices().map(|indices| {
             device.create_buffer_init(&BufferInitDescriptor {
                 label: Some("3D Object Index Buffer"),
-                contents: bytemuck::cast_slice(indices.as_slice()),
+                contents: bytemuck::cast_slice(indices),
                 usage: BufferUsages::INDEX,
             })
         });
 
-        let runtime_mesh_data = RuntimeMeshData {
-            vertices_buf: v_buffer,
-            vertices_num: self.data.vertices.len(),
-            indices_buf: i_buffer,
-            indices_num: self
-                .data
-                .indices
-                .as_ref()
-                .map(|i| i.len())
-                .unwrap_or_default(),
-        };
-
-        RuntimeMesh {
-            data: runtime_mesh_data,
+        RuntimeMeshData {
+            vertices_buf,
+            vertices_num,
+            indices_buf,
+            indices_num,
         }
     }
 }

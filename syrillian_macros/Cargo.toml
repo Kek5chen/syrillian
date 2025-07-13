@@ -1,0 +1,12 @@
+[package]
+name = "syrillian_macros"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+syn = { version = "2.0.104", features = ["full", "printing", "derive"] }
+quote = "1.0.40"
+syrillian_utils = { path = "../syrillian_utils" }
+
+[lib]
+proc-macro = true

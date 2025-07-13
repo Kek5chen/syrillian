@@ -13,11 +13,9 @@ use crate::engine::rendering::Renderer;
 use crate::utils::UNIT_SQUARE;
 use log::{error, warn};
 use nalgebra::{Matrix4, Scale3, Translation3};
-use wgpu::{
-    BindGroupDescriptor, BindGroupEntry, BufferUsages,
-    util::{BufferInitDescriptor, DeviceExt},
-};
 use winit::window::Window;
+use crate::drawables::MeshUniformIndex;
+use crate::engine::rendering::uniform::ShaderUniform;
 
 static UNIT_SQUARE_ID: RwLock<Option<MeshId>> = RwLock::new(None);
 
@@ -48,12 +46,7 @@ pub enum ImageScalingMode {
 #[derive(Debug)]
 struct ImageGPUData {
     translation_data: ModelUniform,
-    translation_data_buffer: wgpu::Buffer,
-
-    _dummy_bone_data: BoneData,
-    _dummy_bone_data_buffer: wgpu::Buffer,
-
-    model_bind_group: wgpu::BindGroup,
+    uniform: ShaderUniform<MeshUniformIndex>,
 }
 
 #[derive(Debug)]
@@ -142,11 +135,11 @@ impl Drawable for Image {
         rpass.set_pipeline(&shader.pipeline);
 
         let vertex_buf_slice = unit_square_runtime.data.vertices_buf.slice(..);
-        let material_bind_group = &material.bind_group;
+        let material_bind_group = material.uniform.bind_group();
         let vertices_count = unit_square_runtime.data.vertices_num as u32;
 
         rpass.set_vertex_buffer(0, vertex_buf_slice);
-        rpass.set_bind_group(1, &gpu_data.model_bind_group, &[]);
+        rpass.set_bind_group(1, gpu_data.uniform.bind_group(), &[]);
         rpass.set_bind_group(2, material_bind_group, &[]);
         rpass.draw(0..vertices_count, 0..1)
     }
@@ -161,42 +154,15 @@ impl Image {
             .unwrap();
 
         let translation_data = ModelUniform::empty();
-        let translation_data_buffer = device.create_buffer_init(&BufferInitDescriptor {
-            label: Some("Image Translation Buffer"),
-            contents: bytemuck::bytes_of(&translation_data),
-            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-        });
 
-        let _dummy_bone_data = BoneData::default();
-        let _dummy_bone_data_buffer = device.create_buffer_init(&BufferInitDescriptor {
-            label: Some("Image Dummy Bone Buffer"),
-            contents: _dummy_bone_data.as_bytes(),
-            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-        });
-
-        let model_bind_group = device.create_bind_group(&BindGroupDescriptor {
-            label: Some("Image Model Bind Group"),
-            layout: bgl,
-            entries: &[
-                BindGroupEntry {
-                    binding: 0,
-                    resource: translation_data_buffer.as_entire_binding(),
-                },
-                BindGroupEntry {
-                    binding: 1,
-                    resource: _dummy_bone_data_buffer.as_entire_binding(),
-                },
-            ],
-        });
+        let uniform = ShaderUniform::<MeshUniformIndex>::builder(bgl)
+            .with_buffer_data(&translation_data)
+            .with_buffer_data_slice(&BoneData::DUMMY_BONE)
+            .build(device);
 
         self.gpu_data = Some(ImageGPUData {
             translation_data,
-            translation_data_buffer,
-
-            _dummy_bone_data,
-            _dummy_bone_data_buffer,
-
-            model_bind_group,
+            uniform,
         });
     }
 
@@ -301,7 +267,7 @@ impl Image {
         gpu_data.translation_data.model_mat = new_model_mat;
 
         queue.write_buffer(
-            &gpu_data.translation_data_buffer,
+            gpu_data.uniform.buffer(MeshUniformIndex::MeshData),
             0,
             bytemuck::bytes_of(&gpu_data.translation_data),
         );
