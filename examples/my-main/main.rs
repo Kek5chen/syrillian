@@ -2,7 +2,6 @@ use env_logger::Env;
 use log::{error, LevelFilter};
 use nalgebra::Vector3;
 use rapier3d::prelude::*;
-use syrillian::asset_management::Bones;
 use std::any::Any;
 use std::cell::RefCell;
 use std::collections::VecDeque;
@@ -11,30 +10,23 @@ use std::sync::Mutex;
 use winit::event::MouseButton;
 use winit::keyboard::KeyCode;
 use winit::window::{CursorGrabMode, Window};
-
+use syrillian::asset_management::{Material, Mesh, SceneLoader, DIM3_SHADER_ID};
+use syrillian::components::{Collider3D, MeshShapeExtra, PointLightComponent, RigidBodyComponent, RotateComponent};
+use syrillian::core::Bones;
+use syrillian::drawables::MeshRenderer;
+use syrillian::utils::{CUBE, CUBE_INDICES};
+use syrillian::{App, World};
 use crate::camera_controller::CameraController;
 use crate::player_movement::PlayerMovement;
-use syrillian::app::App;
-use syrillian::asset_management::materialmanager::Material;
-use syrillian::asset_management::mesh::Mesh;
-use syrillian::asset_management::shadermanager::DIM3_SHADER_ID;
-use syrillian::buffer::{CUBE, CUBE_INDICES};
-use syrillian::components::collider::MeshShapeExtra;
-use syrillian::components::{Collider3D, PointLightComponent, RigidBodyComponent, RotateComponent};
-use syrillian::drawables::mesh_renderer::MeshRenderer;
-use syrillian::scene_loader::SceneLoader;
-use syrillian::world::World;
 
 mod camera_controller;
 mod player_movement;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    let log_env = Env::new().filter("RUST_LOG");
     env_logger::builder()
-        .parse_default_env() // Default env
         .filter_level(LevelFilter::Info) // Use at least info level
-        .parse_env(log_env) // Or override with whatever env says
+        .parse_default_env() // Default env
         .init();
 
     let app = App::create("SYRILLIAN", 800, 600)

@@ -9,18 +9,16 @@ use nalgebra::Vector3;
 use winit::window::Window;
 
 use syrillian::app::App;
+use syrillian::asset_management::SceneLoader;
 use syrillian::components::RotateComponent;
-use syrillian::scene_loader::SceneLoader;
 use syrillian::world::World;
 
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    let log_env = Env::new().filter("RUST_LOG");
     env_logger::builder()
-        .parse_default_env() // Default env
         .filter_level(LevelFilter::Info) // Use at least info level
-        .parse_env(log_env) // Or override with whatever env says
+        .parse_default_env()
         .init();
 
     let app = App::create("SYRILLIAN", 800, 600)
