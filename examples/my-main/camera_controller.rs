@@ -17,7 +17,7 @@ impl Component for CameraController {
     {
         CameraController {
             parent,
-            look_sensitivity: 0.3f32,
+            look_sensitivity: 0.6f32,
             yaw: 0.0,
             pitch: 0.0,
         }
