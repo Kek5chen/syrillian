@@ -155,7 +155,7 @@ macro_rules! store_add_checked {
 #[macro_export]
 #[cfg(not(debug_assertions))]
 macro_rules! store_add_checked {
-    ($store:ident, $expected_id:ident, $elem:expr) => {
+    ($store:ident, $expected_id:path, $elem:expr) => {
         $store.add($elem);
     };
 }
