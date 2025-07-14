@@ -5,7 +5,7 @@ use crate::ensure_aligned;
 use nalgebra::Vector3;
 use syrillian_macros::UniformIndex;
 use wgpu::wgt::SamplerDescriptor;
-use wgpu::{Device, Queue};
+use wgpu::{AddressMode, Device, Queue};
 
 #[repr(u8)]
 #[derive(Debug, Copy, Clone, UniformIndex)]
@@ -66,7 +66,12 @@ impl CacheType for Material {
         let _shininess = cache.texture_opt(self.shininess_texture, HTexture::FALLBACK_SHININESS);
 
         // TODO: Add additional material mapping properties and such
-        let sampler = device.create_sampler(&SamplerDescriptor::default());
+        let sampler = device.create_sampler(&SamplerDescriptor {
+            address_mode_u: AddressMode::Repeat,
+            address_mode_v: AddressMode::Repeat,
+            address_mode_w: AddressMode::Repeat,
+            .. Default::default()
+        });
 
         let uniform = ShaderUniform::<MaterialUniformIndex>::builder(&mat_bgl)
             .with_buffer_data(&data)
