@@ -125,9 +125,9 @@ impl ApplicationHandler for App {
             .create_window(self.window_attributes.clone())
             .unwrap();
 
-        self.world.assets.invalidate();
+        let asset_store = self.world.assets.clone();
 
-        let mut renderer = match block_on(Renderer::new(window)) {
+        let mut renderer = match block_on(Renderer::new(window, asset_store)) {
             Ok(r) => r,
             Err(e) => {
                 error!("Error when creating renderer: {e}");
@@ -135,12 +135,6 @@ impl ApplicationHandler for App {
                 return;
             }
         };
-
-        let state = &renderer.state;
-
-        self.world
-            .assets
-            .init_runtime(state.device.clone(), state.queue.clone());
 
         renderer.init();
 

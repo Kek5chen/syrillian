@@ -8,7 +8,7 @@ use nalgebra::Vector3;
 use winit::window::Window;
 
 use syrillian::app::App;
-use syrillian::asset_management::SceneLoader;
+use syrillian::assets::scene_loader::SceneLoader;
 use syrillian::components::RotateComponent;
 use syrillian::world::World;
 

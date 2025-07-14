@@ -1,23 +1,15 @@
-use std::{
-    error::Error,
-    sync::{RwLock, RwLockWriteGuard},
-};
-
 use super::{BoneData, Drawable};
 use crate::World;
-use crate::asset_management::{
-    DIM2_SHADER_ID, MODEL_UBGL_ID, MaterialId, Mesh, MeshId, MeshManager, RuntimeMesh, ShaderId,
-};
-use crate::core::{Bones, GameObjectId, ModelUniform};
-use crate::engine::rendering::Renderer;
-use crate::utils::UNIT_SQUARE;
-use log::{error, warn};
-use nalgebra::{Matrix4, Scale3, Translation3};
-use winit::window::Window;
+use crate::core::{GameObjectId, ModelUniform};
 use crate::drawables::MeshUniformIndex;
+use crate::engine::assets::{HMaterial, HShader};
+use crate::engine::rendering::cache::AssetCache;
 use crate::engine::rendering::uniform::ShaderUniform;
-
-static UNIT_SQUARE_ID: RwLock<Option<MeshId>> = RwLock::new(None);
+use crate::engine::rendering::{DrawCtx, Renderer};
+use log::error;
+use nalgebra::{Matrix4, Scale3, Translation3};
+use wgpu::Device;
+use winit::window::Window;
 
 #[derive(Debug, Clone, Copy)]
 pub enum ImageScalingMode {
@@ -51,13 +43,13 @@ struct ImageGPUData {
 
 #[derive(Debug)]
 pub struct Image {
-    material: MaterialId,
+    material: HMaterial,
     scaling: ImageScalingMode,
     gpu_data: Option<ImageGPUData>,
 }
 
 impl Image {
-    pub fn new(material: MaterialId) -> Box<Image> {
+    pub fn new(material: HMaterial) -> Box<Image> {
         Box::new(Image {
             material,
             scaling: ImageScalingMode::Absolute {
@@ -70,7 +62,7 @@ impl Image {
         })
     }
 
-    pub fn new_with_size(material: MaterialId, scaling: ImageScalingMode) -> Box<Image> {
+    pub fn new_with_size(material: HMaterial, scaling: ImageScalingMode) -> Box<Image> {
         Box::new(Image {
             material,
             scaling,
@@ -88,10 +80,8 @@ impl Image {
 }
 
 impl Drawable for Image {
-    fn setup(&mut self, renderer: &Renderer, world: &mut World) {
-        ensure_unit_square(world);
-
-        self.setup_model_data(world, &renderer.state.device);
+    fn setup(&mut self, renderer: &Renderer, _world: &mut World) {
+        self.setup_model_data(&renderer.cache, &renderer.state.device);
     }
 
     fn update(
@@ -104,58 +94,38 @@ impl Drawable for Image {
         self.update_model_matrix(&renderer.state.queue, &renderer.window);
     }
 
-    fn draw(
-        &self,
-        world: &mut World,
-        rpass: &mut wgpu::RenderPass,
-        _renderer: &Renderer,
-        _shader_override: Option<ShaderId>,
-    ) {
-        let unit_square_runtime = match unit_square_mesh(&mut world.assets.meshes) {
-            Ok(s) => s,
-            Err(e) => {
-                warn!("Can't render image because the unit square mesh couldn't be fetched: {e}");
-                return;
-            }
-        };
-
-        let Some(material) = world.assets.materials.get_runtime_material(self.material) else {
-            return;
-        };
-
-        let Some(shader) = world.assets.shaders.get_shader_opt(DIM2_SHADER_ID) else {
-            return;
-        };
+    fn draw(&self, _world: &mut World, ctx: &DrawCtx) {
+        let unit_square_runtime = ctx.frame.cache.mesh_unit_square();
+        let material = ctx.frame.cache.material(self.material);
+        let shader = ctx.frame.cache.shader(HShader::DIM2);
 
         let Some(gpu_data) = &self.gpu_data else {
             error!("Image GPU Data wasn't set up.");
             return;
         };
 
-        rpass.set_pipeline(&shader.pipeline);
+        let mut pass = ctx.pass.write().unwrap();
 
-        let vertex_buf_slice = unit_square_runtime.data.vertices_buf.slice(..);
+        pass.set_pipeline(&shader.pipeline);
+
+        let vertex_buf_slice = unit_square_runtime.vertices_buf.slice(..);
         let material_bind_group = material.uniform.bind_group();
-        let vertices_count = unit_square_runtime.data.vertices_num as u32;
+        let vertices_count = unit_square_runtime.vertices_num as u32;
 
-        rpass.set_vertex_buffer(0, vertex_buf_slice);
-        rpass.set_bind_group(1, gpu_data.uniform.bind_group(), &[]);
-        rpass.set_bind_group(2, material_bind_group, &[]);
-        rpass.draw(0..vertices_count, 0..1)
+        pass.set_vertex_buffer(0, vertex_buf_slice);
+        pass.set_bind_group(1, gpu_data.uniform.bind_group(), &[]);
+        pass.set_bind_group(2, material_bind_group, &[]);
+        pass.draw(0..vertices_count, 0..1)
     }
 }
 
 impl Image {
-    fn setup_model_data(&mut self, world: &World, device: &wgpu::Device) {
-        let bgl = world
-            .assets
-            .bind_group_layouts
-            .get_bind_group_layout(MODEL_UBGL_ID)
-            .unwrap();
+    fn setup_model_data(&mut self, cache: &AssetCache, device: &Device) {
+        let bgl = cache.bgl_model();
 
         let translation_data = ModelUniform::empty();
 
-        let uniform = ShaderUniform::<MeshUniformIndex>::builder(bgl)
+        let uniform = ShaderUniform::<MeshUniformIndex>::builder(&bgl)
             .with_buffer_data(&translation_data)
             .with_buffer_data_slice(&BoneData::DUMMY_BONE)
             .build(device);
@@ -272,35 +242,4 @@ impl Image {
             bytemuck::bytes_of(&gpu_data.translation_data),
         );
     }
-}
-
-fn unit_square_mesh(mesh_manager: &mut MeshManager) -> Result<&RuntimeMesh, Box<dyn Error>> {
-    let unit_square_id = UNIT_SQUARE_ID.read().unwrap();
-    let Some(id) = *unit_square_id else {
-        return Err("Unit Square ID should've been set in setup()".into());
-    };
-
-    let Some(unit_square_runtime) = mesh_manager.get_runtime_mesh_or_init(id) else {
-        return Err("Unit Square Mesh should exist.".into());
-    };
-
-    Ok(unit_square_runtime)
-}
-
-fn ensure_unit_square(world: &mut World) {
-    let unit_square = UNIT_SQUARE_ID.write().unwrap();
-    if unit_square.is_some() {
-        return;
-    }
-    remake_unit_square(world, unit_square);
-}
-
-fn remake_unit_square(world: &mut World, mut unit_square: RwLockWriteGuard<'_, Option<MeshId>>) {
-    let id =
-        world
-            .assets
-            .meshes
-            .add_mesh(Mesh::new(UNIT_SQUARE.to_vec(), None, None, Bones::none()));
-
-    *unit_square = Some(id);
 }

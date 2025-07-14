@@ -4,16 +4,14 @@ use std::error::Error;
 use std::rc::Rc;
 
 use crate::World;
-use crate::asset_management::{
-    DIM3_SHADER_ID, FALLBACK_DIFFUSE_TEXTURE, Material, MaterialId, Mesh, ShaderId, TextureId,
-};
+use crate::assets::{H, HMaterial, HShader, HTexture, Material, Mesh};
 use crate::core::{Bones, GameObjectId, Vertex3D};
 use crate::drawables::MeshRenderer;
 use crate::utils::ExtraMatrixMath;
 use itertools::{Itertools, izip};
 use log::warn;
 use nalgebra::{Matrix4, Vector2, Vector3};
-use num_traits::{ToPrimitive, Zero};
+use num_traits::Zero;
 use russimp_ng::Vector3D;
 use russimp_ng::material::{DataContent, MaterialProperty, PropertyTypeInfo, TextureType};
 use russimp_ng::node::Node;
@@ -186,7 +184,7 @@ impl SceneLoader {
 
             // TODO: Change material ranges to usize?
             material_ranges.push((
-                mesh.material_index as usize,
+                H::new(mesh.material_index),
                 mesh_vertex_count_start as u32..mesh_vertex_count as u32,
             ));
 
@@ -228,7 +226,7 @@ impl SceneLoader {
 
         if !vertices.is_empty() {
             let mesh = Mesh::new(vertices, None, Some(material_ranges), bones);
-            let id = world.assets.meshes.add_mesh(mesh);
+            let id = world.assets.meshes.add(mesh);
 
             node_obj.drawable = Some(MeshRenderer::new(id));
         }
@@ -298,34 +296,29 @@ impl SceneLoader {
         }
     }
 
-    fn load_materials(scene: &Scene, world: &mut World) -> HashMap<u32, MaterialId> {
+    fn load_materials(scene: &Scene, world: &mut World) -> HashMap<u32, HMaterial> {
         let mut mapping = HashMap::new();
         for (i, material) in scene.materials.iter().enumerate() {
-            let mat_id = Self::load_material(world, material, DIM3_SHADER_ID);
+            let mat_id = Self::load_material(world, material, HShader::DIM3);
             mapping.insert(i as u32, mat_id);
         }
         mapping
     }
 
-    fn update_material_indices(scene: &mut Scene, mat_map: HashMap<u32, MaterialId>) {
+    fn update_material_indices(scene: &mut Scene, mat_map: HashMap<u32, HMaterial>) {
         for mesh in &mut scene.meshes {
-            let new_idx = mat_map.get(&mesh.material_index).cloned();
-            let intermediate_idx = new_idx.unwrap_or_default();
-            mesh.material_index = intermediate_idx.to_u32().unwrap_or_default();
-
-            if intermediate_idx != mesh.material_index as usize {
-                warn!(
-                    "Scene tried to use more than {} materials. That's crazy and I thought you wanted to know that.",
-                    u32::MAX
-                );
-            }
+            let mapped_mat = mat_map
+                .get(&mesh.material_index)
+                .cloned()
+                .unwrap_or(HMaterial::FALLBACK);
+            mesh.material_index = mapped_mat.id();
         }
     }
 
     fn load_texture(
         world: &mut World,
         texture: Rc<RefCell<russimp_ng::material::Texture>>,
-    ) -> TextureId {
+    ) -> HTexture {
         // TODO: Don't load textures that were loaded before and are just shared between two materials
         let texture = texture.borrow();
         match &texture.data {
@@ -336,7 +329,7 @@ impl SceneLoader {
                 .load_image_from_memory(data)
                 .unwrap_or_else(|e| {
                     warn!("Failed to load texture: {e}. Using fallback texture.");
-                    FALLBACK_DIFFUSE_TEXTURE
+                    HTexture::FALLBACK_DIFFUSE
                 }),
         }
     }
@@ -398,8 +391,8 @@ impl SceneLoader {
     fn load_material(
         world: &mut World,
         material: &russimp_ng::material::Material,
-        shader: ShaderId,
-    ) -> MaterialId {
+        shader: HShader,
+    ) -> HMaterial {
         let name =
             Self::extract_string_property(&material.properties, "name", || "Material".to_string());
 
@@ -423,6 +416,6 @@ impl SceneLoader {
             opacity: 1.0,
             shader: Some(shader),
         };
-        world.assets.materials.add_material(new_material)
+        world.assets.materials.add(new_material)
     }
 }

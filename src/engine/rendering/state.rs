@@ -1,5 +1,5 @@
 use snafu::{ResultExt, Snafu, ensure};
-use std::rc::Rc;
+use std::sync::Arc;
 use wgpu::{
     Adapter, CompositeAlphaMode, CreateSurfaceError, Device, DeviceDescriptor, Extent3d, Features,
     Instance, Limits, MemoryHints, PowerPreference, PresentMode, Queue, RequestAdapterOptions,
@@ -31,8 +31,8 @@ pub struct State {
     pub(crate) instance: Instance,
     pub(crate) surface: Surface<'static>,
     pub(crate) config: SurfaceConfiguration,
-    pub(crate) device: Rc<Device>,
-    pub(crate) queue: Rc<Queue>,
+    pub(crate) device: Arc<Device>,
+    pub(crate) queue: Arc<Queue>,
     pub(crate) size: PhysicalSize<u32>,
     pub(crate) depth_texture: Texture,
 }
@@ -71,7 +71,7 @@ impl State {
         wgpu::Trace::Off
     }
 
-    async fn get_device_and_queue(adapter: &Adapter) -> Result<(Rc<Device>, Rc<Queue>)> {
+    async fn get_device_and_queue(adapter: &Adapter) -> Result<(Arc<Device>, Arc<Queue>)> {
         let (device, queue) = adapter
             .request_device(&DeviceDescriptor {
                 label: Some("Renderer Hardware"),
@@ -86,7 +86,7 @@ impl State {
             .await
             .context(RequestDeviceErr)?;
 
-        Ok((Rc::new(device), Rc::new(queue)))
+        Ok((Arc::new(device), Arc::new(queue)))
     }
 
     fn configure_surface(

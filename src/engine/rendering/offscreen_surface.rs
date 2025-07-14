@@ -1,9 +1,12 @@
-use wgpu::{Device, Extent3d, SurfaceConfiguration, TextureDescriptor, TextureDimension, TextureUsages, TextureView, TextureViewDescriptor};
+use wgpu::{
+    Device, Extent3d, SurfaceConfiguration, TextureDescriptor, TextureDimension, TextureUsages,
+    TextureView, TextureViewDescriptor,
+};
 
 pub struct OffscreenSurface(TextureView);
 
 impl OffscreenSurface {
-    pub fn new(device: &Device, config: &SurfaceConfiguration) -> Self{
+    pub fn new(device: &Device, config: &SurfaceConfiguration) -> Self {
         let tex = device
             .create_texture(&TextureDescriptor {
                 label: Some("Offscreen Texture"),
@@ -20,14 +23,14 @@ impl OffscreenSurface {
                 view_formats: &[],
             })
             .create_view(&TextureViewDescriptor::default());
-        
+
         OffscreenSurface(tex)
     }
-    
+
     pub fn recreate(&mut self, device: &Device, config: &SurfaceConfiguration) {
         *self = Self::new(device, config);
     }
-    
+
     pub fn view(&self) -> &TextureView {
         &self.0
     }

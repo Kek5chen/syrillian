@@ -100,7 +100,7 @@ impl<'a, I: ShaderUniformIndex + 'static> ShaderUniformBuilder<'a, I> {
     }
 
     #[inline]
-    pub fn with_texture_view(mut self, view: &'a TextureView) -> Self {
+    pub fn with_texture(mut self, view: &'a TextureView) -> Self {
         let name = self._next_index();
         self.data.push(ResourceDesc::TextureView { view, name });
         self
@@ -114,11 +114,11 @@ impl<'a, I: ShaderUniformIndex + 'static> ShaderUniformBuilder<'a, I> {
     }
 
     #[inline]
-    fn entries<'b>(&'b self, buffers: &'b UniformBufferStorage<I>) -> SmallVec<[BindGroupEntry<'b>; 1]> {
-            self.data
-                .iter()
-                .map(|desc| desc.entry(buffers))
-                .collect()
+    fn entries<'b>(
+        &'b self,
+        buffers: &'b UniformBufferStorage<I>,
+    ) -> SmallVec<[BindGroupEntry<'b>; 1]> {
+        self.data.iter().map(|desc| desc.entry(buffers)).collect()
     }
 
     #[inline]
@@ -173,8 +173,7 @@ impl<I: ShaderUniformIndex> UniformBufferStorage<I> {
     fn new(device: &Device, desc: &[ResourceDesc<I>]) -> Self {
         assert_eq!(desc.len(), I::MAX + 1);
 
-        let buffers =
-            desc.iter().map(|desc| desc.make_buffer(device)).collect();
+        let buffers = desc.iter().map(|desc| desc.make_buffer(device)).collect();
 
         UniformBufferStorage {
             buffers,
@@ -214,8 +213,10 @@ impl<I: ShaderUniformIndex> ResourceDesc<'_, I> {
         let resource = match self {
             ResourceDesc::DataBuffer { .. }
             | ResourceDesc::StorageBuffer { .. }
-            | ResourceDesc::EmptyBuffer { .. } =>
-                buffers.buffers[self.index()].as_ref().expect("Resource should be registered as a buffer").as_entire_binding(),
+            | ResourceDesc::EmptyBuffer { .. } => buffers.buffers[self.index()]
+                .as_ref()
+                .expect("Resource should be registered as a buffer")
+                .as_entire_binding(),
             ResourceDesc::TextureView { view, .. } => BindingResource::TextureView(view),
             ResourceDesc::Sampler { sampler, .. } => BindingResource::Sampler(sampler),
         };

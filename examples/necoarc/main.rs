@@ -2,13 +2,13 @@ use std::error::Error;
 
 use log::{LevelFilter, error};
 use nalgebra::Vector3;
-use syrillian::asset_management::{DIM3_SHADER_ID, Material, Mesh};
 use syrillian::components::RotateComponent;
 use syrillian::core::Bones;
 use syrillian::drawables::{Image, ImageScalingMode, MeshRenderer};
-use syrillian::utils::{CUBE, CUBE_INDICES};
+use syrillian::utils::{CUBE_IDX, CUBE_VERT};
 use syrillian::{App, World};
 use winit::window::Window;
+use syrillian::assets::{HShader, Material, Mesh};
 
 #[tokio::main]
 async fn main() {
@@ -32,7 +32,7 @@ fn init(world: &mut World, _window: &Window) -> Result<(), Box<dyn Error>> {
     const NECO_ARC_JPG: &[u8; 1293] = include_bytes!("../neco.jpg");
 
     let texture = world.assets.textures.load_image_from_memory(NECO_ARC_JPG)?;
-    let material = world.assets.materials.add_material(Material {
+    let material = world.assets.materials.add(Material {
         name: "Neco Arc".into(),
         diffuse: Vector3::zeros(),
         diffuse_texture: Some(texture),
@@ -40,12 +40,12 @@ fn init(world: &mut World, _window: &Window) -> Result<(), Box<dyn Error>> {
         shininess: 0.0,
         shininess_texture: None,
         opacity: 1.0,
-        shader: Some(DIM3_SHADER_ID),
+        shader: Some(HShader::DIM3),
     });
-    let mesh = world.assets.meshes.add_mesh(Mesh::new(
-        CUBE.to_vec(),
-        Some(CUBE_INDICES.to_vec()),
-        Some(vec![(material, 0..CUBE_INDICES.len() as u32)]),
+    let mesh = world.assets.meshes.add(Mesh::new(
+        CUBE_VERT.to_vec(),
+        Some(CUBE_IDX.to_vec()),
+        Some(vec![(material, 0..CUBE_IDX.len() as u32)]),
         Bones::default(),
     ));
 
