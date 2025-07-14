@@ -1,6 +1,6 @@
-use crate::asset_management::AssetManager;
 use crate::components::{CameraComponent, Component};
 use crate::core::{GameObject, GameObjectId, Transform};
+use crate::engine::assets::AssetStore;
 use crate::engine::rendering::Renderer;
 use crate::input::InputManager;
 use crate::physics::PhysicsSimulator;
@@ -9,6 +9,7 @@ use log::info;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 static mut G_WORLD: *mut World = std::ptr::null_mut();
@@ -17,9 +18,10 @@ pub struct World {
     pub objects: HashMap<GameObjectId, Box<GameObject>>,
     pub children: Vec<GameObjectId>,
     pub active_camera: Option<GameObjectId>,
-    pub assets: AssetManager,
     pub physics: PhysicsSimulator,
     pub input: InputManager,
+    pub assets: Arc<AssetStore>,
+
     start_time: Instant,
     delta_time: Duration,
     last_frame_time: Instant,
@@ -37,12 +39,12 @@ impl World {
             objects: HashMap::new(),
             children: vec![],
             active_camera: None,
-            assets: AssetManager::default(),
             last_frame_time: Instant::now(),
             physics: PhysicsSimulator::default(),
+            input: InputManager::default(),
+            assets: AssetStore::empty(),
             start_time: Instant::now(),
             delta_time: Duration::default(),
-            input: InputManager::default(),
             requested_shutdown: false,
             next_object_id: GameObjectId(0),
         });

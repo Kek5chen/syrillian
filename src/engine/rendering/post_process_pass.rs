@@ -31,19 +31,10 @@ impl PostProcessData {
         });
 
         let uniform = ShaderUniform::<PostProcessUniformIndex>::builder(layout)
-            .with_texture_view(&offscreen_view)
+            .with_texture(&offscreen_view)
             .with_sampler(&sampler)
             .build(device);
 
         Self { uniform }
-    }
-
-    pub(crate) fn recreate(
-        &mut self,
-        device: &Device,
-        layout: &BindGroupLayout,
-        surface: &TextureView,
-    ) {
-        *self = Self::new(device, layout, surface)
     }
 }

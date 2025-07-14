@@ -1,10 +1,10 @@
 use super::error::*;
-use crate::asset_management::{
-    DIM3_SHADER_ID, FALLBACK_SHADER_ID, LIGHT_UBGL_ID, POST_PROCESS_BGL_ID, POST_PROCESS_SHADER_ID,
-    RENDER_UBGL_ID, RuntimeShader, ShaderId,
-};
 use crate::components::{CameraComponent, CameraUniform, PointLightComponent, PointLightUniform};
 use crate::core::GameObjectId;
+use crate::engine::assets::{AssetStore, HShader};
+use crate::engine::rendering::FrameCtx;
+use crate::engine::rendering::cache::AssetCache;
+use crate::engine::rendering::context::DrawCtx;
 use crate::engine::rendering::offscreen_surface::OffscreenSurface;
 use crate::engine::rendering::post_process_pass::PostProcessData;
 use crate::engine::rendering::uniform::ShaderUniform;
@@ -15,34 +15,30 @@ use log::error;
 use nalgebra::{Matrix4, Perspective3, Vector2};
 use snafu::ResultExt;
 use std::fmt::Debug;
+use std::sync::{Arc, RwLock};
 use syrillian_macros::UniformIndex;
 use wgpu::{
-    Color, CommandEncoder, CommandEncoderDescriptor, LoadOp, Operations,
-    RenderPass, RenderPassColorAttachment, RenderPassDepthStencilAttachment, RenderPassDescriptor,
-    StoreOp, SurfaceError, SurfaceTexture, TextureView, TextureViewDescriptor,
+    Color, CommandEncoderDescriptor, LoadOp, Operations, RenderPass, RenderPassColorAttachment,
+    RenderPassDepthStencilAttachment, RenderPassDescriptor, StoreOp, SurfaceError,
+    TextureViewDescriptor,
 };
+use winit::dpi::PhysicalSize;
 use winit::window::Window;
 
 #[allow(dead_code)]
 pub struct Renderer {
     pub state: Box<State>,
     pub window: Window,
-    pub current_pipeline: Option<ShaderId>,
-    render_uniform_data: Option<RenderUniformData>,
+    render_uniform_data: RenderUniformData,
 
-    post_process_data: Option<PostProcessData>,
+    post_process_data: PostProcessData,
     offscreen_surface: OffscreenSurface,
+
+    pub cache: Arc<AssetCache>,
 
     pub debug: DebugRenderer,
 
     printed_errors: u32,
-}
-
-pub struct RenderContext {
-    pub output: SurfaceTexture,
-    pub color_view: TextureView,
-    pub depth_view: TextureView,
-    pub encoder: CommandEncoder,
 }
 
 #[repr(C)]
@@ -61,9 +57,17 @@ pub struct RenderUniformData {
     uniform: ShaderUniform<RenderUniformIndex>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct DebugRenderer {
     pub draw_edges: bool,
+}
+
+impl Default for DebugRenderer {
+    fn default() -> Self {
+        let flag = cfg!(debug_assertions);
+
+        DebugRenderer { draw_edges: flag }
+    }
 }
 
 #[repr(u8)]
@@ -81,69 +85,50 @@ pub enum PointLightUniformIndex {
 }
 
 impl Renderer {
-    pub(crate) async fn new(window: Window) -> Result<Self> {
+    pub(crate) async fn new(window: Window, store: Arc<AssetStore>) -> Result<Self> {
         let state = Box::new(State::new(&window).await.context(StateErr)?);
+        let offscreen_surface = OffscreenSurface::new(&state.device, &state.config);
+        let cache = Arc::new(AssetCache::new(store, &state));
 
-        let offscreen_view = OffscreenSurface::new(&state.device, &state.config);
-
-        Ok(Renderer {
-            state,
-            window,
-            current_pipeline: None,
-            render_uniform_data: None,
-            post_process_data: None,
-            offscreen_surface: offscreen_view,
-            debug: DebugRenderer::default(),
-            printed_errors: 0,
-        })
-    }
-
-    pub fn init(&mut self) {
-        // TODO: Make it possible to pick a shader
-        self.current_pipeline = Some(DIM3_SHADER_ID);
-
-        let render_data_bgl = World::instance()
-            .assets
-            .bind_group_layouts
-            .get_bind_group_layout(RENDER_UBGL_ID)
-            .unwrap();
+        // Let's heat it up :)
+        let render_bgl = cache.bgl_render();
+        let pp_bgl = cache.bgl_post_process();
 
         let camera_data = Box::<CameraUniform>::default();
         let system_data = Box::<SystemUniform>::default();
 
-        let render_uniform = ShaderUniform::<RenderUniformIndex>::builder(render_data_bgl)
+        let render_uniform = ShaderUniform::<RenderUniformIndex>::builder(&render_bgl)
             .with_buffer_data(camera_data.as_ref())
             .with_buffer_data(system_data.as_ref())
-            .build(&self.state.device);
+            .build(&state.device);
 
-        self.render_uniform_data = Some(RenderUniformData {
+        let render_uniform_data = RenderUniformData {
             camera_data,
             system_data,
             uniform: render_uniform,
-        });
+        };
 
-        let world = World::instance();
-        let post_bgl = world
-            .assets
-            .bind_group_layouts
-            .get_bind_group_layout(POST_PROCESS_BGL_ID)
-            .unwrap();
+        let post_process_data =
+            PostProcessData::new(&state.device, &pp_bgl, &offscreen_surface.view());
 
-        self.post_process_data = Some(PostProcessData::new(
-            &self.state.device,
-            post_bgl,
-            &self.offscreen_surface.view(),
-        ));
+        drop(render_bgl);
+        drop(pp_bgl);
 
-        #[cfg(debug_assertions)]
-        self.init_debug();
+        Ok(Renderer {
+            state,
+            window,
+            render_uniform_data,
+            post_process_data,
+            offscreen_surface,
+            cache,
+
+            debug: DebugRenderer::default(),
+
+            printed_errors: 0,
+        })
     }
 
-    #[inline]
-    #[cfg(debug_assertions)]
-    fn init_debug(&mut self) {
-        self.debug.draw_edges = true;
-    }
+    pub fn init(&mut self) {}
 
     pub fn render_world(&mut self, world: &mut World) -> bool {
         let mut ctx = match self.begin_render() {
@@ -177,28 +162,24 @@ impl Renderer {
     }
 
     #[cfg(debug_assertions)]
-    pub fn render_debug(&mut self, ctx: &mut RenderContext, world: &mut World) {
-        use crate::asset_management::DEBUG_EDGES_SHADER_ID;
+    pub fn render_debug(&mut self, ctx: &mut FrameCtx, world: &mut World) {
         if self.debug.draw_edges {
-            self.render(ctx, world, Some(DEBUG_EDGES_SHADER_ID));
+            self.render(ctx, world, Some(HShader::DEBUG_EDGES));
         }
     }
 
-    pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
+    pub fn resize(&mut self, new_size: PhysicalSize<u32>) {
         self.state.resize(new_size);
 
-        let world = World::instance();
-        let post_bgl = world
-            .assets
-            .bind_group_layouts
-            .get_bind_group_layout(POST_PROCESS_BGL_ID)
-            .unwrap();
+        let pp_bgl = self.cache.bgl_post_process();
 
-        self.offscreen_surface.recreate(&self.state.device, &self.state.config);
-        self.post_process_data = Some(PostProcessData::new(&self.state.device, post_bgl, self.offscreen_surface.view()));
+        self.offscreen_surface
+            .recreate(&self.state.device, &self.state.config);
+        self.post_process_data =
+            PostProcessData::new(&self.state.device, &pp_bgl, self.offscreen_surface.view());
     }
 
-    fn begin_render(&mut self) -> Result<RenderContext> {
+    fn begin_render(&mut self) -> Result<FrameCtx> {
         let mut output = self
             .state
             .surface
@@ -221,31 +202,16 @@ impl Renderer {
             .state
             .depth_texture
             .create_view(&TextureViewDescriptor::default());
-        let encoder = self
-            .state
-            .device
-            .create_command_encoder(&CommandEncoderDescriptor {
-                label: Some("Main Encoder"),
-            });
 
-        if self.current_pipeline.is_none() {
-            self.current_pipeline = Some(FALLBACK_SHADER_ID);
-        }
-
-        Ok(RenderContext {
+        Ok(FrameCtx {
             output,
             color_view,
             depth_view,
-            encoder,
+            cache: self.cache.clone(),
         })
     }
 
-    fn render(
-        &mut self,
-        ctx: &mut RenderContext,
-        world: &mut World,
-        shader_override: Option<ShaderId>,
-    ) {
+    fn render(&mut self, ctx: &mut FrameCtx, world: &mut World, shader_override: Option<HShader>) {
         if let Err(e) = self.render_inner(ctx, world, shader_override) {
             if self.printed_errors < 5 {
                 self.printed_errors += 1;
@@ -258,38 +224,50 @@ impl Renderer {
 
     fn render_inner(
         &mut self,
-        ctx: &mut RenderContext,
+        ctx: &mut FrameCtx,
         world: &mut World,
-        shader_override: Option<ShaderId>,
+        shader_override: Option<HShader>,
     ) -> Result<()> {
         self.update_render_data(world)?;
 
-        let shader_id = self.default_shader_id(shader_override)?;
-        let shader = world.assets.shaders.get_shader(Some(shader_id));
-        let (load_op_color, load_op_depth) = determine_draw_over_color(shader);
+        let (load_op_color, load_op_depth) =
+            determine_draw_over_color(&world.assets, shader_override);
 
         let light_uniform = self.setup_lights(world)?;
 
-        let mut rpass = self.prepare_render_pass(ctx, load_op_color, load_op_depth);
+        let mut encoder = self
+            .state
+            .device
+            .create_command_encoder(&CommandEncoderDescriptor {
+                label: Some("Main Encoder"),
+            });
 
-        let render_data = self
-            .render_uniform_data
-            .as_mut()
-            .ok_or(RenderError::DataNotSet)?;
+        let mut pass = self.prepare_render_pass(&mut encoder, ctx, load_op_color, load_op_depth);
 
-        rpass.set_bind_group(0, render_data.uniform.bind_group(), &[]);
-        rpass.set_bind_group(3, light_uniform.bind_group(), &[]);
+        let render_uniform = &self.render_uniform_data.uniform;
+
+        pass.set_bind_group(0, render_uniform.bind_group(), &[]);
+        pass.set_bind_group(3, light_uniform.bind_group(), &[]);
+
+        let draw_ctx = DrawCtx {
+            frame: ctx,
+            pass: RwLock::new(pass),
+            shader_override,
+        };
 
         let world_ptr = world as *mut World;
         unsafe {
             self.traverse_and_render(
                 &mut *world_ptr,
-                &mut rpass,
                 &world.children,
                 Matrix4::identity(),
-                shader_override,
+                &draw_ctx,
             );
         }
+
+        drop(draw_ctx);
+
+        self.state.queue.submit(Some(encoder.finish()));
 
         Ok(())
     }
@@ -297,19 +275,17 @@ impl Renderer {
     fn traverse_and_render(
         &self,
         world: &mut World,
-        rpass: &mut RenderPass,
         children: &[GameObjectId],
         combined_matrix: Matrix4<f32>,
-        shader_override: Option<ShaderId>,
+        ctx: &DrawCtx,
     ) {
         for child in children {
             if !child.children.is_empty() {
                 self.traverse_and_render(
                     world,
-                    rpass,
                     &child.children,
                     combined_matrix * child.transform.full_matrix().to_homogeneous(),
-                    shader_override,
+                    ctx,
                 );
             }
             let Some(drawable) = &mut child.clone().drawable else {
@@ -317,13 +293,26 @@ impl Renderer {
             };
 
             drawable.update(world, *child, self, &combined_matrix);
-            drawable.draw(world, rpass, self, shader_override);
+            drawable.draw(world, ctx);
         }
     }
 
-    fn render_final_pass(&mut self, world: &mut World, ctx: &mut RenderContext) {
-        let mut rpass = ctx.encoder.begin_render_pass(&RenderPassDescriptor {
-            label: Some("PostProcess Render Pass"),
+    fn end_render(&mut self, world: &mut World, mut ctx: FrameCtx) {
+        self.render_final_pass(world, &mut ctx);
+
+        ctx.output.present();
+        self.window.request_redraw();
+    }
+
+    fn render_final_pass(&mut self, _world: &mut World, ctx: &mut FrameCtx) {
+        let mut encoder = self
+            .state
+            .device
+            .create_command_encoder(&CommandEncoderDescriptor {
+                label: Some("Final Pass Copy Encoder"),
+            });
+        let mut pass = encoder.begin_render_pass(&RenderPassDescriptor {
+            label: Some("Post Process Render Pass"),
             color_attachments: &[Some(RenderPassColorAttachment {
                 view: &ctx.color_view,
                 depth_slice: None,
@@ -337,30 +326,14 @@ impl Renderer {
             ..RenderPassDescriptor::default()
         });
 
-        let post_shader = world
-            .assets
-            .shaders
-            .get_shader_opt(POST_PROCESS_SHADER_ID)
-            .expect("PostProcess shader should be initialized");
-        rpass.set_pipeline(&post_shader.pipeline);
-        rpass.set_bind_group(
-            0,
-            self.post_process_data
-                .as_ref()
-                .unwrap()
-                .uniform
-                .bind_group(),
-            &[],
-        );
-        rpass.draw(0..6, 0..1);
-    }
+        let post_shader = self.cache.shader_post_process();
+        pass.set_pipeline(&post_shader.pipeline);
+        pass.set_bind_group(0, self.post_process_data.uniform.bind_group(), &[]);
+        pass.draw(0..6, 0..1);
 
-    fn end_render(&mut self, world: &mut World, mut ctx: RenderContext) {
-        self.render_final_pass(world, &mut ctx);
+        drop(pass);
 
-        self.state.queue.submit(Some(ctx.encoder.finish()));
-        ctx.output.present();
-        self.window.request_redraw();
+        self.state.queue.submit(Some(encoder.finish()));
     }
 
     pub fn window(&self) -> &Window {
@@ -379,11 +352,6 @@ impl Renderer {
     }
 
     fn update_camera_data(&mut self, world: &World) -> Result<()> {
-        let render_data = self
-            .render_uniform_data
-            .as_mut()
-            .ok_or(RenderError::DataNotSet)?;
-
         let camera_rc = world
             .active_camera
             .as_ref()
@@ -396,6 +364,8 @@ impl Renderer {
 
         let projection_matrix: &Perspective3<f32> = &camera_comp.borrow_mut().projection;
         let camera_transform = &camera.transform;
+
+        let render_data = &mut self.render_uniform_data;
 
         render_data
             .camera_data
@@ -411,14 +381,10 @@ impl Renderer {
     }
 
     fn update_system_data(&mut self, world: &World) -> Result<()> {
-        let render_data = self
-            .render_uniform_data
-            .as_mut()
-            .ok_or(RenderError::DataNotSet)?;
-
         let window_size = self.window.inner_size();
         let window_size = Vector2::new(window_size.width, window_size.height);
 
+        let render_data = &mut self.render_uniform_data;
         render_data.system_data.screen_size = window_size;
         render_data.system_data.time = world.time().as_secs_f32();
         render_data.system_data.delta_time = world.get_delta_time().as_secs_f32();
@@ -434,14 +400,10 @@ impl Renderer {
 
     fn setup_lights(&self, world: &World) -> Result<ShaderUniform<PointLightUniformIndex>> {
         // TODO: cache this if light data doesn't change?
-        let point_lights = World::instance().get_all_components_of_type::<PointLightComponent>();
+        let point_lights = world.get_all_components_of_type::<PointLightComponent>();
         let point_light_count = point_lights.len() as u32;
 
-        let light_bgl = world
-            .assets
-            .bind_group_layouts
-            .get_bind_group_layout(LIGHT_UBGL_ID)
-            .ok_or(RenderError::NoLightUBGL)?;
+        let light_bgl = self.cache.bgl_light();
 
         const DUMMY_POINT_LIGHT: PointLightUniform = PointLightUniform::zero();
 
@@ -474,11 +436,12 @@ impl Renderer {
 
     fn prepare_render_pass<'a>(
         &self,
-        ctx: &'a mut RenderContext,
+        encoder: &'a mut wgpu::CommandEncoder,
+        ctx: &mut FrameCtx,
         load_op_color: LoadOp<Color>,
         load_op_depth: LoadOp<f32>,
     ) -> RenderPass<'a> {
-        ctx.encoder.begin_render_pass(&RenderPassDescriptor {
+        encoder.begin_render_pass(&RenderPassDescriptor {
             label: Some("Offscreen Render Pass"),
             color_attachments: &[Some(RenderPassColorAttachment {
                 view: self.offscreen_surface.view(),
@@ -500,18 +463,17 @@ impl Renderer {
             ..RenderPassDescriptor::default()
         })
     }
-
-    fn default_shader_id(&self, shader_override: Option<usize>) -> Result<usize> {
-        shader_override
-            .or_else(|| self.current_pipeline)
-            .ok_or(RenderError::NoRenderPipeline)
-    }
 }
 
-fn determine_draw_over_color(shader: &RuntimeShader) -> (LoadOp<Color>, LoadOp<f32>) {
-    if shader.draw_over {
-        (LoadOp::Load, LoadOp::Load)
-    } else {
-        (LoadOp::Clear(Color::BLACK), LoadOp::Clear(1.0))
+fn determine_draw_over_color(
+    store: &AssetStore,
+    shader: Option<HShader>,
+) -> (LoadOp<Color>, LoadOp<f32>) {
+    if let Some(shader) = shader {
+        if store.shaders.get(shader).draw_over {
+            return (LoadOp::Load, LoadOp::Load);
+        }
     }
+
+    (LoadOp::Clear(Color::BLACK), LoadOp::Clear(1.0))
 }

@@ -1,8 +1,8 @@
 use crate::World;
-use crate::asset_management::MeshId;
 use crate::components::{Component, RigidBodyComponent};
 use crate::core::GameObjectId;
-use log::{debug, warn};
+use crate::engine::assets::Mesh;
+use log::{trace, warn};
 use nalgebra::Vector3;
 use rapier3d::prelude::*;
 
@@ -102,14 +102,13 @@ impl Collider3D {
 }
 
 pub trait MeshShapeExtra<T> {
-    fn mesh(mesh: MeshId) -> Option<T>;
-    fn mesh_convex_hull(mesh: MeshId) -> Option<SharedShape>;
+    fn mesh(mesh: &Mesh) -> Option<T>;
+    fn mesh_convex_hull(mesh: &Mesh) -> Option<SharedShape>;
 }
 
 impl MeshShapeExtra<SharedShape> for SharedShape {
-    fn mesh(mesh: MeshId) -> Option<SharedShape> {
-        let mesh = World::instance().assets.meshes.get_raw_mesh(mesh)?;
-        debug!(
+    fn mesh(mesh: &Mesh) -> Option<SharedShape> {
+        trace!(
             "Loading collider mesh with {} vertices",
             mesh.data.vertices.len()
         );
@@ -124,8 +123,7 @@ impl MeshShapeExtra<SharedShape> for SharedShape {
         }
     }
 
-    fn mesh_convex_hull(mesh: MeshId) -> Option<SharedShape> {
-        let mesh = World::instance().assets.meshes.get_raw_mesh(mesh)?;
+    fn mesh_convex_hull(mesh: &Mesh) -> Option<SharedShape> {
         let vertices = mesh.data.make_point_cloud();
         SharedShape::convex_hull(&vertices)
     }

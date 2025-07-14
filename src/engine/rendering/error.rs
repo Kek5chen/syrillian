@@ -1,6 +1,6 @@
+use crate::engine::rendering::StateError;
 use snafu::Snafu;
 use wgpu::SurfaceError;
-use crate::engine::rendering::StateError;
 
 pub type Result<T, E = RenderError> = std::result::Result<T, E>;
 
@@ -12,6 +12,9 @@ pub enum RenderError {
 
     #[snafu(display("Render pipeline is not set"))]
     NoRenderPipeline,
+
+    #[snafu(display("Invalid Shader requested"))]
+    InvalidShader,
 
     #[snafu(display("No camera set for rendering"))]
     NoCameraSet,

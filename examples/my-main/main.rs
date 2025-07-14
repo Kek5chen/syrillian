@@ -8,17 +8,18 @@ use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::error::Error;
 use std::sync::Mutex;
-use syrillian::asset_management::{DIM3_SHADER_ID, Material, Mesh, SceneLoader};
+use syrillian::assets::scene_loader::SceneLoader;
+use syrillian::assets::{HShader, Material, Mesh};
 use syrillian::components::{
     Collider3D, MeshShapeExtra, PointLightComponent, RigidBodyComponent, RotateComponent,
 };
-use syrillian::core::Bones;
 use syrillian::drawables::MeshRenderer;
-use syrillian::utils::{CUBE, CUBE_INDICES};
 use syrillian::{App, World};
 use winit::event::MouseButton;
 use winit::keyboard::KeyCode;
 use winit::window::Window;
+use syrillian::core::Bones;
+use syrillian::utils::{CUBE_IDX, CUBE_VERT};
 
 mod camera_controller;
 mod player_movement;
@@ -58,7 +59,12 @@ fn funnyinit(world: &mut World, _window: &Window) -> Result<(), Box<dyn Error>> 
         };
 
         let collider = collider.get_collider_mut();
-        let shape = SharedShape::mesh(renderer.mesh()).unwrap();
+        let mesh = world
+            .assets
+            .meshes
+            .try_get(renderer.mesh())
+            .expect("Scene Loader should've loaded the mesh");
+        let shape = SharedShape::mesh(&mesh).unwrap();
         collider.unwrap().set_shape(shape)
     }
 
@@ -93,7 +99,7 @@ fn funnyinit(world: &mut World, _window: &Window) -> Result<(), Box<dyn Error>> 
 
     let neco_arc_tex = world.assets.textures.load_image_from_memory(NECO_ARC_JPG)?;
 
-    let neco_material = world.assets.materials.add_material(Material {
+    let neco_material = world.assets.materials.add(Material {
         name: "necoarc".to_string(),
         diffuse: Vector3::new(1.0, 1.0, 1.0),
         diffuse_texture: Some(neco_arc_tex),
@@ -101,19 +107,20 @@ fn funnyinit(world: &mut World, _window: &Window) -> Result<(), Box<dyn Error>> 
         shininess: 0.0,
         shininess_texture: None,
         opacity: 1.0,
-        shader: Some(DIM3_SHADER_ID),
+        shader: Some(HShader::DIM3),
     });
 
-    let cube_mesh = world.assets.meshes.add_mesh(Mesh::new(
-        CUBE.to_vec(),
-        Some(CUBE_INDICES.to_vec()),
-        Some(vec![(neco_material, 0..CUBE_INDICES.len() as u32)]),
-        Bones::none(),
+    let mesh = world.assets.meshes.add(Mesh::new(
+        CUBE_VERT.to_vec(),
+        Some(CUBE_IDX.to_vec()),
+        Some(vec![(neco_material, 0..CUBE_IDX.len() as u32)]),
+        Bones::default(),
     ));
 
     let mut cube = world.new_object("Cube");
-    let _ = cube.drawable.insert(MeshRenderer::new(cube_mesh));
-    cube.transform.set_position(Vector3::new(20.0, 100.9, -40.0));
+    let _ = cube.drawable.insert(MeshRenderer::new(mesh));
+    cube.transform
+        .set_position(Vector3::new(20.0, 100.9, -40.0));
 
     cube.add_component::<RotateComponent>();
     cube.add_component::<PointLightComponent>();

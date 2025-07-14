@@ -2,7 +2,7 @@ use crate::core::{SimpleVertex3D, Vertex3D};
 
 #[allow(dead_code)]
 #[rustfmt::skip]
-pub const TRIANGLE: [Vertex3D; 3] = [
+pub const TRIANGLE_VERT: [Vertex3D; 3] = [
     SimpleVertex3D {
         position: [0.0, 1.0, 0.0],
         normal:   [0.0, 0.0, -1.0],
@@ -22,7 +22,7 @@ pub const TRIANGLE: [Vertex3D; 3] = [
 
 #[allow(dead_code)]
 #[rustfmt::skip]
-pub const CUBE: [Vertex3D; 24] = [  // 4 vertices per face × 6 faces = 24 vertices
+pub const CUBE_VERT: [Vertex3D; 24] = [  // 4 vertices per face × 6 faces = 24 vertices
     // Front face (z = -0.5)
     SimpleVertex3D { position: [-0.5,  0.5, -0.5], normal: [0.0, 0.0, -1.0], uv: [0.0, 1.0] }.upgrade(),
     SimpleVertex3D { position: [ 0.5,  0.5, -0.5], normal: [0.0, 0.0, -1.0], uv: [1.0, 1.0] }.upgrade(),
@@ -62,7 +62,7 @@ pub const CUBE: [Vertex3D; 24] = [  // 4 vertices per face × 6 faces = 24 verti
 
 #[allow(dead_code)]
 #[rustfmt::skip]
-pub const CUBE_INDICES: [u32; 6 * 6] = [
+pub const CUBE_IDX: [u32; 6 * 6] = [
     // Front face
     0, 1, 2, 1, 3, 2,
     // Back face
@@ -79,7 +79,7 @@ pub const CUBE_INDICES: [u32; 6 * 6] = [
 
 #[allow(dead_code)]
 #[rustfmt::skip]
-pub const UNIT_SQUARE: [Vertex3D; 6] = [
+pub const UNIT_SQUARE_VERT: [Vertex3D; 6] = [
     SimpleVertex3D { position: [-1.0, -1.0, 0.0], normal: [0.0, 0.0, -1.0], uv: [0.0, 0.0] }.upgrade(),
     SimpleVertex3D { position: [1.0,  -1.0, 0.0], normal: [0.0, 0.0, -1.0], uv: [1.0, 0.0] }.upgrade(),
     SimpleVertex3D { position: [-1.0,  1.0, 0.0], normal: [0.0, 0.0, -1.0], uv: [0.0, 1.0] }.upgrade(),

@@ -43,7 +43,7 @@ impl Bones {
         &self.names
     }
 
-    pub fn bones(&self) -> &[Bone] {
+    pub fn as_slice(&self) -> &[Bone] {
         &self.raw
     }
 

@@ -1,9 +1,9 @@
 use nalgebra::{UnitQuaternion, Vector3};
 use std::error::Error;
 use syrillian::app::App;
-use syrillian::asset_management::SceneLoader;
 use syrillian::world::World;
 use winit::window::Window;
+use syrillian::assets::scene_loader::SceneLoader;
 
 #[tokio::main]
 async fn main() {
