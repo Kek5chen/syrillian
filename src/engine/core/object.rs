@@ -53,11 +53,11 @@ impl DerefMut for GameObjectId {
 pub struct GameObject {
     pub id: GameObjectId,
     pub name: String,
-    pub children: Vec<GameObjectId>,
-    pub parent: Option<GameObjectId>,
+    pub(crate) children: Vec<GameObjectId>,
+    pub(crate) parent: Option<GameObjectId>,
     pub transform: Transform,
-    pub drawable: Option<Box<dyn Drawable>>,
-    pub components: Vec<Rc<RefCell<Box<dyn Component>>>>,
+    pub(crate) drawable: Option<Box<dyn Drawable>>,
+    pub(crate) components: Vec<Rc<RefCell<Box<dyn Component>>>>,
 }
 
 impl GameObject {
@@ -176,6 +176,14 @@ impl GameObject {
             }
         }
         components
+    }
+
+    pub fn parent(&self) -> &Option<GameObjectId> {
+        &self.parent
+    }
+
+    pub fn children(&self) -> &[GameObjectId] {
+        &self.children
     }
 
     pub fn delete(&mut self) {
