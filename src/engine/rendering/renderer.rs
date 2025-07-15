@@ -315,7 +315,6 @@ impl Renderer {
             label: Some("Post Process Render Pass"),
             color_attachments: &[Some(RenderPassColorAttachment {
                 view: &ctx.color_view,
-                depth_slice: None,
                 resolve_target: None,
                 ops: Operations {
                     load: LoadOp::Clear(Color::BLACK),
@@ -445,7 +444,6 @@ impl Renderer {
             label: Some("Offscreen Render Pass"),
             color_attachments: &[Some(RenderPassColorAttachment {
                 view: self.offscreen_surface.view(),
-                depth_slice: None,
                 resolve_target: None,
                 ops: Operations {
                     load: load_op_color,
