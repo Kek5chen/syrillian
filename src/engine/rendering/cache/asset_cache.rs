@@ -1,9 +1,9 @@
 use crate::engine::assets::*;
 use crate::engine::rendering::State;
 use crate::engine::rendering::cache::generic_cache::Cache;
+use crate::rendering::{RuntimeMaterial, RuntimeMesh, RuntimeShader};
 use std::sync::Arc;
 use wgpu::{BindGroupLayout, TextureView};
-use crate::rendering::{RuntimeMaterial, RuntimeMesh, RuntimeShader};
 
 pub struct AssetCache {
     meshes: Cache<Mesh>,

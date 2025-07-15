@@ -46,7 +46,7 @@ impl StoreType for Material {
     fn ident_fmt(handle: H<Self>) -> HandleName<Self> {
         match handle.id() {
             HMaterial::FALLBACK_ID => HandleName::Static("Fallback Material"),
-            _ => HandleName::Id(handle)
+            _ => HandleName::Id(handle),
         }
     }
 }

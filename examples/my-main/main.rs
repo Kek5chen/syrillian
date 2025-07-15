@@ -13,13 +13,13 @@ use syrillian::assets::{HShader, Material, Mesh};
 use syrillian::components::{
     Collider3D, MeshShapeExtra, PointLightComponent, RigidBodyComponent, RotateComponent,
 };
+use syrillian::core::Bones;
 use syrillian::drawables::MeshRenderer;
+use syrillian::utils::{CUBE_IDX, CUBE_VERT};
 use syrillian::{App, World};
 use winit::event::MouseButton;
 use winit::keyboard::KeyCode;
 use winit::window::Window;
-use syrillian::core::Bones;
-use syrillian::utils::{CUBE_IDX, CUBE_VERT};
 
 mod camera_controller;
 mod player_movement;

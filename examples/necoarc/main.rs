@@ -2,13 +2,13 @@ use std::error::Error;
 
 use log::{LevelFilter, error};
 use nalgebra::Vector3;
+use syrillian::assets::{HShader, Material, Mesh};
 use syrillian::components::RotateComponent;
 use syrillian::core::Bones;
 use syrillian::drawables::{Image, ImageScalingMode, MeshRenderer};
 use syrillian::utils::{CUBE_IDX, CUBE_VERT};
 use syrillian::{App, World};
 use winit::window::Window;
-use syrillian::assets::{HShader, Material, Mesh};
 
 #[tokio::main]
 async fn main() {

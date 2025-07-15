@@ -70,7 +70,7 @@ impl CacheType for Material {
             address_mode_u: AddressMode::Repeat,
             address_mode_v: AddressMode::Repeat,
             address_mode_w: AddressMode::Repeat,
-            .. Default::default()
+            ..Default::default()
         });
 
         let uniform = ShaderUniform::<MaterialUniformIndex>::builder(&mat_bgl)

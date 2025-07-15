@@ -1,5 +1,5 @@
 use crate::engine::assets::generic_store::{Store, StoreDefaults, StoreType};
-use crate::engine::assets::{AssetKey, StoreTypeFallback, H};
+use crate::engine::assets::{AssetKey, H, StoreTypeFallback};
 use crate::engine::rendering::cache::AssetCache;
 use dashmap::DashMap;
 use log::warn;
@@ -64,7 +64,10 @@ impl<T: CacheType> Cache<T> {
     pub fn try_get(&self, h: H<T>, cache: &AssetCache) -> Option<Arc<T::Hot>> {
         self.data
             .entry(h.into())
-            .or_try_insert_with(|| self.try_refresh_item(h, &self.device, &self.queue, cache).map(Arc::new))
+            .or_try_insert_with(|| {
+                self.try_refresh_item(h, &self.device, &self.queue, cache)
+                    .map(Arc::new)
+            })
             .map(|t| t.clone())
             .ok()
     }
