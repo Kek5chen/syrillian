@@ -10,7 +10,7 @@ use syrillian::prefabs::first_person_player::FirstPersonPlayerPrefab;
 use syrillian::prefabs::prefab::Prefab;
 use syrillian::utils::frame_counter::FrameCounter;
 use syrillian::{AppState, World};
-use syrillian_macros::SyrillianApp;
+use syrillian::SyrillianApp;
 use winit::window::Window;
 
 const NECO_IMAGE: &[u8; 1293] = include_bytes!("assets/neco.jpg");

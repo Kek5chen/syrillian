@@ -98,5 +98,5 @@ lto = "fat"
 
 
 [features]
-default = []
-derive_env_logger = ["syrillian_macros/derive_env_logger"]
+default = ["derive"]
+derive = ["syrillian_macros/derive_env_logger"]
