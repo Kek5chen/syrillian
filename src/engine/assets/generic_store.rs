@@ -80,6 +80,7 @@ impl<T: StoreType> Store<T> {
         *id_lock += 1;
         id
     }
+
     pub fn add(&self, elem: T) -> H<T> {
         let id = self.next_id();
         self.data.insert(id.into(), elem);
@@ -89,8 +90,8 @@ impl<T: StoreType> Store<T> {
         id
     }
 
-    pub fn _try_get_mut(&self, h: H<T>) -> Option<RefMut<'_, T>> {
-        self.data.get_mut(&h.into()).or_else(|| {
+    pub fn try_get(&self, h: H<T>) -> Option<Ref<'_, T>> {
+        self.data.get(&h.into()).or_else(|| {
             warn!(
                 "[{} Store] Invalid Reference: h={} not found",
                 T::name(),
@@ -100,17 +101,40 @@ impl<T: StoreType> Store<T> {
         })
     }
 
-    pub fn try_get(&self, h: H<T>) -> Option<Ref<'_, T>> {
-        self._try_get_mut(h).map(RefMut::downgrade)
-    }
-
     pub fn try_get_mut(&mut self, h: H<T>) -> Option<RefMut<'_, T>> {
         self._try_get_mut(h)
+    }
+
+    fn _try_get_mut(&self, h: H<T>) -> Option<RefMut<'_, T>> {
+        self.data.get_mut(&h.into()).or_else(|| {
+            warn!(
+                "[{} Store] Invalid Reference: h={} not found",
+                T::name(),
+                T::ident_fmt(h)
+            );
+            None
+        })
     }
 }
 
 impl<T: StoreTypeFallback> Store<T> {
-    fn _get_mut(&self, h: H<T>) -> RefMut<'_, T> {
+    pub fn get(&self, h: H<T>) -> Ref<'_, T> {
+        if !self.data.contains_key(&h.into()) {
+            let fallback = self.try_get(T::fallback());
+            match fallback {
+                Some(elem) => elem,
+                None => unreachable!("Fallback items should always be populated"),
+            }
+        } else {
+            let data = self.data.get(&h.into());
+            match data {
+                Some(elem) => elem,
+                None => unreachable!("Item was checked previously"),
+            }
+        }
+    }
+
+    pub fn get_mut(&self, h: H<T>) -> RefMut<'_, T> {
         if !self.data.contains_key(&h.into()) {
             let fallback = self._try_get_mut(T::fallback());
             match fallback {
@@ -124,13 +148,6 @@ impl<T: StoreTypeFallback> Store<T> {
                 None => unreachable!("Item was checked previously"),
             }
         }
-    }
-    pub fn get(&self, h: H<T>) -> Ref<'_, T> {
-        self._get_mut(h).downgrade()
-    }
-
-    pub fn get_mut(&self, h: H<T>) -> RefMut<'_, T> {
-        self._get_mut(h)
     }
 }
 
