@@ -68,8 +68,7 @@ version = "1.40"
 features = ["rt", "rt-multi-thread", "macros", "sync"]
 
 [dependencies.russimp-ng]
-path = "../russimp-ng"
-# git = "https://github.com/Kek5chen/russimp-ng"
+git = "https://github.com/Kek5chen/russimp-ng"
 features = ["static-link"]
 
 
