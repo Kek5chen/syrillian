@@ -5,6 +5,7 @@ use winit::dpi::PhysicalPosition;
 use winit::event::{DeviceEvent, ElementState, MouseButton, MouseScrollDelta, WindowEvent};
 use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::{CursorGrabMode, Window};
+use crate::World;
 
 pub type KeyState = ElementState;
 
@@ -19,6 +20,8 @@ pub struct InputManager {
     lock_on_next_frame: bool,
     unlock_on_next_frame: bool,
     current_mouse_mode: CursorGrabMode,
+    auto_cursor_lock: bool,
+    quit_on_escape: bool,
 }
 
 impl Default for InputManager {
@@ -34,6 +37,8 @@ impl Default for InputManager {
             lock_on_next_frame: true,
             unlock_on_next_frame: true,
             current_mouse_mode: CursorGrabMode::None,
+            auto_cursor_lock: false,
+            quit_on_escape: false,
         }
     }
 }
@@ -80,13 +85,13 @@ impl InputManager {
     }
 
     pub(crate) fn process_event(&mut self, window: &mut Window, window_event: &WindowEvent) {
-        if self.lock_on_next_frame {
-            self._lock_cursor(window);
-            self.lock_on_next_frame = false;
-        } else if self.unlock_on_next_frame {
-            self._unlock_cursor(window);
-            self.unlock_on_next_frame = false;
+        if self.auto_cursor_lock {
+            self.auto_cursor_lock_loop();
         }
+        if self.quit_on_escape && self.is_key_down(KeyCode::Escape) && !self.is_cursor_locked() {
+            World::instance().shutdown();
+        }
+        self.do_cursor_lock(window);
 
         match window_event {
             WindowEvent::KeyboardInput { event, .. } => {
@@ -226,5 +231,35 @@ impl InputManager {
         self.key_just_updated.clear();
         self.button_just_updated.clear();
         self.mouse_delta = Vector2::zero();
+    }
+
+    pub fn set_auto_cursor_lock(&mut self, enabled: bool) {
+        self.auto_cursor_lock = enabled
+    }
+
+    pub fn set_quit_on_escape(&mut self, enabled: bool) {
+        self.quit_on_escape = enabled;
+    }
+
+    fn auto_cursor_lock_loop(&mut self) {
+        if self.is_key_down(KeyCode::Escape) {
+            self.lock_cursor(false);
+        }
+
+        if self.is_button_pressed(MouseButton::Left)
+            || self.is_button_pressed(MouseButton::Right)
+        {
+            self.lock_cursor(true);
+        }
+    }
+
+    fn do_cursor_lock(&mut self, window: &mut Window) {
+        if self.lock_on_next_frame {
+            self._lock_cursor(window);
+            self.lock_on_next_frame = false;
+        } else if self.unlock_on_next_frame {
+            self._unlock_cursor(window);
+            self.unlock_on_next_frame = false;
+        }
     }
 }

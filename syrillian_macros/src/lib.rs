@@ -61,3 +61,33 @@ pub fn uniform_index(input: TokenStream) -> TokenStream {
     }
     .into()
 }
+
+/// This will start a preconfigured runtime for your App. Make sure you have a Default implementation
+#[proc_macro_derive(SyrillianApp)]
+pub fn syrillian_app(input: TokenStream) -> TokenStream {
+    let input = syn::parse_macro_input!(input as syn::DeriveInput);
+
+    let logger = cfg!(feature = "derive_env_logger").then(|| {
+        quote!(
+            ::env_logger::builder()
+                .filter_level(::log::LevelFilter::Info)
+                .parse_default_env()
+                .init();
+        )
+    });
+    
+    let app_name = &input.ident;
+
+    quote! {
+        #[::syrillian::tokio::main]
+        async fn main() {
+            let app = ::syrillian::AppRuntime::configure(#app_name::default(), stringify!(#app_name), 800, 600);
+
+            #logger
+
+            if let Err(e) = ::syrillian::AppSettings::run(app).await {
+                ::syrillian::log::error!("{e}");
+            }
+        }
+    }.into()
+}

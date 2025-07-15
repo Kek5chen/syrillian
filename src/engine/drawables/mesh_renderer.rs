@@ -64,6 +64,10 @@ impl MeshRenderer {
         })
     }
 
+    pub fn set_mesh(&mut self, mesh: HMesh) {
+        self.mesh = mesh;
+    }
+
     pub fn mesh(&self) -> HMesh {
         self.mesh
     }
@@ -155,7 +159,7 @@ impl Drawable for MeshRenderer {
 
             let shader = ctx
                 .shader_override
-                .or(material.shader)
+                .or(Some(material.shader))
                 .map(|id| ctx.frame.cache.shader(id));
 
             let shader = shader.as_ref().unwrap_or(&default_shader);

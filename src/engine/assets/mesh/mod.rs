@@ -1,3 +1,6 @@
+mod builder;
+
+use crate::assets::mesh::builder::MeshBuilder;
 use crate::core::{Bones, Vertex3D};
 use crate::engine::assets::generic_store::{HandleName, Store, StoreDefaults, StoreType};
 use crate::engine::assets::{H, HMaterial, HMesh};
@@ -21,28 +24,8 @@ pub struct MeshVertexData<T: Debug + Clone> {
 }
 
 impl Mesh {
-    pub fn new(
-        vertices: Vec<Vertex3D>,
-        indices: Option<Vec<u32>>,
-        material_ranges: Option<Vec<(HMaterial, Range<u32>)>>,
-        bones: Bones,
-    ) -> Self {
-        let mut material_ranges = material_ranges.unwrap_or_default();
-
-        if material_ranges.is_empty() {
-            let vert_count = indices
-                .as_ref()
-                .map(|indices| indices.len())
-                .unwrap_or_else(|| vertices.len());
-
-            material_ranges.push((HMaterial::FALLBACK, 0u32..vert_count as u32));
-        }
-
-        Mesh {
-            data: MeshVertexData::<Vertex3D> { vertices, indices },
-            material_ranges,
-            bones,
-        }
+    pub fn builder(vertices: Vec<Vertex3D>) -> MeshBuilder {
+        MeshBuilder::new(vertices)
     }
 
     #[inline]
@@ -67,6 +50,10 @@ impl Mesh {
 }
 
 impl MeshVertexData<Vertex3D> {
+    pub fn new(vertices: Vec<Vertex3D>, indices: Option<Vec<u32>>) -> Self {
+        MeshVertexData { vertices, indices }
+    }
+
     pub fn make_triangle_indices(&self) -> Vec<[u32; 3]> {
         match &self.indices {
             None => (0u32..self.vertices.len() as u32)
@@ -101,8 +88,10 @@ impl H<Mesh> {
 
 impl StoreDefaults for Mesh {
     fn populate(store: &mut Store<Self>) {
-        let unit_square = Mesh::new(UNIT_SQUARE_VERT.to_vec(), None, None, Bones::none());
-        let unit_cube = Mesh::new(CUBE_VERT.into(), Some(CUBE_IDX.into()), None, Bones::none());
+        let unit_square = Mesh::builder(UNIT_SQUARE_VERT.to_vec()).build();
+        let unit_cube = Mesh::builder(CUBE_VERT.into())
+            .with_indices(CUBE_IDX.into())
+            .build();
 
         store_add_checked!(store, HMesh::UNIT_SQUARE_ID, unit_square);
         store_add_checked!(store, HMesh::UNIT_CUBE_ID, unit_cube);

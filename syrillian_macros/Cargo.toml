@@ -7,6 +7,12 @@ edition = "2024"
 syn = { version = "2.0.104", features = ["full", "printing", "derive"] }
 quote = "1.0.40"
 syrillian_utils = { path = "../syrillian_utils" }
+tokio = { version = "1.46" }
+env_logger = { version = "0.11", optional = true }
 
 [lib]
 proc-macro = true
+
+[features]
+default = [ "derive_env_logger" ]
+derive_env_logger = ["dep:env_logger"]

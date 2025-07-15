@@ -1,4 +1,4 @@
-use std::any::TypeId;
+use std::any::{Any, TypeId};
 use std::cell::RefCell;
 use std::mem;
 use std::ops::{Deref, DerefMut};
@@ -23,6 +23,14 @@ pub struct GameObjectId(pub usize);
 impl GameObjectId {
     pub fn exists(&self) -> bool {
         World::instance().objects.contains_key(self)
+    }
+
+    pub fn invalid() -> GameObjectId {
+        GameObjectId(usize::MAX)
+    }
+
+    pub fn is_invalid(&self) -> bool {
+        self.0 == usize::MAX
     }
 }
 
@@ -74,11 +82,28 @@ impl GameObject {
         child.parent = Some(self.id);
     }
 
-    pub fn set_drawable(&mut self, drawable: Option<Box<dyn Drawable>>) {
-        self.drawable = drawable;
+    pub fn set_drawable(&mut self, drawable: Box<dyn Drawable>) {
+        self.drawable = Some(drawable);
     }
 
-    pub fn add_component<'b, C: Component + 'static>(&mut self) -> &'b mut C {
+    pub fn remove_drawable(&mut self) {
+        self.drawable = None;
+    }
+
+    pub fn drawable<D: Drawable>(&self) -> Option<&D> {
+        let drawable = self.drawable.as_ref()?.as_ref();
+        Some((drawable as &dyn Any).downcast_ref::<D>()?)
+    }
+
+    pub fn drawable_mut<D: Drawable>(&mut self) -> Option<&mut D> {
+        let drawable = self.drawable.as_mut()?.as_mut();
+        Some((drawable as &mut dyn Any).downcast_mut::<D>()?)
+    }
+
+    pub fn add_component<'b, C>(&mut self) -> &'b mut C
+    where
+        C: Component + 'static,
+    {
         unsafe {
             let mut comp: Box<dyn Component> = Box::new(C::new(self.id));
             let comp_inner_ptr: utils::FatPtr<C> =
@@ -93,6 +118,25 @@ impl GameObject {
             self.components.push(comp_dyn);
 
             comp_inner_ref
+        }
+    }
+
+    pub fn add_child_components<C>(&mut self)
+    where
+        C: Component + 'static,
+    {
+        for child in &mut self.children {
+            child.add_component::<C>();
+        }
+    }
+
+    pub fn add_child_components_then<C>(&mut self, f: impl Fn(&mut C))
+    where
+        C: Component + 'static,
+    {
+        for child in &mut self.children {
+            let comp = child.add_component::<C>();
+            f(comp);
         }
     }
 

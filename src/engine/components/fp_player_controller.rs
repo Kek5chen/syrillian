@@ -4,12 +4,12 @@ use num_traits::Zero;
 use rapier3d::prelude::{LockedAxes, vector};
 use std::cell::RefCell;
 use std::rc::Rc;
-use syrillian::World;
-use syrillian::components::{Component, RigidBodyComponent};
-use syrillian::core::GameObjectId;
+use crate::World;
+use crate::components::{Component, RigidBodyComponent};
+use crate::core::GameObjectId;
 use winit::keyboard::KeyCode;
 
-pub struct PlayerMovement {
+pub struct FPPlayerController {
     parent: GameObjectId,
     move_speed: f32,
     jump_factor: f32,
@@ -19,12 +19,12 @@ pub struct PlayerMovement {
     sprint_multiplier: f32,
 }
 
-impl Component for PlayerMovement {
+impl Component for FPPlayerController {
     fn new(parent: GameObjectId) -> Self
     where
         Self: Sized,
     {
-        PlayerMovement {
+        FPPlayerController {
             parent,
             move_speed: 2.0,
             damping_factor: 1.5,

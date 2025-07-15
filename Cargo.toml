@@ -30,7 +30,9 @@ snafu = "0.8"
 smallvec = "1.15.1"
 syrillian_macros = { path = "syrillian_macros" }
 syrillian_utils = { path = "syrillian_utils" }
-dashmap = "6.1.0"
+dashmap = "6.1"
+bon = "3.6"
+const_format = "0.2.34"
 
 [build-dependencies]
 chrono = "0.4"
@@ -68,7 +70,8 @@ version = "1.40"
 features = ["rt", "rt-multi-thread", "macros", "sync"]
 
 [dependencies.russimp-ng]
-git = "https://github.com/Kek5chen/russimp-ng"
+path = "../russimp-ng"
+#git = "https://github.com/Kek5chen/russimp-ng"
 features = ["static-link"]
 
 
@@ -87,3 +90,14 @@ opt-level = 3
 codegen-units = 1
 lto = "fat"
 
+
+
+#################################################
+#                   Features                    #
+#################################################
+
+
+
+[features]
+default = []
+derive_env_logger = ["syrillian_macros/derive_env_logger"]

@@ -1,4 +1,4 @@
-use crate::engine::assets::{H, HTexture, Material, Shader};
+use crate::engine::assets::{HTexture, Material};
 use crate::engine::rendering::cache::{AssetCache, CacheType};
 use crate::engine::rendering::uniform::ShaderUniform;
 use crate::ensure_aligned;
@@ -6,6 +6,7 @@ use nalgebra::Vector3;
 use syrillian_macros::UniformIndex;
 use wgpu::wgt::SamplerDescriptor;
 use wgpu::{AddressMode, Device, Queue};
+use crate::assets::HShader;
 
 #[repr(u8)]
 #[derive(Debug, Copy, Clone, UniformIndex)]
@@ -35,7 +36,7 @@ ensure_aligned!(MaterialUniform { diffuse }, align <= 16 * 2 => size);
 pub struct RuntimeMaterial {
     pub(crate) data: MaterialUniform,
     pub(crate) uniform: ShaderUniform<MaterialUniformIndex>,
-    pub(crate) shader: Option<H<Shader>>,
+    pub(crate) shader: HShader,
 }
 
 #[derive(Debug)]
@@ -50,7 +51,7 @@ impl CacheType for Material {
 
     fn upload(&self, device: &Device, _queue: &Queue, cache: &AssetCache) -> Self::Hot {
         let data = MaterialUniform {
-            diffuse: self.diffuse,
+            diffuse: self.color,
             _padding: 0xFFFFFFFF,
             use_diffuse_texture: self.diffuse_texture.is_some() as u32,
             use_normal_texture: self.normal_texture.is_some() as u32,

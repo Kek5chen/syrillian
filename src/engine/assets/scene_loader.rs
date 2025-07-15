@@ -225,7 +225,9 @@ impl SceneLoader {
         .collect();
 
         if !vertices.is_empty() {
-            let mesh = Mesh::new(vertices, None, Some(material_ranges), bones);
+            let mesh = Mesh::builder(vertices)
+                .with_many_textures(material_ranges)
+                .with_bones(bones);
             let id = world.assets.meshes.add(mesh);
 
             node_obj.drawable = Some(MeshRenderer::new(id));
@@ -299,7 +301,7 @@ impl SceneLoader {
     fn load_materials(scene: &Scene, world: &mut World) -> HashMap<u32, HMaterial> {
         let mut mapping = HashMap::new();
         for (i, material) in scene.materials.iter().enumerate() {
-            let mat_id = Self::load_material(world, material, HShader::DIM3);
+            let mat_id = Self::load_material(world, material);
             mapping.insert(i as u32, mat_id);
         }
         mapping
@@ -391,7 +393,6 @@ impl SceneLoader {
     fn load_material(
         world: &mut World,
         material: &russimp_ng::material::Material,
-        shader: HShader,
     ) -> HMaterial {
         let name =
             Self::extract_string_property(&material.properties, "name", || "Material".to_string());
@@ -408,13 +409,13 @@ impl SceneLoader {
         let shininess = Self::extract_float_property(&material.properties, "shininess", 0.0);
         let new_material = Material {
             name,
-            diffuse,
+            color: diffuse,
             shininess,
             diffuse_texture: diffuse_tex_id,
             normal_texture: normal_tex_id,
             shininess_texture: None,
             opacity: 1.0,
-            shader: Some(shader),
+            shader: HShader::DIM3,
         };
         world.assets.materials.add(new_material)
     }

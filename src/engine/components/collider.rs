@@ -1,15 +1,38 @@
 use crate::World;
+use crate::components::ColliderError::{
+    DesyncedCollider, InvalidMesh, InvalidMeshRef, NoMeshRenderer,
+};
 use crate::components::{Component, RigidBodyComponent};
 use crate::core::GameObjectId;
+use crate::drawables::MeshRenderer;
 use crate::engine::assets::Mesh;
 use log::{trace, warn};
 use nalgebra::Vector3;
 use rapier3d::prelude::*;
+use snafu::Snafu;
 
 pub struct Collider3D {
     pub phys_handle: ColliderHandle,
     linked_to_body: Option<RigidBodyHandle>,
     parent: GameObjectId,
+}
+
+#[derive(Debug, Snafu)]
+#[snafu(context(suffix(Err)))]
+pub enum ColliderError {
+    #[snafu(display(
+        "Cannot use Mesh as Collider since no MeshRenderer is attached to the Object"
+    ))]
+    NoMeshRenderer,
+
+    #[snafu(display("A mesh renderer was storing an invalid mesh reference"))]
+    InvalidMeshRef,
+
+    #[snafu(display("No collider was attached to the object"))]
+    DesyncedCollider,
+
+    #[snafu(display("The collider mesh was invalid"))]
+    InvalidMesh,
 }
 
 impl Component for Collider3D {
@@ -98,6 +121,37 @@ impl Collider3D {
         );
 
         self.linked_to_body = h_body;
+    }
+
+    pub fn use_mesh(&mut self) {
+        if let Err(e) = self.try_use_mesh() {
+            warn!("{e}");
+        }
+    }
+    
+    /// Same as Collider3D::use_mesh but without a warning. This is nice for guarantee-less iteration
+    pub fn please_use_mesh(&mut self) {
+        _ = self.try_use_mesh();
+    }
+
+    pub fn try_use_mesh(&mut self) -> Result<(), ColliderError> {
+        let mesh_renderer = self
+            .parent
+            .drawable::<MeshRenderer>()
+            .ok_or(NoMeshRenderer)?;
+
+        let handle = mesh_renderer.mesh();
+        let mesh = World::instance()
+            .assets
+            .meshes
+            .try_get(handle)
+            .ok_or(InvalidMeshRef)?;
+        let collider = self.get_collider_mut().ok_or(DesyncedCollider)?;
+        let collider_shape = SharedShape::mesh(&mesh).ok_or(InvalidMesh)?;
+
+        collider.set_shape(collider_shape);
+
+        Ok(())
     }
 }
 

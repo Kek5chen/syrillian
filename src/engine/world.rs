@@ -1,4 +1,4 @@
-use crate::components::{CameraComponent, Component};
+use crate::components::Component;
 use crate::core::{GameObject, GameObjectId, Transform};
 use crate::engine::assets::AssetStore;
 use crate::engine::rendering::Renderer;
@@ -11,6 +11,8 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+use crate::engine::prefabs::prefab::Prefab;
+use crate::prefabs::CameraPrefab;
 
 static mut G_WORLD: *mut World = std::ptr::null_mut();
 
@@ -90,25 +92,29 @@ impl World {
         });
 
         self.objects.insert(id, obj);
+        // TODO: Consider adding the object to the world right away
 
         id
     }
 
     pub fn new_camera(&mut self) -> GameObjectId {
-        let mut obj = self.new_object("Camera");
-        obj.transform.set_compound_pos_first(true);
-
-        obj.add_component::<CameraComponent>();
+        let camera = CameraPrefab.build(self);
 
         if self.active_camera.is_none() {
-            self.active_camera = Some(obj);
+            self.add_child(camera);
+            self.active_camera = Some(camera);
         }
-        obj
+
+        camera
     }
 
     pub fn add_child(&mut self, mut obj: GameObjectId) {
         self.children.push(obj);
         obj.parent = None;
+    }
+
+    pub fn spawn<P: Prefab>(&mut self, prefab: &P) -> GameObjectId {
+        prefab.spawn(self)
     }
 
     unsafe fn execute_component_func(&mut self, func: unsafe fn(&mut dyn Component)) {
