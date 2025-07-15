@@ -17,7 +17,7 @@ use crate::core::Transform;
 
 #[derive(Debug, Copy, Clone, Eq, Ord, PartialOrd, PartialEq, Hash)]
 #[repr(transparent)]
-pub struct GameObjectId(pub usize);
+pub struct GameObjectId(pub(crate) usize);
 
 #[allow(dead_code)]
 impl GameObjectId {
