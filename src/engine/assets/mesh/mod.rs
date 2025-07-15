@@ -35,7 +35,7 @@ impl Mesh {
 
     #[inline]
     pub fn indices_count(&self) -> usize {
-        self.indices().map(<[u32]>::len).unwrap_or(0)
+        self.indices().map_or(0, <[u32]>::len)
     }
 
     #[inline]

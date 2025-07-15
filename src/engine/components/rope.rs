@@ -57,11 +57,8 @@ impl Component for RopeComponent {
 
 impl RopeComponent {
     pub fn connect_to(&mut self, body: GameObjectId) {
-        match self.try_connect_to(body) {
-            Err(e) => {
-                warn!("{e}");
-            }
-            _ => (),
+        if let Err(e) = self.try_connect_to(body) {
+            warn!("{e}");
         }
     }
 

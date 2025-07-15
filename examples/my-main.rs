@@ -80,9 +80,11 @@ impl AppState for MyMain {
 
 impl MyMain {
     fn format_title(&self) -> String {
-        let debug_or_release = cfg!(debug_assertions)
-            .then_some("[DEBUG]")
-            .unwrap_or("[RELEASE]");
+        let debug_or_release = if cfg!(debug_assertions) {
+            "[DEBUG]"
+        } else {
+            "[RELEASE]"
+        };
 
         format!(
             "{} {} - FPS: [ {} ]",

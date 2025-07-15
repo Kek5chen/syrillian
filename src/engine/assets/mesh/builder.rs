@@ -29,8 +29,7 @@ impl MeshBuilder {
             let vert_count = self
                 .indices
                 .as_ref()
-                .map(|indices| indices.len())
-                .unwrap_or_else(|| self.vertices.len());
+                .map_or_else(|| self.vertices.len(), |indices| indices.len());
 
             let mat = self.single_material.unwrap_or(HMaterial::FALLBACK);
             material_ranges.push((mat, 0u32..vert_count as u32));

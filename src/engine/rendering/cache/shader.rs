@@ -115,9 +115,12 @@ impl<'a> RenderPipelineBuilder<'a> {
             },
         };
 
-        let buffers = (!self.is_post_process)
-            .then_some(DEFAULT_BUFFERS.as_ref())
-            .unwrap_or(&[]);
+        let buffers = if self.is_post_process {
+            &[]
+        } else {
+            DEFAULT_BUFFERS.as_ref()
+        };
+
         let depth_stencil = (!self.is_post_process).then_some(DEFAULT_DEPTH_STENCIL);
         let cull_mode = (!self.is_post_process).then_some(Face::Back);
 

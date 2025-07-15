@@ -54,13 +54,14 @@ impl<T: CacheType + StoreTypeFallback> Cache<T> {
 impl<T: CacheType> Cache<T> {
     pub fn new(store: Arc<Store<T>>, device: Arc<Device>, queue: Arc<Queue>) -> Self {
         Cache {
-            data: Default::default(),
-            cache_misses: Default::default(),
+            data: DashMap::new(),
+            cache_misses: RwLock::new(AtomicUsize::new(0)),
             store,
             device,
             queue,
         }
     }
+    
     pub fn try_get(&self, h: H<T>, cache: &AssetCache) -> Option<Arc<T::Hot>> {
         self.data
             .entry(h.into())
@@ -68,8 +69,8 @@ impl<T: CacheType> Cache<T> {
                 self.try_refresh_item(h, &self.device, &self.queue, cache)
                     .map(Arc::new)
             })
-            .map(|t| t.clone())
             .ok()
+            .map(|h| h.clone())
     }
 
     fn try_refresh_item(
