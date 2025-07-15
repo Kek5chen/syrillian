@@ -2,8 +2,8 @@ use std::error::Error;
 
 use nalgebra::Vector3;
 use syrillian::World;
-use winit::window::Window;
 use syrillian::assets::scene_loader::SceneLoader;
+use winit::window::Window;
 
 #[tokio::main]
 async fn main() {
