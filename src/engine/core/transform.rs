@@ -30,9 +30,14 @@ impl Transform {
         }
     }
 
-    pub fn set_position(&mut self, position: Vector3<f32>) {
+    #[inline(always)]
+    pub fn set_position(&mut self, x: f32, y: f32, z: f32) {
+        self.set_position_vec(Vector3::new(x, y, z))
+    }
+
+    pub fn set_position_vec(&mut self, pos: Vector3<f32>) {
         let mat = self.get_global_transform_matrix_ext(false);
-        self.set_local_position(mat.inverse_transform_vector(&position));
+        self.set_local_position_vec(mat.inverse_transform_vector(&pos));
     }
 
     pub fn position(&self) -> Vector3<f32> {
@@ -103,7 +108,13 @@ impl Transform {
         self.get_global_scale_matrix_ext(true)
     }
 
-    pub fn set_local_position(&mut self, position: Vector3<f32>) {
+    #[inline]
+    pub fn set_local_position(&mut self, x: f32, y: f32, z: f32) {
+        let position = Vector3::new(x, y, z);
+        self.set_local_position_vec(position);
+    }
+
+    pub fn set_local_position_vec(&mut self, position: Vector3<f32>) {
         self.pos = position;
         self.recalculate_pos_matrix();
     }

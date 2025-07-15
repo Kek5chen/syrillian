@@ -1,4 +1,4 @@
-use nalgebra::{UnitQuaternion, Vector3};
+use nalgebra::UnitQuaternion;
 use std::error::Error;
 use syrillian::AppState;
 use syrillian::assets::scene_loader::SceneLoader;
@@ -36,7 +36,7 @@ impl Prefab for NineCubes {
             );
         };
 
-        scene.transform.set_position(Vector3::new(0.0, 0.0, -10.0));
+        scene.transform.set_position(0.0, 0.0, -10.0);
         scene
             .transform
             .set_rotation(UnitQuaternion::from_euler_angles(0.0, 90.0, 0.0));

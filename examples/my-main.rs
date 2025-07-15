@@ -1,5 +1,3 @@
-use nalgebra::Vector3;
-use rapier3d::prelude::*;
 use std::error::Error;
 use syrillian::assets::Material;
 use syrillian::assets::scene_loader::SceneLoader;
@@ -27,7 +25,7 @@ impl AppState for MyMain {
 
         world.spawn(&City);
         let mut player = world.spawn(&FirstPersonPlayerPrefab);
-        player.transform.set_position(Vector3::new(0.0, 20.0, 0.0));
+        player.transform.set_position(0.0, 20.0, 0.0);
 
         let texture = world.assets.textures.load_image_from_memory(NECO_IMAGE)?;
         let neco_material = world.assets.materials.add(
@@ -42,8 +40,8 @@ impl AppState for MyMain {
         let mut cube = world.spawn(&cube_prefab);
         let mut cube2 = world.spawn(&cube_prefab);
 
-        cube.transform.set_position(Vector3::new(20.0, 20.9, -20.0));
-        cube2.transform.set_position(Vector3::new(5.0, 20.9, -20.0));
+        cube.transform.set_position(20.0, 20.9, -20.0);
+        cube2.transform.set_position(5.0, 20.9, -20.0);
 
         cube.add_component::<PointLightComponent>();
         cube.add_component::<Collider3D>()

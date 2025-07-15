@@ -1,6 +1,5 @@
 use std::error::Error;
 
-use nalgebra::Vector3;
 use winit::window::Window;
 
 use syrillian::assets::scene_loader::SceneLoader;
@@ -21,7 +20,7 @@ impl AppState for ParentingAndObjectTypes {
         let mut obj1 = world.new_object("Mow");
         let mut camera = world.new_camera();
 
-        camera.transform.set_position(Vector3::new(0.0, 1.0, 50.0));
+        camera.transform.set_position(0.0, 1.0, 50.0);
 
         obj2.transform.set_uniform_scale(0.03);
         obj2.add_component::<RotateComponent>();

@@ -1,6 +1,5 @@
 use std::error::Error;
 
-use nalgebra::Vector3;
 use syrillian::{AppState, World};
 use syrillian::assets::scene_loader::SceneLoader;
 use winit::window::Window;
@@ -20,7 +19,7 @@ impl AppState for BonesExample {
         boney_obj.transform.set_uniform_scale(0.01);
         boney_obj
             .transform
-            .set_position(Vector3::new(0.0, -5.0, -20.0));
+            .set_position(0.0, -5.0, -20.0);
 
         world.add_child(boney_obj);
 

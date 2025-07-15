@@ -1,4 +1,3 @@
-use nalgebra::Vector3;
 use rapier3d::geometry::SharedShape;
 use crate::components::{Collider3D, FPCameraController, FPPlayerController, RigidBodyComponent};
 use crate::core::GameObjectId;
@@ -16,13 +15,13 @@ impl Prefab for FirstPersonPlayerPrefab {
         // Prepare camera
         let mut camera = world.new_camera();
         camera.add_component::<FPCameraController>();
-        camera.transform.set_position(Vector3::new(0.0, 1., 0.0));
+        camera.transform.set_position(0.0, 1., 0.0);
 
         // Prepare character controller
         let mut char_controller = world.new_object(self.prefab_name());
         char_controller
             .transform
-            .set_position(Vector3::new(0.0, 0.0, 0.0));
+            .set_position(0.0, 0.0, 0.0);
 
         char_controller.add_component::<Collider3D>()
             .get_collider_mut()

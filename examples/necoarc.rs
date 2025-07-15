@@ -1,6 +1,5 @@
 use std::error::Error;
 
-use nalgebra::Vector3;
 use syrillian::assets::Material;
 use syrillian::components::RotateComponent;
 use syrillian::drawables::{Image, ImageScalingMode};
@@ -29,7 +28,7 @@ impl AppState for NecoArc {
 
         let mut neco = world.spawn(&CubePrefab::new(material));
         neco.add_component::<RotateComponent>();
-        neco.transform.set_position(Vector3::new(0.0, 0.0, -5.0));
+        neco.transform.set_position(0.0, 0.0, -5.0);
 
         let mut image_obj = world.new_object("Image");
         image_obj.set_drawable(Image::new_with_size(
