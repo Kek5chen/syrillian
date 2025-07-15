@@ -6,8 +6,8 @@ use crate::core::GameObjectId;
 
 pub struct GravityComp {
     pub acceleration_per_sec: f32,
-    velocity: f32,
-    max_acceleration: f32,
+    pub velocity: f32,
+    pub max_acceleration: f32,
     parent: GameObjectId,
 }
 

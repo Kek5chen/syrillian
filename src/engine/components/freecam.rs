@@ -6,11 +6,11 @@ use num_traits::Zero;
 use winit::keyboard::KeyCode;
 
 pub struct FreecamController {
-    move_speed: f32,
-    look_sensitivity: f32,
+    pub move_speed: f32,
+    pub look_sensitivity: f32,
     parent: GameObjectId,
-    yaw: f32,
-    pitch: f32,
+    pub yaw: f32,
+    pub pitch: f32,
 }
 
 impl Component for FreecamController {

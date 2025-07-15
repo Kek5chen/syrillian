@@ -5,19 +5,65 @@ use nalgebra::{Matrix4, Perspective3, Vector3};
 
 pub struct CameraComponent {
     pub projection: Perspective3<f32>,
+    fov: f32,
+    near: f32,
+    far: f32,
+    width: f32,
+    height: f32,
     parent: GameObjectId,
 }
 
 impl CameraComponent {
-    pub fn resize(&mut self, width: f32, height: f32) {
-        self.projection = Perspective3::new(width / height, 60f32.to_radians(), 0.01, 1000.0);
+    /// Returns the fov in degrees
+    pub fn fov(&self) -> f32 {
+        self.fov
     }
+
+    /// Sets the fov in degrees
+    pub fn set_fov(&mut self, fov: f32) {
+        self.fov = fov;
+        self.regenerate();
+    }
+
+    pub fn near(&self) -> f32 {
+        self.near
+    }
+
+    pub fn set_near(&mut self, near: f32) {
+        self.near = near;
+        self.regenerate();
+    }
+
+    pub fn far(&self) -> f32 {
+        self.far
+    }
+
+    pub fn set_far(&mut self, far: f32) {
+        self.far = far;
+        self.regenerate();
+    }
+
+    pub fn regenerate(&mut self) {
+        self.projection = Perspective3::new(self.width / self.height, self.fov.to_radians(), self.near, self.far);
+    }
+
+    pub fn resize(&mut self, width: f32, height: f32) {
+        self.width = width;
+        self.height = height;
+        self.regenerate();
+    }
+
 }
 
 impl Component for CameraComponent {
     fn new(parent: GameObjectId) -> Self {
         CameraComponent {
             projection: Perspective3::new(800.0 / 600.0, 60f32.to_radians(), 0.01, 1000.0),
+            fov: 60.0,
+            near: 0.01,
+            far: 1000.0,
+            width: 800.0,
+            height: 600.0,
             parent,
         }
     }
