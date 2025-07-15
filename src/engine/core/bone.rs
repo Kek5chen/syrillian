@@ -24,6 +24,7 @@ impl From<&russimp_ng::bone::Bone> for Bone {
     }
 }
 
+// TODO: Bones don't work yet. Yes I shipped something brokey.
 #[derive(Debug, Default, Clone)]
 pub struct Bones {
     pub names: Vec<String>,

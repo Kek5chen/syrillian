@@ -6,6 +6,7 @@ use syrillian::assets::scene_loader::SceneLoader;
 use winit::window::Window;
 use syrillian_macros::SyrillianApp;
 
+// TODO: Bones don't work yet. Yes I shipped something brokey.
 #[derive(Debug, Default, SyrillianApp)]
 struct BonesExample;
 
