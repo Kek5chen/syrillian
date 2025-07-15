@@ -2,69 +2,46 @@ use futures::executor::block_on;
 use log::{error, info};
 use std::error::Error;
 use winit::application::ApplicationHandler;
-use winit::dpi::{PhysicalSize, Size};
 use winit::error::EventLoopError;
 use winit::event::{DeviceEvent, DeviceId, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{WindowAttributes, WindowId};
-
+use crate::AppState;
 use crate::components::CameraComponent;
-use crate::logichooks::{HookFunc, LogicHooks};
 use crate::rendering::Renderer;
 use crate::world::World;
 
-pub struct PrematureApp {
-    window_attributes: WindowAttributes,
-    init_cb: Option<HookFunc>,
-    update_cb: Option<HookFunc>,
-    deinit_cb: Option<HookFunc>,
-}
-
-pub struct App {
+pub struct App<S: AppState> {
     renderer: Option<Renderer>,
     world: Box<World>,
     window_attributes: WindowAttributes,
-    pub hook_funcs: LogicHooks,
+    state: S,
 }
 
-#[allow(unused)]
-impl Default for PrematureApp {
-    fn default() -> PrematureApp {
-        PrematureApp {
-            window_attributes: WindowAttributes::default()
-                .with_inner_size(Size::Physical(PhysicalSize {
-                    width: 800,
-                    height: 600,
-                }))
-                .with_title("Default Window"),
-            init_cb: None,
-            update_cb: None,
-            deinit_cb: None,
-        }
-    }
+pub struct AppSettings<S: AppState> {
+    pub window: WindowAttributes,
+    pub state: S,
 }
 
-impl App {
-    #[allow(unused)]
-    pub fn create(title: &str, width: u32, height: u32) -> PrematureApp {
-        PrematureApp {
-            window_attributes: WindowAttributes::default()
-                .with_inner_size(Size::Physical(PhysicalSize { width, height }))
-                //.with_resizable(false)
-                .with_title(title),
-            init_cb: None,
-            update_cb: None,
-            deinit_cb: None,
-        }
-    }
+pub trait AppRuntime: AppState {
+    fn configure(self, title: &str, width: u32, height: u32) -> AppSettings<Self>;
 
+    fn default_config(self) -> AppSettings<Self>;
+}
+
+impl<S: AppState> App<S> {
     pub fn renderer(&self) -> &Renderer {
         self.renderer.as_ref().unwrap()
     }
 }
 
-impl PrematureApp {
-    async fn init_state(&mut self) -> Result<(EventLoop<()>, App), Box<dyn Error>> {
+impl<S: AppState> AppSettings<S> {
+    pub async fn run(self) -> Result<(), Box<dyn Error>> {
+        let (event_loop, app) = self.init_state().await?;
+        app.run(event_loop).await
+    }
+    
+    async fn init_state(self) -> Result<(EventLoop<()>, App<S>), Box<dyn Error>> {
         let event_loop = match EventLoop::new() {
             Err(EventLoopError::NotSupported(_)) => {
                 return Err("No graphics backend found that could be used.".into());
@@ -78,47 +55,22 @@ impl PrematureApp {
         let app = App {
             renderer: None,
             world,
-            window_attributes: self.window_attributes.clone(),
-            hook_funcs: LogicHooks {
-                init: self.init_cb,
-                update: self.update_cb,
-                deinit: self.deinit_cb,
-            },
+            window_attributes: self.window,
+            state: self.state,
         };
 
         Ok((event_loop, app))
     }
-
-    pub fn with_init(mut self, init: Option<HookFunc>) -> Self {
-        self.init_cb = init;
-        self
-    }
-
-    pub fn with_update(mut self, update: Option<HookFunc>) -> Self {
-        self.update_cb = update;
-        self
-    }
-
-    pub fn with_deinit(mut self, deinit: Option<HookFunc>) -> Self {
-        self.deinit_cb = deinit;
-        self
-    }
-
-    pub async fn run(mut self) -> Result<(), Box<dyn Error>> {
-        let (event_loop, app) = self.init_state().await?;
-        app.run(event_loop).await
-    }
 }
 
-impl App {
+impl<S: AppState> App<S> {
     pub async fn run(mut self, event_loop: EventLoop<()>) -> Result<(), Box<dyn Error>> {
-        event_loop.run_app(&mut self).unwrap();
-
+        event_loop.run_app(&mut self)?;
         Ok(())
     }
 }
 
-impl ApplicationHandler for App {
+impl<S: AppState> ApplicationHandler for App<S> {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         info!("(Re)initializing render state!");
         let window = event_loop
@@ -138,10 +90,8 @@ impl ApplicationHandler for App {
 
         renderer.init();
 
-        if let Some(init) = self.hook_funcs.init {
-            if let Err(e) = init(&mut self.world, renderer.window()) {
-                panic!("World init function hook returned: {e}");
-            }
+        if let Err(e) = self.state.init(&mut self.world, renderer.window()) {
+            panic!("World init function hook returned: {e}");
         }
 
         self.world.initialize_runtime(&renderer);
@@ -177,10 +127,8 @@ impl ApplicationHandler for App {
 
         match event {
             WindowEvent::RedrawRequested => {
-                if let Some(update_func) = self.hook_funcs.update {
-                    if let Err(e) = update_func(world, renderer.window()) {
-                        error!("Error happened when calling update function hook: {e}");
-                    }
+                if let Err(e) = self.state.update(world, renderer.window()) {
+                    error!("Error happened when calling update function hook: {e}");
                 }
 
                 world.update();

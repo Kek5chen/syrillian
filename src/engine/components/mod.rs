@@ -1,10 +1,13 @@
-mod camera;
-mod collider;
-mod freecam;
-mod gravity;
-mod light;
-mod rigid_body;
-mod rotate;
+pub mod camera;
+pub mod collider;
+pub mod freecam;
+pub mod gravity;
+pub mod light;
+pub mod rigid_body;
+pub mod rotate;
+pub mod rope;
+pub mod fp_camera_controller;
+mod fp_player_controller;
 
 pub use camera::*;
 pub use collider::*;
@@ -13,6 +16,9 @@ pub use gravity::*;
 pub use light::*;
 pub use rigid_body::*;
 pub use rotate::*;
+pub use rope::RopeComponent;
+pub use fp_camera_controller::FPCameraController;
+pub use fp_player_controller::FPPlayerController;
 
 use crate::core::GameObjectId;
 use std::any::Any;

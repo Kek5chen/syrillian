@@ -81,9 +81,9 @@ impl<T: StoreType> Store<T> {
         id
     }
 
-    pub fn add(&self, elem: T) -> H<T> {
+    pub fn add<T2: Into<T>>(&self, elem: T2) -> H<T> {
         let id = self.next_id();
-        self.data.insert(id.into(), elem);
+        self.data.insert(id.into(), elem.into());
 
         trace!("[{} Store] Added element: {}", T::name(), T::ident_fmt(id));
 

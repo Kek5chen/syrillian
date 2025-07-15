@@ -1,7 +1,6 @@
 use std::any::Any;
 
 use nalgebra::Matrix4;
-
 use crate::core::GameObjectId;
 use crate::engine::rendering::DrawCtx;
 use crate::rendering::Renderer;

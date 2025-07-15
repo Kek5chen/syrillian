@@ -1,21 +1,21 @@
 use nalgebra::{UnitQuaternion, Vector3};
-use syrillian::World;
-use syrillian::components::Component;
-use syrillian::core::GameObjectId;
+use crate::World;
+use crate::core::GameObjectId;
+use crate::components::Component;
 
-pub struct CameraController {
+pub struct FPCameraController {
     parent: GameObjectId,
     look_sensitivity: f32,
     yaw: f32,
     pitch: f32,
 }
 
-impl Component for CameraController {
+impl Component for FPCameraController {
     fn new(parent: GameObjectId) -> Self
     where
         Self: Sized,
     {
-        CameraController {
+        FPCameraController {
             parent,
             look_sensitivity: 0.6f32,
             yaw: 0.0,
