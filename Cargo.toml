@@ -48,7 +48,7 @@ env_logger = { version = "0.11", features = ["auto-color"] }
 
 
 [dependencies.wgpu]
-version = "26.0"
+version = "25.0"
 default-features = false
 features = [
   "vulkan-portability",
