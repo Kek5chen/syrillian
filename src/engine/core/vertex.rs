@@ -2,6 +2,7 @@ use nalgebra::{Vector2, Vector3};
 use static_assertions::const_assert_eq;
 use wgpu::{BufferAddress, VertexAttribute, VertexFormat};
 
+/// Convenience vertex used when constructing static meshes.
 #[derive(Copy, Clone)]
 pub struct SimpleVertex3D {
     pub position: [f32; 3],
@@ -10,6 +11,7 @@ pub struct SimpleVertex3D {
 }
 
 impl SimpleVertex3D {
+    /// Converts this simplified vertex into a full [`Vertex3D`].
     pub const fn upgrade(self) -> Vertex3D {
         Vertex3D {
             position: Vector3::new(self.position[0], self.position[1], self.position[2]),
@@ -23,6 +25,7 @@ impl SimpleVertex3D {
     }
 }
 
+/// A fully featured vertex used for 3D rendering.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct Vertex3D {
@@ -36,6 +39,7 @@ pub struct Vertex3D {
 }
 
 impl Vertex3D {
+    /// Creates a new vertex from individual attributes.
     pub fn new(
         position: Vector3<f32>,
         tex_coord: Vector2<f32>,
@@ -55,6 +59,8 @@ impl Vertex3D {
             bone_weights: pad_to_four(bone_weights, 0.0),
         }
     }
+
+    /// Returns a [`wgpu::VertexBufferLayout`] describing the layout of this vertex.
     pub const fn continuous_descriptor<'a>() -> wgpu::VertexBufferLayout<'a> {
         use crate::utils::sizes::*;
 
@@ -106,6 +112,7 @@ impl Vertex3D {
     }
 }
 
+/// Pads a slice to four elements using the provided default value.
 fn pad_to_four<T: Copy>(input: &[T], default: T) -> [T; 4] {
     let mut arr = [default; 4];
     let count = input.len().min(4);

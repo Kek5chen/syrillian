@@ -1,3 +1,9 @@
+//! High level renderer driving all drawing operations.
+//!
+//! The [`Renderer`] owns the [`State`], manages frame buffers and traverses
+//! the [`World`](crate::engine::world::World) to draw all objects each frame.
+//! It also provides debug drawing and post processing utilities.
+
 use super::error::*;
 use crate::components::{CameraComponent, CameraUniform, PointLightComponent, PointLightUniform};
 use crate::core::GameObjectId;

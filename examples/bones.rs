@@ -1,3 +1,8 @@
+//! Skeletal Mesh and Animation experimentation example.
+//!
+//! The goal of this is to test if bones are working as expected, and to
+//! aid in the development in the first place.
+
 use std::error::Error;
 
 use syrillian::{AppState, World};

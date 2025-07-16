@@ -1,3 +1,10 @@
+//! The [`World`] struct stores and updates all game objects. Its use is to manage any
+//! "raw" data, store and provide access to the objects and behavior in an intended
+//! way, with a focus on ease of use.
+//!
+//! It maintains the scene graph, input state and physics simulation and
+//! offers utility such as methods to create, find and remove game objects.
+
 use crate::components::Component;
 use crate::core::{GameObject, GameObjectId, Transform};
 use crate::engine::assets::AssetStore;
@@ -16,6 +23,12 @@ use crate::prefabs::CameraPrefab;
 
 static mut G_WORLD: *mut World = std::ptr::null_mut();
 
+/// Central structure representing the running scene.
+///
+/// The world keeps track of all [`GameObject`](crate::core::GameObject)
+/// instances and provides access to shared systems like physics and input.
+/// Only one instance can exist at a time and is globally accessible via
+/// [`World::instance`].
 pub struct World {
     pub objects: HashMap<GameObjectId, Box<GameObject>>,
     pub children: Vec<GameObjectId>,
@@ -32,12 +45,16 @@ pub struct World {
 }
 
 impl World {
-    /// # Safety
-    /// This function should not be called more than once since it registers its created world
-    /// globally. Neither should the world be dropped before the App has exited and isn't used
-    /// anymore.
-    pub unsafe fn new() -> Box<World> {
-        let mut world = Box::new(World {
+    /// Create a new, empty, clean-slate world with default data.
+    ///
+    /// This currently isn't really useful on its own because it
+    /// still depends on the initialization routine in the World::new
+    /// function. In the future, a better solution has to be found.
+    /// Than managing the world state globally. It's currently like this
+    /// because the GameObjectId Deref makes usage very - !! very !! simple.
+    /// At the cost of safety and some other things.
+    fn empty() -> Box<World> {
+        Box::new(World {
             objects: HashMap::new(),
             children: vec![],
             active_camera: None,
@@ -49,7 +66,17 @@ impl World {
             delta_time: Duration::default(),
             requested_shutdown: false,
             next_object_id: GameObjectId(0),
-        });
+        })
+    }
+
+    /// # Safety
+    /// Creates a new world through World::empty and registers it globally.
+    ///
+    /// This function must only be called once during program startup since the
+    /// returned world is stored in a global pointer for [`World::instance`]. The
+    /// world should remain alive for the duration of the application.
+    pub unsafe fn new() -> Box<World> {
+        let mut world = World::empty();
 
         // create a second mutable reference so G_WORLD can be used in (~un~)safe code
         unsafe {
@@ -60,6 +87,10 @@ impl World {
     }
 
     // TODO: make this an option later when it's too late
+    /// Returns a mutable reference to the global [`World`] instance.
+    ///
+    /// # Panics
+    /// Panics if [`World::new`] has not been called beforehand.
     pub fn instance() -> &'static mut World {
         unsafe {
             if G_WORLD.is_null() {
@@ -144,9 +175,9 @@ impl World {
                 self.physics.step();
                 self.execute_component_func(Component::post_update);
             }
-
-            self.input.next_frame();
         }
+
+        self.input.next_frame();
     }
 
     pub fn find_object_by_name(&self, name: &str) -> Option<GameObjectId> {

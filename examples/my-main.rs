@@ -1,3 +1,9 @@
+//! A showcase of various engine features.
+//!
+//! w: I use this as my main test environment, which allows me to expand this and experiment
+//!    with new features. Therefore, it should contain the latest and greatest. I can recommend
+//!    using this for reference.
+
 use std::error::Error;
 use syrillian::assets::Material;
 use syrillian::assets::scene_loader::SceneLoader;

@@ -1,3 +1,32 @@
+//! Asset loading and management utilities.
+//!
+//! Assets such as meshes, textures and shaders are stored in type specific
+//! stores and referenced through handles. This module also exposes helper
+//! functionality for loading scenes.
+//!
+//! Example on how to interact with the store:
+//! ```rust
+//! use syrillian::assets::{HMaterial, Material};
+//! use syrillian::prefabs::CubePrefab;
+//! use syrillian::World;
+//!
+//! fn update(world: &mut World) {
+//!     // make a Material
+//!     let material: Material = Material::builder()
+//!         .name("Test Material".to_string())
+//!         .build();
+//!
+//!     // add an asset
+//!     let material: HMaterial = world.assets.materials.add(material);
+//!
+//!     // Spawn a cube prefab with the material
+//!     let cube_prefab = CubePrefab::new(material);
+//!     let cube = world.spawn(&cube_prefab);
+//! }
+//! ```
+//!
+//! To see how you can use an asset on the GPU, check [`AssetCache`](crate::rendering::AssetCache)
+
 mod bind_group_layout;
 pub mod scene_loader;
 

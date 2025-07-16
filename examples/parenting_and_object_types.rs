@@ -1,3 +1,5 @@
+//! Demonstrates parenting behavior, as well as testing/using the scene loader.
+
 use std::error::Error;
 
 use winit::window::Window;

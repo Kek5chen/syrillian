@@ -1,3 +1,7 @@
+//! Basics of moving, rotating and scaling game objects.
+//!
+//! Also uses a simple Prefab as an example on - well, how to do that.
+
 use nalgebra::UnitQuaternion;
 use std::error::Error;
 use syrillian::AppState;

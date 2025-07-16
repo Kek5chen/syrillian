@@ -1,3 +1,7 @@
+//! A cache of hot GPU Runtime Data, uploaded from the [`AssetStore`]
+//!
+//! For more information please see module level documentation.
+
 use crate::engine::assets::*;
 use crate::engine::rendering::State;
 use crate::engine::rendering::cache::generic_cache::Cache;

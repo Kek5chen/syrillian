@@ -1,3 +1,9 @@
+//! Root module of the Syrillian game engine.
+//!
+//! It exposes all primary systems such as rendering, physics and the
+//! asset pipeline. Applications usually interact with the [`World`]
+//! type defined here to spawn and manage game objects.
+
 pub mod components;
 pub mod core;
 pub mod drawables;

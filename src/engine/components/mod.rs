@@ -1,3 +1,43 @@
+//! Built-in components that can be attached to [`GameObject`](crate::core::GameObject).
+//!
+//! Components implement behavior ranging from camera control to physics. If it's dynamic,
+//! it's probably a component. (Only Rendering is done in [`Drawable`](crate::drawables::Drawable)s)
+//!
+//! To make a component:
+//! ```rust
+//! use nalgebra::Vector3;
+//! use syrillian::components::Component;
+//! use syrillian::core::GameObjectId;
+//! use syrillian::World;
+//!
+//! pub struct Gravity {
+//!     force: f32,
+//!     parent: GameObjectId, // the parent needs to be stored
+//! }
+//!
+//! impl Component for Gravity {
+//!     fn new(parent: GameObjectId) -> Self {
+//!         Gravity {
+//!             force: 8.91,
+//!             parent,
+//!         }
+//!     }
+//!
+//!     fn update(&mut self) {
+//!         let delta_time = World::instance().get_delta_time().as_secs_f32();
+//!
+//!         let movement = Vector3::new(0.0, self.force * delta_time, 0.0);
+//!
+//!         let transform = &mut self.get_parent().transform;
+//!         transform.translate(movement);
+//!     }
+//!
+//!     fn get_parent(&self) -> GameObjectId {
+//!         self.parent
+//!     }
+//! }
+//! ```
+
 pub mod camera;
 pub mod collider;
 pub mod freecam;

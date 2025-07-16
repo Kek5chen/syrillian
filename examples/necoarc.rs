@@ -1,3 +1,5 @@
+//! Example that renders a textured spinning cube and some 2d images.
+
 use std::error::Error;
 
 use syrillian::assets::Material;

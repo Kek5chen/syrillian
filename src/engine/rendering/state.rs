@@ -1,3 +1,9 @@
+//! Abstraction over the GPU device and surface state.
+//!
+//! [`State`] is responsible for creating the GPU "device", swapchain and
+//! depth textures. It also exposes methods to resize and recreate these
+//! resources when the window changes.
+
 use snafu::{ResultExt, Snafu, ensure};
 use std::sync::Arc;
 use wgpu::{
