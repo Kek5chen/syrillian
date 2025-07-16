@@ -12,13 +12,44 @@ pub struct SimpleVertex3D {
 
 impl SimpleVertex3D {
     /// Converts this simplified vertex into a full [`Vertex3D`].
+    /// This is not recommended as the tangent and bitangent calculation is just a rought approximation.
     pub const fn upgrade(self) -> Vertex3D {
+        let px = self.position[0];
+        let py = self.position[1];
+        let pz = self.position[2];
+        let nx = self.normal[0];
+        let ny = self.normal[1];
+        let nz = self.normal[2];
+        let u = self.uv[0];
+        let v = self.uv[1];
+
+        let world_up = if ny.abs() < 0.999 {
+            [0.0, 1.0, 0.0]
+        } else {
+            [1.0, 0.0, 0.0]
+        };
+
+        let dot = nx * world_up[0] + ny * world_up[1] + nz * world_up[2];
+        let tx = world_up[0] - nx * dot;
+        let ty = world_up[1] - ny * dot;
+        let tz = world_up[2] - nz * dot;
+        let tangent = Vector3::new(tx, ty, tz);
+
+        let bx = ny * tz - nz * ty;
+        let by = nz * tx - nx * tz;
+        let bz = nx * ty - ny * tx;
+        let bitangent = Vector3::new(bx, by, bz);
+
+        let position = Vector3::new(px, py, pz);
+        let uv = Vector2::new(u, v);
+        let normal = Vector3::new(nx, ny, nz);
+
         Vertex3D {
-            position: Vector3::new(self.position[0], self.position[1], self.position[2]),
-            tex_coord: Vector2::new(self.uv[0], self.uv[1]),
-            normal: Vector3::new(self.normal[0], self.normal[1], self.normal[2]),
-            tangent: Vector3::new(0.0, 0.0, 0.0),
-            bitangent: Vector3::new(0.0, 0.0, 0.0),
+            position,
+            uv,
+            normal,
+            tangent,
+            bitangent,
             bone_indices: [0xFF, 0xFF, 0xFF, 0xFF],
             bone_weights: [0.0, 0.0, 0.0, 0.0],
         }
@@ -30,7 +61,7 @@ impl SimpleVertex3D {
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct Vertex3D {
     pub position: Vector3<f32>,
-    pub tex_coord: Vector2<f32>,
+    pub uv: Vector2<f32>,
     pub normal: Vector3<f32>,
     pub tangent: Vector3<f32>,
     pub bitangent: Vector3<f32>,
@@ -51,7 +82,7 @@ impl Vertex3D {
     ) -> Self {
         Vertex3D {
             position,
-            tex_coord,
+            uv: tex_coord,
             normal,
             tangent,
             bitangent,
