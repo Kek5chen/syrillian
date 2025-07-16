@@ -41,7 +41,7 @@ impl Component for Collider3D {
         Self: Sized,
     {
         let scale = parent.transform.scale();
-        let shape = SharedShape::cuboid(scale.x, scale.y, scale.z);
+        let shape = SharedShape::cuboid(scale.x / 2., scale.y / 2., scale.z / 2.);
         let collider = Self::default_collider(shape);
         let phys_handle = World::instance()
             .physics
