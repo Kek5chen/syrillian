@@ -5,25 +5,29 @@ use nalgebra::Vector3;
 
 #[repr(C)]
 #[derive(Copy, Clone, Default, bytemuck::Pod, bytemuck::Zeroable)]
-pub(crate) struct PointLightUniform {
-    pub(crate) pos: Vector3<f32>,
-    pub(crate) radius: f32,
-    pub(crate) color: Vector3<f32>,
-    pub(crate) intensity: f32,
+pub struct PointLightUniform {
+    pub pos: Vector3<f32>,
+    pub radius: f32,
+    pub color: Vector3<f32>,
+    pub intensity: f32,
+    pub specular_color: Vector3<f32>,
+    pub specular_intensity: f32,
 }
 
 impl PointLightUniform {
-    pub(crate) const fn zero() -> Self {
+    pub const fn zero() -> Self {
         PointLightUniform {
             pos: Vector3::new(0.0, 0.0, 0.0),
             radius: 0.0,
             color: Vector3::new(0.0, 0.0, 0.0),
             intensity: 0.0,
+            specular_color: Vector3::new(0.0, 0.0, 0.0),
+            specular_intensity: 0.0,
         }
     }
 }
 
-ensure_aligned!(PointLightUniform { pos, color }, align <= 16 * 2 => size);
+ensure_aligned!(PointLightUniform { pos, color, specular_color }, align <= 16 * 3 => size);
 
 pub struct PointLightComponent {
     parent: GameObjectId,
@@ -42,6 +46,8 @@ impl Component for PointLightComponent {
                 radius: 100.0,
                 color: Vector3::new(1.0, 1.0, 1.0),
                 intensity: 1.0,
+                specular_color: Vector3::new(1.0, 0.0, 0.0),
+                specular_intensity: 1.0,
             },
         }
     }

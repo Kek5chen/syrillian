@@ -7,7 +7,7 @@
 use std::error::Error;
 use syrillian::assets::Material;
 use syrillian::assets::scene_loader::SceneLoader;
-use syrillian::components::{Collider3D, PointLightComponent, RigidBodyComponent, RopeComponent};
+use syrillian::components::{Collider3D, PointLightComponent, RigidBodyComponent, RopeComponent, RotateComponent};
 use syrillian::core::GameObjectId;
 use syrillian::prefabs::CubePrefab;
 use syrillian::prefabs::first_person_player::FirstPersonPlayerPrefab;
@@ -45,29 +45,31 @@ impl AppState for MyMain {
         let cube_prefab = CubePrefab::new(neco_material);
         let mut cube = world.spawn(&cube_prefab);
         let mut cube2 = world.spawn(&cube_prefab);
+        let mut cube3 = world.spawn(&cube_prefab);
 
-        cube.transform.set_position(20.0, 20.9, -20.0);
-        cube2.transform.set_position(5.0, 20.9, -20.0);
+        cube.transform.set_position(20.0, 3.9, -20.0);
+        cube3.transform.set_position(5.0, 3.9, -20.0);
+        cube2.transform.set_position(5.0, 6.9, -20.0);
 
         cube.add_component::<PointLightComponent>();
-        cube.add_component::<Collider3D>()
-            .get_collider_mut()
-            .unwrap()
-            .set_mass(1.0);
-        cube.add_component::<RigidBodyComponent>();
-        cube.add_component::<RopeComponent>().connect_to(player);
+        cube.add_component::<RotateComponent>();
+        // cube.add_component::<RopeComponent>().connect_to(player);
 
         cube2.add_component::<PointLightComponent>();
-        cube2
+        let collider = cube2
             .add_component::<Collider3D>()
             .get_collider_mut()
-            .unwrap()
-            .set_mass(1.0);
-        cube2.add_component::<RigidBodyComponent>();
-        cube2.add_component::<RopeComponent>().connect_to(player);
+            .unwrap();
+        collider.set_mass(1.0);
+        collider.set_restitution(0.9);
+        let rb = cube2.add_component::<RigidBodyComponent>().get_body_mut().unwrap();
+        rb.set_gravity_scale(0.0, false);
+        rb.enable_ccd(true);
 
-        world.add_child(cube);
-        world.add_child(cube2);
+
+        cube3.add_component::<RigidBodyComponent>().get_body_mut().unwrap().enable_ccd(true);
+        cube3.add_component::<Collider3D>();
+        cube3.add_component::<RopeComponent>().connect_to(cube2);
 
         world.print_objects();
 

@@ -18,7 +18,7 @@ fn vs_main(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
     );
 
     var output: VertexOutput;
-    output.pos = vec4f(positions[vertex_index], 0.0, 1.0);
+    output.position = vec4f(positions[vertex_index], 0.0, 1.0);
     output.uv = uvs[vertex_index];
     return output;
 }

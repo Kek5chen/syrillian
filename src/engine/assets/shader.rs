@@ -4,14 +4,18 @@ use std::borrow::Cow;
 use std::error::Error;
 use std::fs;
 use std::path::Path;
+use bon::Builder;
 use wgpu::PolygonMode;
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Builder)]
 pub struct Shader {
     pub name: String,
     pub code: String,
+    #[builder(default = PolygonMode::Fill)]
     pub polygon_mode: PolygonMode,
+    #[builder(default = false)]
     pub draw_over: bool,
+    #[builder(default = ShaderStage::Default)]
     pub stage: ShaderStage,
 }
 

@@ -2,14 +2,14 @@
 fn vs_main(in: VInput) -> VOutput {
     var out: VOutput;
 
-    let model_view_mat = camera.view_proj_mat * model.model_mat;
+    let model_view_mat = camera.view_proj_mat * model.transform;
 
-    out.clip_pos = model_view_mat * vec4<f32>(in.vpos, 1.0);
-    out.tex_coords = vec2<f32>(in.vtex.x, 1.0 - in.vtex.y);
-    out.world_pos = (model.model_mat * vec4<f32>(in.vpos, 1.0)).xyz;
-    out.world_normal = normalize((model.model_mat * vec4<f32>(in.vnorm, 0.0)).xyz);
-    out.world_tangent = normalize((model.model_mat * vec4<f32>(in.vtan, 0.0)).xyz);
-    out.world_bitangent = normalize((model.model_mat * vec4<f32>(in.vbitan, 0.0)).xyz);
+    out.position_clip = model_view_mat * vec4<f32>(in.position, 1.0);
+    out.uv = vec2<f32>(in.uv.x, 1.0 - in.uv.y);
+    out.position = (model.transform * vec4<f32>(in.position, 1.0)).xyz;
+    out.normal = normalize((model.transform * vec4<f32>(in.normal, 0.0)).xyz);
+    out.tangent = normalize((model.transform * vec4<f32>(in.tangent, 0.0)).xyz);
+    out.bitangent = normalize((model.transform * vec4<f32>(in.bitangent, 0.0)).xyz);
 
     return out;
 }

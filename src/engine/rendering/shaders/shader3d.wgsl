@@ -5,24 +5,21 @@ const AMBIENT_STRENGTH = 0.1;
 fn vs_main(in: VInput) -> VOutput {
     var out: VOutput;
 
-    let world_pos_4 = model.model_mat * vec4<f32>(in.vpos, 1.0);
-    out.world_pos = world_pos_4.xyz;
-    out.clip_pos = camera.view_proj_mat * world_pos_4;
+    let world_pos_4 = model.transform * vec4<f32>(in.position, 1.0);
+    out.position = world_pos_4.xyz;
+    out.position_clip = camera.view_proj_mat * world_pos_4;
 
-    out.tex_coords = vec2<f32>(in.vtex.x, 1.0 - in.vtex.y);
+    out.uv = vec2<f32>(in.uv.x, 1.0 - in.uv.y);
 
     // FIXME: This is only correct for uniform scaling + rotation.
     // For non-uniform scaling, transform using the inverse transpose of the model matrix (normal_mat).
     // normal_mat needs to be passed into ModelData.
-    let normal_mat = mat3x3<f32>(model.model_mat[0].xyz, model.model_mat[1].xyz, model.model_mat[2].xyz); // Approximation if no normal_mat uniform
-    out.world_normal = normalize((model.model_mat * vec4<f32>(in.vnorm, 0.0)).xyz);
-    out.world_tangent = normalize((model.model_mat * vec4<f32>(in.vtan, 0.0)).xyz);
+    out.normal = normalize((model.transform * vec4<f32>(in.normal, 0.0)).xyz);
+    out.tangent = normalize((model.transform * vec4<f32>(in.tangent, 0.0)).xyz);
+    out.bitangent = normalize((model.transform * vec4<f32>(in.bitangent, 0.0)).xyz);
 
-    // Recompute bitangent for guaranteed orthogonality.
-    out.world_bitangent = cross(out.world_normal, out.world_tangent);
-
-    out.bone_indices = in.vboneidx;
-    out.bone_weights = in.vboneweights;
+    out.bone_indices = in.bone_indices;
+    out.bone_weights = in.bone_weights;
 
     return out;
 }
@@ -42,14 +39,13 @@ fn calculate_specular(
     light_dir: vec3<f32>,
     view_dir: vec3<f32>,
     world_normal: vec3<f32>,
-    light_color: vec3<f32>,
     shininess: f32
-) -> vec3<f32> {
+) -> f32 {
     let half_dir = normalize(light_dir + view_dir);
-    let spec_angle = max(dot(world_normal, half_dir), 0.0);
+    let spec_angle = dot(world_normal, half_dir);
     
-    let spec_power = pow(spec_angle, max(shininess, 1.0));
-    return light_color * spec_power;
+    let spec_power = pow(saturate(spec_angle), shininess);
+    return spec_power;
 }
 
 fn get_normal_from_map(
@@ -78,7 +74,7 @@ fn fs_main(in: VOutput) -> @location(0) vec4<f32> {
     // Color 
     var base_color: vec4<f32>;
     if material.use_diffuse_texture != 0u {
-        base_color = textureSample(t_diffuse, s_diffuse, in.tex_coords);
+        base_color = textureSample(t_diffuse, s_diffuse, in.uv);
     } else {
         base_color = vec4<f32>(material.diffuse, 1.0);
     }
@@ -92,43 +88,50 @@ fn fs_main(in: VOutput) -> @location(0) vec4<f32> {
     var world_normal: vec3<f32>;
     if material.use_normal_texture != 0u {
         world_normal = get_normal_from_map(
-            t_normal, s_normal, in.tex_coords,
-            in.world_normal, in.world_tangent, in.world_bitangent
+            t_normal, s_normal, in.uv,
+            in.normal, in.tangent, in.bitangent
         );
     } else {
-        world_normal = normalize(in.world_normal);
+        world_normal = normalize(in.normal);
     }
 
     // Lighting
-    let view_dir = normalize(camera.pos - in.world_pos);
+    let view_dir = normalize(camera.position - in.position);
 
     var lit_color = base_color.rgb * AMBIENT_STRENGTH;
 
     let count = point_light_count;
     for (var i: u32 = 0u; i < count; i = i + 1u) {
         let light = point_lights[i];
-        let light_dir = light.pos - in.world_pos;
-        let distance = length(light_dir);
+        var light_dir = light.position - in.position;
+        var distance = length(light_dir);
+        light_dir = light_dir / distance;
 
         if distance > light.radius {
             continue;
         }
 
-        let light_dir_norm = normalize(light_dir);
+        let diffuse_angle = dot(world_normal, light_dir);
+
+        if diffuse_angle <= 0 {
+            continue;
+        }
+
         let attenuation = calculate_attenuation(distance, light.radius);
         let light_strength = light.color * light.intensity * attenuation;
 
-        let diffuse_angle = max(dot(world_normal, light_dir_norm), 0.0);
         let diffuse_contrib = base_color.rgb * diffuse_angle * light_strength;
         lit_color = lit_color + diffuse_contrib;
 
-        let specular_color = vec3(1.0, 1.0, 1.0);
+        distance = distance * distance;
+
+        let specular_color = light.specular_color * light.specular_intensity;
         let specular_contrib = calculate_specular(
-            light_dir_norm, view_dir, world_normal,
-            specular_color * light_strength,
+            light_dir, view_dir, world_normal,
             material.shininess
         );
-        lit_color = lit_color + specular_contrib;
+        let specular = specular_contrib * specular_color / distance;
+        lit_color = lit_color + specular;
     }
 
     let final_color = vec4(lit_color, base_color.a * material.opacity);
