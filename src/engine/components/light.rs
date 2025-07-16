@@ -46,7 +46,7 @@ impl Component for PointLightComponent {
                 radius: 100.0,
                 color: Vector3::new(1.0, 1.0, 1.0),
                 intensity: 1.0,
-                specular_color: Vector3::new(1.0, 0.0, 0.0),
+                specular_color: Vector3::new(1.0, 1.0, 1.0),
                 specular_intensity: 1.0,
             },
         }
