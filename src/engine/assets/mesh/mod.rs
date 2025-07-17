@@ -92,18 +92,18 @@ impl StoreDefaults for Mesh {
         let unit_square = Mesh::builder(UNIT_SQUARE_VERT.to_vec()).build();
         store_add_checked!(store, HMesh::UNIT_SQUARE_ID, unit_square);
 
-        let unit_cube = SceneLoader::load_first_mesh_from_buffer(CUBE_OBJ)
+        let unit_cube = SceneLoader::load_first_mesh_from_buffer(CUBE_OBJ, "obj")
             .expect("Cube Mesh load failed")
             .expect("Cube Mesh doesn't have a mesh");
         store_add_checked!(store, HMesh::UNIT_CUBE_ID, unit_cube);
 
-        let debug_arrow = SceneLoader::load_first_mesh_from_buffer(DEBUG_ARROW)
+        let debug_arrow = SceneLoader::load_first_mesh_from_buffer(DEBUG_ARROW, "obj")
             .ok()
             .flatten()
             .expect("Debug Arrow Mesh load failed");
         store_add_checked!(store, HMesh::DEBUG_ARROW_ID, debug_arrow);
 
-        let sphere = SceneLoader::load_first_mesh_from_buffer(SPHERE)
+        let sphere = SceneLoader::load_first_mesh_from_buffer(SPHERE, "obj")
             .ok()
             .flatten()
             .expect("Sphere Mesh load failed");
