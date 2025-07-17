@@ -5,10 +5,10 @@ use std::error::Error;
 use syrillian::assets::Material;
 use syrillian::components::RotateComponent;
 use syrillian::drawables::{Image, ImageScalingMode};
-use winit::window::Window;
-use syrillian::{AppState, World};
 use syrillian::prefabs::CubePrefab;
+use syrillian::{AppState, World};
 use syrillian_macros::SyrillianApp;
+use winit::window::Window;
 
 const NECO_IMAGE: &[u8; 1293] = include_bytes!("assets/neco.jpg");
 
@@ -22,11 +22,13 @@ impl AppState for NecoArc {
 
         let texture = world.assets.textures.load_image_from_memory(NECO_IMAGE)?;
 
-        let material = world.assets.materials.add(Material::builder()
-            .name("Neco Arc".into())
-            .diffuse_texture(texture)
-            .opacity(1.0)
-            .build());
+        let material = world.assets.materials.add(
+            Material::builder()
+                .name("Neco Arc".into())
+                .diffuse_texture(texture)
+                .opacity(1.0)
+                .build(),
+        );
 
         let mut neco = world.spawn(&CubePrefab::new(material));
         neco.add_component::<RotateComponent>();

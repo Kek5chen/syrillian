@@ -1,7 +1,7 @@
-use nalgebra::{UnitQuaternion, Vector3};
 use crate::World;
-use crate::core::GameObjectId;
 use crate::components::Component;
+use crate::core::GameObjectId;
+use nalgebra::{UnitQuaternion, Vector3};
 
 pub struct FPCameraController {
     parent: GameObjectId,

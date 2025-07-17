@@ -5,10 +5,10 @@
 
 use std::error::Error;
 
-use syrillian::{AppState, World};
 use syrillian::assets::scene_loader::SceneLoader;
-use winit::window::Window;
+use syrillian::{AppState, World};
 use syrillian_macros::SyrillianApp;
+use winit::window::Window;
 
 // TODO: Bones don't work yet. Yes I shipped something brokey.
 #[derive(Debug, Default, SyrillianApp)]
@@ -22,9 +22,7 @@ impl AppState for BonesExample {
         boney_obj.name = "Boney thing".to_owned();
 
         boney_obj.transform.set_uniform_scale(0.01);
-        boney_obj
-            .transform
-            .set_position(0.0, -5.0, -20.0);
+        boney_obj.transform.set_position(0.0, -5.0, -20.0);
 
         world.add_child(boney_obj);
 

@@ -1,15 +1,19 @@
-use wgpu::{ColorTargetState, ColorWrites, CompareFunction, DepthBiasState, DepthStencilState, Device, Face, FragmentState, MultisampleState, PipelineCompilationOptions, PipelineLayout, PolygonMode, PrimitiveState, PrimitiveTopology, RenderPipeline, RenderPipelineDescriptor, ShaderModule, StencilFaceState, StencilState, TextureFormat, VertexBufferLayout, VertexState};
 use crate::assets::Shader;
 use crate::core::Vertex3D;
+use wgpu::{
+    ColorTargetState, ColorWrites, CompareFunction, DepthBiasState, DepthStencilState, Device,
+    Face, FragmentState, MultisampleState, PipelineCompilationOptions, PipelineLayout, PolygonMode,
+    PrimitiveState, PrimitiveTopology, RenderPipeline, RenderPipelineDescriptor, ShaderModule,
+    StencilFaceState, StencilState, TextureFormat, VertexBufferLayout, VertexState,
+};
 
 const DEFAULT_BUFFERS: [VertexBufferLayout; 1] = [Vertex3D::continuous_descriptor()];
 
-const DEFAULT_COLOR_TARGET_STATE: [Option<ColorTargetState>; 1] =
-    [Some(ColorTargetState {
-        format: TextureFormat::Bgra8UnormSrgb,
-        blend: None,
-        write_mask: ColorWrites::all(),
-    })];
+const DEFAULT_COLOR_TARGET_STATE: [Option<ColorTargetState>; 1] = [Some(ColorTargetState {
+    format: TextureFormat::Bgra8UnormSrgb,
+    blend: None,
+    write_mask: ColorWrites::all(),
+})];
 
 const DEFAULT_DEPTH_STENCIL: DepthStencilState = DepthStencilState {
     format: TextureFormat::Depth32Float,
@@ -76,7 +80,11 @@ impl<'a> RenderPipelineBuilder<'a> {
         }
     }
 
-    pub fn builder(shader: &Shader, layout: &'a PipelineLayout, module: &'a ShaderModule) -> RenderPipelineBuilder<'a> {
+    pub fn builder(
+        shader: &Shader,
+        layout: &'a PipelineLayout,
+        module: &'a ShaderModule,
+    ) -> RenderPipelineBuilder<'a> {
         let name = shader.name();
         let polygon_mode = shader.polygon_mode();
         let topology = shader.topology();

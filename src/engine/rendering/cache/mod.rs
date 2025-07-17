@@ -11,7 +11,7 @@ pub use self::asset_cache::AssetCache;
 
 pub use self::material::*;
 pub use self::mesh::*;
-pub use self::shader::*;
 pub use self::shader::builder::*;
+pub use self::shader::*;
 
 pub(crate) use self::generic_cache::CacheType;

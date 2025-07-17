@@ -32,4 +32,3 @@ where
 {
     extendable.extend(extract_data(indices, source, converter));
 }
-

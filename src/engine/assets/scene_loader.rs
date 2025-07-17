@@ -17,7 +17,6 @@ use russimp_ng::material::{DataContent, MaterialProperty, PropertyTypeInfo, Text
 use russimp_ng::node::Node;
 use russimp_ng::scene::{PostProcess, Scene};
 
-
 #[allow(dead_code)]
 pub struct SceneLoader;
 
@@ -70,7 +69,7 @@ impl SceneLoader {
         Ok(scene)
     }
 
-    pub fn load_scene_from_buffer(model: &[u8]) -> Result<Scene, Box<dyn Error>> {
+    pub fn load_scene_from_buffer(model: &[u8], hint: &str) -> Result<Scene, Box<dyn Error>> {
         let scene = Scene::from_buffer(
             model,
             vec![
@@ -84,7 +83,7 @@ impl SceneLoader {
                 PostProcess::EmbedTextures,
                 PostProcess::LimitBoneWeights,
             ],
-            "obj"
+            hint,
         )?;
 
         Ok(scene)
@@ -101,8 +100,8 @@ impl SceneLoader {
         node_obj
     }
 
-    pub fn load_first_mesh_from_buffer(model: &[u8]) -> Result<Option<Mesh>, Box<dyn Error>> {
-        let scene = Self::load_scene_from_buffer(model)?;
+    pub fn load_first_mesh_from_buffer(model: &[u8], hint: &str) -> Result<Option<Mesh>, Box<dyn Error>> {
+        let scene = Self::load_scene_from_buffer(model, hint)?;
         Ok(Self::load_first_from_scene(&scene))
     }
 
@@ -111,7 +110,7 @@ impl SceneLoader {
         Ok(Self::load_first_from_scene(&scene))
     }
 
-    pub fn load_first_from_scene(scene: &Scene)  -> Option<Mesh> {
+    pub fn load_first_from_scene(scene: &Scene) -> Option<Mesh> {
         let mesh = load_first_from_node(&scene, scene.root.as_ref()?, 0);
         mesh
     }
@@ -221,9 +220,9 @@ impl SceneLoader {
         .collect();
 
         let mesh = Mesh::builder(vertices)
-                .with_many_textures(material_ranges)
-                .with_bones(bones)
-                .build();
+            .with_many_textures(material_ranges)
+            .with_bones(bones)
+            .build();
 
         Some(mesh)
     }
@@ -443,4 +442,3 @@ fn vec3_from_vec3d(v: &Vector3D) -> Vector3<f32> {
 fn vec2_from_vec3d(v: &Vector3D) -> Vector2<f32> {
     Vector2::new(v.x, v.y)
 }
-

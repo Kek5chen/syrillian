@@ -1,5 +1,5 @@
-use syrillian::engine::core::{Vertex3D};
 use nalgebra::{Vector2, Vector3};
+use syrillian::engine::core::Vertex3D;
 
 #[test]
 fn vertex_creation_pads_indices() {

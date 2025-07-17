@@ -8,9 +8,11 @@
 use crate::components::Component;
 use crate::core::{GameObject, GameObjectId, Transform};
 use crate::engine::assets::AssetStore;
+use crate::engine::prefabs::prefab::Prefab;
 use crate::engine::rendering::Renderer;
 use crate::input::InputManager;
 use crate::physics::PhysicsSimulator;
+use crate::prefabs::CameraPrefab;
 use itertools::Itertools;
 use log::info;
 use std::cell::RefCell;
@@ -18,8 +20,6 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use crate::engine::prefabs::prefab::Prefab;
-use crate::prefabs::CameraPrefab;
 
 static mut G_WORLD: *mut World = std::ptr::null_mut();
 

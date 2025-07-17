@@ -44,7 +44,7 @@ pub enum HandleName<T: StoreType> {
 impl<T: StoreType> Display for HandleName<T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            HandleName::Static(s) => write!(f, "\"{s}\"", ),
+            HandleName::Static(s) => write!(f, "\"{s}\"",),
             HandleName::Id(id) => write!(f, "#{id}"),
         }
     }
@@ -109,17 +109,20 @@ impl<T: StoreType> Store<T> {
     }
 
     fn _try_get_mut(&self, h: H<T>) -> Option<RefMut<'_, T>> {
-        self.data.get_mut(&h.into()).or_else(|| {
-            warn!(
-                "[{} Store] Invalid Reference: h={} not found",
-                T::name(),
-                T::ident_fmt(h)
-            );
-            None
-        }).and_then(|v| {
-            self.set_dirty(h.into());
-            Some(v)
-        })
+        self.data
+            .get_mut(&h.into())
+            .or_else(|| {
+                warn!(
+                    "[{} Store] Invalid Reference: h={} not found",
+                    T::name(),
+                    T::ident_fmt(h)
+                );
+                None
+            })
+            .and_then(|v| {
+                self.set_dirty(h.into());
+                Some(v)
+            })
     }
 
     fn set_dirty(&self, h: AssetKey) {

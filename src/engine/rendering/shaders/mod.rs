@@ -9,7 +9,8 @@ macro_rules! test_shader {
                 name: $name.to_string(),
                 code: include_str!($path).to_string(),
                 polygon_mode: PolygonMode::Fill,
-            }.gen_code();
+            }
+            .gen_code();
 
             wgpu::naga::front::wgsl::parse_str(&shader).unwrap();
         }
@@ -25,7 +26,8 @@ macro_rules! test_post_shader {
             let shader = Shader::PostProcess {
                 name: $name.to_string(),
                 code: include_str!($path).to_string(),
-            }.gen_code();
+            }
+            .gen_code();
 
             wgpu::naga::front::wgsl::parse_str(&shader).unwrap();
         }

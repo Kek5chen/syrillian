@@ -229,11 +229,7 @@ impl Renderer {
         self.printed_errors = 0;
     }
 
-    fn render_inner(
-        &mut self,
-        ctx: &mut FrameCtx,
-        world: &mut World,
-    ) -> Result<()> {
+    fn render_inner(&mut self, ctx: &mut FrameCtx, world: &mut World) -> Result<()> {
         self.update_render_data(world)?;
 
         let light_uniform = self.setup_lights(world)?;

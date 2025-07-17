@@ -1,7 +1,7 @@
 use crate::engine::rendering::cache::AssetCache;
+use crate::rendering::DebugRenderer;
 use std::sync::{Arc, RwLock};
 use wgpu::{RenderPass, SurfaceTexture, TextureView};
-use crate::rendering::DebugRenderer;
 
 pub struct FrameCtx {
     pub output: SurfaceTexture,

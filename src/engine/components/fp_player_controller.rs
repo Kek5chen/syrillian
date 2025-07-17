@@ -1,12 +1,12 @@
+use crate::World;
+use crate::components::{Component, RigidBodyComponent};
+use crate::core::GameObjectId;
 use log::warn;
 use nalgebra::Vector3;
 use num_traits::Zero;
 use rapier3d::prelude::{LockedAxes, vector};
 use std::cell::RefCell;
 use std::rc::Rc;
-use crate::World;
-use crate::components::{Component, RigidBodyComponent};
-use crate::core::GameObjectId;
 use winit::keyboard::KeyCode;
 
 pub struct FPPlayerController {

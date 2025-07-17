@@ -118,4 +118,3 @@ impl RopeComponent {
         }
     }
 }
-

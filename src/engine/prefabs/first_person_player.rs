@@ -1,8 +1,8 @@
-use rapier3d::geometry::SharedShape;
+use crate::World;
 use crate::components::{Collider3D, FPCameraController, FPPlayerController, RigidBodyComponent};
 use crate::core::GameObjectId;
 use crate::engine::prefabs::prefab::Prefab;
-use crate::World;
+use rapier3d::geometry::SharedShape;
 
 pub struct FirstPersonPlayerPrefab;
 
@@ -19,11 +19,10 @@ impl Prefab for FirstPersonPlayerPrefab {
 
         // Prepare character controller
         let mut char_controller = world.new_object(self.prefab_name());
-        char_controller
-            .transform
-            .set_position(0.0, 0.0, 0.0);
+        char_controller.transform.set_position(0.0, 0.0, 0.0);
 
-        char_controller.add_component::<Collider3D>()
+        char_controller
+            .add_component::<Collider3D>()
             .get_collider_mut()
             .unwrap()
             .set_shape(SharedShape::capsule_y(1.0, 0.25));

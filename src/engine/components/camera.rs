@@ -44,7 +44,12 @@ impl CameraComponent {
     }
 
     pub fn regenerate(&mut self) {
-        self.projection = Perspective3::new(self.width / self.height, self.fov.to_radians(), self.near, self.far);
+        self.projection = Perspective3::new(
+            self.width / self.height,
+            self.fov.to_radians(),
+            self.near,
+            self.far,
+        );
     }
 
     pub fn resize(&mut self, width: f32, height: f32) {
@@ -52,7 +57,6 @@ impl CameraComponent {
         self.height = height;
         self.regenerate();
     }
-
 }
 
 impl Component for CameraComponent {

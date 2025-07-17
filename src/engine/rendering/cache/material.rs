@@ -1,3 +1,4 @@
+use crate::assets::HShader;
 use crate::engine::assets::{HTexture, Material};
 use crate::engine::rendering::cache::{AssetCache, CacheType};
 use crate::engine::rendering::uniform::ShaderUniform;
@@ -6,7 +7,6 @@ use nalgebra::Vector3;
 use syrillian_macros::UniformIndex;
 use wgpu::wgt::SamplerDescriptor;
 use wgpu::{AddressMode, Device, Queue};
-use crate::assets::HShader;
 
 #[repr(u8)]
 #[derive(Debug, Copy, Clone, UniformIndex)]

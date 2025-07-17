@@ -43,11 +43,11 @@ mod key;
 
 pub use self::asset_store::*;
 pub use self::bind_group_layout::*;
+pub use self::handle::*;
 pub use self::material::*;
 pub use self::mesh::*;
 pub use self::shader::*;
 pub use self::texture::*;
-pub use self::handle::*;
 
 pub(crate) use self::generic_store::*;
 pub(crate) use self::key::*;

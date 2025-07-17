@@ -128,7 +128,7 @@ impl Collider3D {
             warn!("{e}");
         }
     }
-    
+
     /// Same as Collider3D::use_mesh but without a warning. This is nice for guarantee-less iteration
     pub fn please_use_mesh(&mut self) {
         _ = self.try_use_mesh();

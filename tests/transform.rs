@@ -1,5 +1,5 @@
-use syrillian::engine::core::{Transform, GameObjectId};
-use nalgebra::{Vector3, UnitQuaternion};
+use nalgebra::{UnitQuaternion, Vector3};
+use syrillian::engine::core::{GameObjectId, Transform};
 
 #[test]
 fn local_position_and_translation() {

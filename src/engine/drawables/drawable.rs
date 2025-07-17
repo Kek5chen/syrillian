@@ -1,10 +1,10 @@
 use std::any::Any;
 
-use nalgebra::Matrix4;
 use crate::core::GameObjectId;
 use crate::engine::rendering::DrawCtx;
 use crate::rendering::Renderer;
 use crate::world::World;
+use nalgebra::Matrix4;
 
 #[allow(unused_variables)]
 #[rustfmt::skip]

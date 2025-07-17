@@ -7,8 +7,8 @@ use std::error::Error;
 use std::fs;
 use std::path::Path;
 use wgpu::{
-    PolygonMode, PrimitiveTopology, VertexAttribute, VertexBufferLayout,
-    VertexFormat, VertexStepMode,
+    PolygonMode, PrimitiveTopology, VertexAttribute, VertexBufferLayout, VertexFormat,
+    VertexStepMode,
 };
 
 #[derive(Debug, Clone)]
@@ -107,13 +107,11 @@ impl StoreDefaults for Shader {
                 VertexBufferLayout {
                     array_stride: 0,
                     step_mode: VertexStepMode::Vertex,
-                    attributes: &[
-                        VertexAttribute {
-                            format: VertexFormat::Uint32,
-                            offset: 0,
-                            shader_location: 0,
-                        }
-                    ],
+                    attributes: &[VertexAttribute {
+                        format: VertexFormat::Uint32,
+                        offset: 0,
+                        shader_location: 0,
+                    }],
                 },
                 VertexBufferLayout {
                     array_stride: 0,

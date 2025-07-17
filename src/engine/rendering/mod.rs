@@ -15,8 +15,8 @@
 //! combined handle into the [`AssetCache`]. The [`AssetStore`](crate::assets::AssetStore) is
 //! where you can put your raw data, which is then initialized by the AssetCache on the GPU.
 //!
-//! You'll usually only interact with the Cache or something like that, in a 
-//! [`Drawable`](crate::drawables::Drawable), which is syrillians abstraction for 
+//! You'll usually only interact with the Cache or something like that, in a
+//! [`Drawable`](crate::drawables::Drawable), which is syrillians abstraction for
 //! "components" / systems, that know how to "render stuff".
 //!
 //! In a [`Drawable`](crate::drawables::Drawable) you'll want to interact with the

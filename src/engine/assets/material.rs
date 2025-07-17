@@ -1,7 +1,7 @@
-use bon::Builder;
 use crate::engine::assets::generic_store::{HandleName, Store, StoreDefaults, StoreType};
 use crate::engine::assets::*;
 use crate::store_add_checked;
+use bon::Builder;
 use nalgebra::Vector3;
 
 #[derive(Debug, Clone, Builder)]

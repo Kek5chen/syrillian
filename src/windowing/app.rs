@@ -1,3 +1,7 @@
+use crate::AppState;
+use crate::components::CameraComponent;
+use crate::rendering::Renderer;
+use crate::world::World;
 use futures::executor::block_on;
 use log::{error, info};
 use std::error::Error;
@@ -6,10 +10,6 @@ use winit::error::EventLoopError;
 use winit::event::{DeviceEvent, DeviceId, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{WindowAttributes, WindowId};
-use crate::AppState;
-use crate::components::CameraComponent;
-use crate::rendering::Renderer;
-use crate::world::World;
 
 pub struct App<S: AppState> {
     renderer: Option<Renderer>,
@@ -40,7 +40,7 @@ impl<S: AppState> AppSettings<S> {
         let (event_loop, app) = self.init_state().await?;
         app.run(event_loop).await
     }
-    
+
     async fn init_state(self) -> Result<(EventLoop<()>, App<S>), Box<dyn Error>> {
         let event_loop = match EventLoop::new() {
             Err(EventLoopError::NotSupported(_)) => {

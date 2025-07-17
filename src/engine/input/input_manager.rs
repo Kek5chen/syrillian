@@ -1,3 +1,4 @@
+use crate::World;
 use nalgebra::Vector2;
 use num_traits::Zero;
 use std::collections::HashMap;
@@ -5,7 +6,6 @@ use winit::dpi::PhysicalPosition;
 use winit::event::{DeviceEvent, ElementState, MouseButton, MouseScrollDelta, WindowEvent};
 use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::{CursorGrabMode, Window};
-use crate::World;
 
 pub type KeyState = ElementState;
 
@@ -246,9 +246,7 @@ impl InputManager {
             self.lock_cursor(false);
         }
 
-        if self.is_button_pressed(MouseButton::Left)
-            || self.is_button_pressed(MouseButton::Right)
-        {
+        if self.is_button_pressed(MouseButton::Left) || self.is_button_pressed(MouseButton::Right) {
             self.lock_cursor(true);
         }
     }

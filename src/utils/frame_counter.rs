@@ -1,5 +1,5 @@
-use std::collections::VecDeque;
 use crate::World;
+use std::collections::VecDeque;
 
 const DEFAULT_RUNNING_SIZE: usize = 60;
 

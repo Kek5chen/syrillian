@@ -1,9 +1,9 @@
+use crate::World;
 use crate::assets::{HMaterial, Mesh};
 use crate::core::GameObjectId;
 use crate::drawables::MeshRenderer;
 use crate::prefabs::prefab::Prefab;
 use crate::utils::{CUBE_IDX, CUBE_VERT};
-use crate::World;
 
 pub struct CubePrefab {
     pub material: HMaterial,
@@ -40,7 +40,7 @@ impl Prefab for CubePrefab {
 
         let mut cube = world.new_object("Cube");
         cube.drawable = Some(MeshRenderer::new(mesh));
-        
+
         cube
     }
 }

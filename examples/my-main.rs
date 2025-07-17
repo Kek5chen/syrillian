@@ -5,7 +5,6 @@
 //!    using this for reference.
 
 use std::error::Error;
-use wgpu::PolygonMode;
 use syrillian::SyrillianApp;
 use syrillian::assets::scene_loader::SceneLoader;
 use syrillian::assets::{Material, Shader};
@@ -18,6 +17,7 @@ use syrillian::prefabs::first_person_player::FirstPersonPlayerPrefab;
 use syrillian::prefabs::prefab::Prefab;
 use syrillian::utils::frame_counter::FrameCounter;
 use syrillian::{AppState, World};
+use wgpu::PolygonMode;
 use winit::window::Window;
 
 const NECO_IMAGE: &[u8; 1293] = include_bytes!("assets/neco.jpg");
@@ -39,13 +39,11 @@ impl AppState for MyMain {
         let fs = include_str!("dynamic_shader/shader.wgsl");
         let code = include_str!("../src/engine/rendering/shaders/default_vertex3d.wgsl");
 
-        let shader = world.assets.shaders.add(
-            Shader::Default {
-                name: "Funky Shader".to_string(),
-                code: fs.to_string() + code,
-                polygon_mode: PolygonMode::Fill,
-            }
-        );
+        let shader = world.assets.shaders.add(Shader::Default {
+            name: "Funky Shader".to_string(),
+            code: fs.to_string() + code,
+            polygon_mode: PolygonMode::Fill,
+        });
 
         let texture = world.assets.textures.load_image_from_memory(NECO_IMAGE)?;
         let neco_material = world.assets.materials.add(
@@ -82,6 +80,8 @@ impl AppState for MyMain {
             .get_body_mut()
             .unwrap();
         rb.set_gravity_scale(0.0, false);
+        rb.set_angular_damping(0.5);
+        rb.set_linear_damping(0.5);
         rb.enable_ccd(true);
 
         cube3
