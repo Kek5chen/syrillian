@@ -2,12 +2,12 @@
 //!
 //! The [`Renderer`] owns the [`State`], manages frame buffers and traverses
 //! the [`World`](crate::engine::world::World) to draw all objects each frame.
-//! It also provides debug drawing and post processing utilities.
+//! It also provides debug drawing and post-processing utilities.
 
 use super::error::*;
 use crate::components::{CameraComponent, CameraUniform, PointLightComponent, PointLightUniform};
 use crate::core::GameObjectId;
-use crate::engine::assets::{AssetStore, HShader};
+use crate::engine::assets::AssetStore;
 use crate::engine::rendering::FrameCtx;
 use crate::engine::rendering::cache::AssetCache;
 use crate::engine::rendering::context::DrawCtx;
@@ -67,13 +67,17 @@ pub struct RenderUniformData {
 #[derive(Debug)]
 pub struct DebugRenderer {
     pub draw_edges: bool,
+    pub draw_vertex_normals: bool,
 }
 
 impl Default for DebugRenderer {
     fn default() -> Self {
-        let flag = cfg!(debug_assertions);
+        const DEBUG_BUILD: bool = cfg!(debug_assertions);
 
-        DebugRenderer { draw_edges: flag }
+        DebugRenderer {
+            draw_edges: DEBUG_BUILD,
+            draw_vertex_normals: DEBUG_BUILD,
+        }
     }
 }
 
@@ -159,21 +163,11 @@ impl Renderer {
             }
         };
 
-        self.render(&mut ctx, world, None);
-
-        #[cfg(debug_assertions)]
-        self.render_debug(&mut ctx, world);
+        self.render(&mut ctx, world);
 
         self.end_render(world, ctx);
 
         true
-    }
-
-    #[cfg(debug_assertions)]
-    pub fn render_debug(&mut self, ctx: &mut FrameCtx, world: &mut World) {
-        if self.debug.draw_edges {
-            self.render(ctx, world, Some(HShader::DEBUG_EDGES));
-        }
     }
 
     pub fn resize(&mut self, new_size: PhysicalSize<u32>) {
@@ -218,11 +212,14 @@ impl Renderer {
             color_view,
             depth_view,
             cache: self.cache.clone(),
+
+            #[cfg(debug_assertions)]
+            debug: DebugRenderer::default(),
         })
     }
 
-    fn render(&mut self, ctx: &mut FrameCtx, world: &mut World, shader_override: Option<HShader>) {
-        if let Err(e) = self.render_inner(ctx, world, shader_override) {
+    fn render(&mut self, ctx: &mut FrameCtx, world: &mut World) {
+        if let Err(e) = self.render_inner(ctx, world) {
             if self.printed_errors < 5 {
                 self.printed_errors += 1;
                 error!("{e}")
@@ -236,12 +233,8 @@ impl Renderer {
         &mut self,
         ctx: &mut FrameCtx,
         world: &mut World,
-        shader_override: Option<HShader>,
     ) -> Result<()> {
         self.update_render_data(world)?;
-
-        let (load_op_color, load_op_depth) =
-            determine_draw_over_color(&world.assets, shader_override);
 
         let light_uniform = self.setup_lights(world)?;
 
@@ -252,7 +245,7 @@ impl Renderer {
                 label: Some("Main Encoder"),
             });
 
-        let mut pass = self.prepare_render_pass(&mut encoder, ctx, load_op_color, load_op_depth);
+        let mut pass = self.prepare_render_pass(&mut encoder, ctx);
 
         let render_uniform = &self.render_uniform_data.uniform;
 
@@ -262,7 +255,6 @@ impl Renderer {
         let draw_ctx = DrawCtx {
             frame: ctx,
             pass: RwLock::new(pass),
-            shader_override,
         };
 
         let world_ptr = world as *mut World;
@@ -455,8 +447,6 @@ impl Renderer {
         &self,
         encoder: &'a mut wgpu::CommandEncoder,
         ctx: &mut FrameCtx,
-        load_op_color: LoadOp<Color>,
-        load_op_depth: LoadOp<f32>,
     ) -> RenderPass<'a> {
         encoder.begin_render_pass(&RenderPassDescriptor {
             label: Some("Offscreen Render Pass"),
@@ -464,14 +454,14 @@ impl Renderer {
                 view: self.offscreen_surface.view(),
                 resolve_target: None,
                 ops: Operations {
-                    load: load_op_color,
+                    load: LoadOp::Clear(Color::BLACK),
                     store: StoreOp::Store,
                 },
             })],
             depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
                 view: &ctx.depth_view,
                 depth_ops: Some(Operations {
-                    load: load_op_depth,
+                    load: LoadOp::Clear(1.0),
                     store: StoreOp::Store,
                 }),
                 stencil_ops: None,
@@ -479,17 +469,4 @@ impl Renderer {
             ..RenderPassDescriptor::default()
         })
     }
-}
-
-fn determine_draw_over_color(
-    store: &AssetStore,
-    shader: Option<HShader>,
-) -> (LoadOp<Color>, LoadOp<f32>) {
-    if let Some(shader) = shader {
-        if store.shaders.get(shader).draw_over {
-            return (LoadOp::Load, LoadOp::Load);
-        }
-    }
-
-    (LoadOp::Clear(Color::BLACK), LoadOp::Clear(1.0))
 }

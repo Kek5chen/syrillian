@@ -8,13 +8,14 @@ use std::sync::mpsc;
 use std::sync::mpsc::TryRecvError;
 use std::time::Instant;
 use syrillian::assets::{HMaterial, HShader, Material, Shader};
+use syrillian::components::RotateComponent;
 use syrillian::core::GameObjectId;
 use syrillian::prefabs::CubePrefab;
 use syrillian::{AppState, World};
 use syrillian_macros::SyrillianApp;
+use wgpu::PolygonMode;
 use wgpu::naga::valid::{Capabilities, ValidationFlags};
 use winit::window::Window;
-use syrillian::components::RotateComponent;
 
 const SHADER_PATH: &str = "examples/dynamic_shader/shader.wgsl";
 const DEFAULT_VERT: &str = include_str!("../../src/engine/rendering/shaders/default_vertex3d.wgsl");
@@ -55,11 +56,13 @@ impl Default for DynamicShaderExample {
 
 impl DynamicShaderExample {
     fn check_valid(source: &str) -> Result<(), String> {
-        let code = Shader::builder()
-            .name("Dynamic Shader".to_string())
-            .code(source.to_string())
-            .build()
-            .gen_code();
+        let code = Shader::Default {
+            name: "Dynamic Shader".to_string(),
+            code: source.to_string(),
+            polygon_mode: PolygonMode::Fill,
+        }
+        .gen_code();
+
         let module =
             wgpu::naga::front::wgsl::parse_str(&code).map_err(|e| e.emit_to_string(&code))?;
 
@@ -91,7 +94,11 @@ impl DynamicShaderExample {
             self.shader_id = shader;
             self.material_id = material;
         } else {
-            world.assets.shaders.get_mut(self.shader_id).code = source_2;
+            world
+                .assets
+                .shaders
+                .get_mut(self.shader_id)
+                .set_code(source_2);
         }
     }
 
@@ -146,7 +153,6 @@ impl DynamicShaderExample {
 
             self.cube.delete();
         }
-
 
         self.cube = world.spawn(&CubePrefab {
             material: self.material_id,

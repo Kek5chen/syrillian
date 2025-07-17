@@ -6,7 +6,7 @@ fn circle(ranged: f32) -> vec4<f32> {
   }
 }
 
-fn triangle(x_og: f32, y_og: f32) -> bool {
+fn tri(x_og: f32, y_og: f32) -> bool {
   let x = x_og * cos(system.time);
   let y = y_og * cos(system.time);
 
@@ -19,8 +19,10 @@ fn triangle(x_og: f32, y_og: f32) -> bool {
 
 @fragment
 fn fs_main(in: VOutput) -> @location(0) vec4<f32> {
-  let x = sin(in.position.x);
-  let y = cos(in.position.y);
+  let og_x = in.position.x;
+  let og_y = in.position.y;
+  let x = sin(og_x);
+  let y = cos(og_y);
 
   let dist = length(in.position);
   var color = circle(dist);
@@ -34,7 +36,7 @@ fn fs_main(in: VOutput) -> @location(0) vec4<f32> {
     color += vec4(1.0, 0.0, 0.0, 0.0);
   }
 
-  if triangle(in.position.x, in.position.y) {
+  if tri((in.uv.x - 0.5) * 3, (in.uv.y - 0.5) * 3) {
     color = vec4(1.0, 0.0, 1.0, 0.0) - color;
   }
 

@@ -5,6 +5,7 @@
 //!    using this for reference.
 
 use std::error::Error;
+use wgpu::PolygonMode;
 use syrillian::SyrillianApp;
 use syrillian::assets::scene_loader::SceneLoader;
 use syrillian::assets::{Material, Shader};
@@ -39,10 +40,11 @@ impl AppState for MyMain {
         let code = include_str!("../src/engine/rendering/shaders/default_vertex3d.wgsl");
 
         let shader = world.assets.shaders.add(
-            Shader::builder()
-                .name("Funky Shader".to_string())
-                .code(fs.to_string() + code)
-                .build()
+            Shader::Default {
+                name: "Funky Shader".to_string(),
+                code: fs.to_string() + code,
+                polygon_mode: PolygonMode::Fill,
+            }
         );
 
         let texture = world.assets.textures.load_image_from_memory(NECO_IMAGE)?;
@@ -65,7 +67,7 @@ impl AppState for MyMain {
         cube2.transform.set_position(5.0, 6.9, -20.0);
 
         cube.add_component::<PointLightComponent>();
-        cube.add_component::<RotateComponent>();
+        cube.add_component::<RotateComponent>().scale_coefficient = 1.;
         // cube.add_component::<RopeComponent>().connect_to(player);
 
         cube2.add_component::<PointLightComponent>();

@@ -9,6 +9,8 @@ pub struct RotateComponent {
     pub iteration: f32,
     parent: GameObjectId,
     pub y_rot: f32,
+    pub scale_coefficient: f32,
+    default_scale: Vector3<f32>,
 }
 
 impl Component for RotateComponent {
@@ -21,6 +23,8 @@ impl Component for RotateComponent {
             iteration: 0.0,
             parent,
             y_rot: 0.0,
+            scale_coefficient: 0.0,
+            default_scale: parent.transform.scale(),
         }
     }
 
@@ -37,6 +41,7 @@ impl Component for RotateComponent {
         let combined_rotation = y_rotation * x_rotation;
 
         transform.set_rotation(combined_rotation);
+        transform.set_nonuniform_scale(self.default_scale * (self.iteration.sin() * self.scale_coefficient + 1.));
         self.iteration += delta_time;
     }
 

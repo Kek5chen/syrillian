@@ -1,28 +1,36 @@
 use crate::engine::assets::generic_store::{HandleName, Store, StoreDefaults, StoreType};
 use crate::engine::assets::{H, HShader, StoreTypeFallback, StoreTypeName};
+use crate::store_add_checked;
+use crate::utils::sizes::VEC3_SIZE;
 use std::borrow::Cow;
 use std::error::Error;
 use std::fs;
 use std::path::Path;
-use bon::Builder;
-use wgpu::PolygonMode;
+use wgpu::{
+    PolygonMode, PrimitiveTopology, VertexAttribute, VertexBufferLayout,
+    VertexFormat, VertexStepMode,
+};
 
-#[derive(Debug, Clone, Eq, PartialEq, Builder)]
-pub struct Shader {
-    pub name: String,
-    pub code: String,
-    #[builder(default = PolygonMode::Fill)]
-    pub polygon_mode: PolygonMode,
-    #[builder(default = false)]
-    pub draw_over: bool,
-    #[builder(default = ShaderStage::Default)]
-    pub stage: ShaderStage,
-}
+#[derive(Debug, Clone)]
+pub enum Shader {
+    Default {
+        name: String,
+        code: String,
+        polygon_mode: PolygonMode,
+    },
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub enum ShaderStage {
-    Default,
-    PostProcess,
+    PostProcess {
+        name: String,
+        code: String,
+    },
+
+    Custom {
+        name: String,
+        code: String,
+        polygon_mode: PolygonMode,
+        topology: PrimitiveTopology,
+        vertex_buffers: &'static [VertexBufferLayout<'static>],
+    },
 }
 
 impl H<Shader> {
@@ -32,6 +40,8 @@ impl H<Shader> {
     pub const POST_PROCESS_ID: u32 = 3;
     #[cfg(debug_assertions)]
     pub const DEBUG_EDGES_ID: u32 = 4;
+    #[cfg(debug_assertions)]
+    pub const DEBUG_VERTEX_NORMALS_ID: u32 = 5;
 
     // The fallback shader if a pipeline fails
     pub const FALLBACK: H<Shader> = H::new(Self::FALLBACK_ID);
@@ -48,6 +58,10 @@ impl H<Shader> {
     // An addon shader ID that is used for drawing debug edges on meshes
     #[cfg(debug_assertions)]
     pub const DEBUG_EDGES: H<Shader> = H::new(Self::DEBUG_EDGES_ID);
+
+    // An addon shader ID that is used for drawing debug edges on meshes
+    #[cfg(debug_assertions)]
+    pub const DEBUG_VERTEX_NORMALS: H<Shader> = H::new(Self::DEBUG_VERTEX_NORMALS_ID);
 }
 
 impl StoreDefaults for Shader {
@@ -79,14 +93,58 @@ impl StoreDefaults for Shader {
 
         #[cfg(debug_assertions)]
         {
-            let shader = store.add(Shader {
-                name: "3D Debug Edges Shader".to_owned(),
-                code: include_str!("../rendering/shaders/debug/edges.wgsl").to_string(),
-                polygon_mode: PolygonMode::Line,
-                draw_over: true,
-                stage: ShaderStage::Default,
-            });
-            assert_eq!(shader, HShader::DEBUG_EDGES);
+            store_add_checked!(
+                store,
+                HShader::DEBUG_EDGES_ID,
+                Shader::Default {
+                    name: "Mesh Debug Edges Shader".to_owned(),
+                    code: include_str!("../rendering/shaders/debug/edges.wgsl").to_string(),
+                    polygon_mode: PolygonMode::Line,
+                }
+            );
+
+            const DEBUG_VERTEX_NORMALS_VBL: &[VertexBufferLayout] = &[
+                VertexBufferLayout {
+                    array_stride: 0,
+                    step_mode: VertexStepMode::Vertex,
+                    attributes: &[
+                        VertexAttribute {
+                            format: VertexFormat::Uint32,
+                            offset: 0,
+                            shader_location: 0,
+                        }
+                    ],
+                },
+                VertexBufferLayout {
+                    array_stride: 0,
+                    step_mode: VertexStepMode::Instance,
+                    attributes: &[
+                        VertexAttribute {
+                            format: VertexFormat::Float32x3,
+                            offset: 0,
+                            shader_location: 1,
+                        },
+                        VertexAttribute {
+                            format: VertexFormat::Float32x3,
+                            offset: VEC3_SIZE,
+                            shader_location: 2,
+                        },
+                    ],
+                },
+            ];
+
+            store_add_checked!(
+                store,
+                HShader::DEBUG_VERTEX_NORMALS_ID,
+                Shader::Custom {
+                    name: "Mesh Debug Vertices Shader".to_owned(),
+                    code: include_str!("../rendering/shaders/debug/vertex_normals.wgsl")
+                        .to_string(),
+                    topology: PrimitiveTopology::LineList,
+                    polygon_mode: PolygonMode::Line,
+                    vertex_buffers: DEBUG_VERTEX_NORMALS_VBL,
+                }
+            );
         }
     }
 }
@@ -101,7 +159,7 @@ impl StoreTypeFallback for Shader {
 impl StoreTypeName for Shader {
     #[inline]
     fn name(&self) -> &str {
-        &self.name
+        &self.name()
     }
 }
 
@@ -132,11 +190,44 @@ const SHADER_PRE_CONTEXT: &str =
     include_str!("../rendering/shaders/engine_reserved_groups/basic.wgsl");
 
 impl Shader {
+    pub fn name(&self) -> &str {
+        match self {
+            Shader::Default { name, .. } => name,
+            Shader::PostProcess { name, .. } => name,
+            Shader::Custom { name, .. } => name,
+        }
+    }
+
+    pub fn polygon_mode(&self) -> PolygonMode {
+        match self {
+            Shader::Default { polygon_mode, .. } => *polygon_mode,
+            Shader::PostProcess { .. } => PolygonMode::Fill,
+            Shader::Custom { .. } => PolygonMode::Fill,
+        }
+    }
+
+    pub fn topology(&self) -> PrimitiveTopology {
+        match self {
+            Shader::Default { .. } | Shader::PostProcess { .. } => PrimitiveTopology::TriangleList,
+            Shader::Custom { topology, .. } => *topology,
+        }
+    }
+
+    pub fn set_code(&mut self, source: String) {
+        match self {
+            Shader::Default { code, .. }
+            | Shader::PostProcess { code, .. }
+            | Shader::Custom { code, .. } => *code = source,
+        }
+    }
+
     pub fn gen_code(&self) -> Cow<'static, str> {
-        let code = match self.stage {
-            ShaderStage::Default => format!("{}\n{}", &self.code, SHADER_PRE_CONTEXT),
-            ShaderStage::PostProcess => {
-                format!("{}\n{}", &self.code, POST_PROCESS_SHADER_PRE_CONTEXT)
+        let code = match self {
+            Shader::Default { code, .. } | Shader::Custom { code, .. } => {
+                format!("{}\n{}", code, SHADER_PRE_CONTEXT)
+            }
+            Shader::PostProcess { code, .. } => {
+                format!("{}\n{}", code, POST_PROCESS_SHADER_PRE_CONTEXT)
             }
         };
 
@@ -158,22 +249,14 @@ impl Store<Shader> {
     }
 
     pub fn add_post_process_shader(&self, name: String, code: String) -> H<Shader> {
-        self.add(Shader {
-            name,
-            code,
-            polygon_mode: PolygonMode::Fill,
-            draw_over: true,
-            stage: ShaderStage::PostProcess,
-        })
+        self.add(Shader::PostProcess { name, code })
     }
 
     pub fn add_default_shader(&self, name: String, code: String) -> H<Shader> {
-        self.add(Shader {
+        self.add(Shader::Default {
             name,
             code,
             polygon_mode: PolygonMode::Fill,
-            draw_over: false,
-            stage: ShaderStage::Default,
         })
     }
 }
