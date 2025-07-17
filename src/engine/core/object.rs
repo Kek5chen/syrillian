@@ -178,6 +178,19 @@ impl GameObject {
         components
     }
 
+    pub fn get_component_in_children<C>(&mut self) -> Option<Rc<RefCell<Box<C>>>>
+    where
+        C: Component + 'static,
+    {
+        for child in &mut self.children {
+            if let Some(comp) = child.get_component::<C>() {
+                return Some(comp);
+            }
+        }
+
+        None
+    }
+
     pub fn parent(&self) -> &Option<GameObjectId> {
         &self.parent
     }

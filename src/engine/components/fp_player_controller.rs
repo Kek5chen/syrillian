@@ -1,5 +1,5 @@
 use crate::World;
-use crate::components::{Component, RigidBodyComponent};
+use crate::components::{Component, FPCameraController, RigidBodyComponent};
 use crate::core::GameObjectId;
 use log::warn;
 use nalgebra::Vector3;
@@ -11,12 +11,13 @@ use winit::keyboard::KeyCode;
 
 pub struct FPPlayerController {
     parent: GameObjectId,
-    move_speed: f32,
-    jump_factor: f32,
-    damping_factor: f32,
+    pub move_speed: f32,
+    pub jump_factor: f32,
+    pub damping_factor: f32,
     rigid_body: Option<Rc<RefCell<Box<RigidBodyComponent>>>>,
-    velocity: Vector3<f32>,
-    sprint_multiplier: f32,
+    camera_controller: Option<Rc<RefCell<Box<FPCameraController>>>>,
+    pub velocity: Vector3<f32>,
+    pub sprint_multiplier: f32,
 }
 
 impl Component for FPPlayerController {
@@ -28,8 +29,9 @@ impl Component for FPPlayerController {
             parent,
             move_speed: 2.0,
             damping_factor: 1.5,
-            jump_factor: 10.0,
+            jump_factor: 100.0,
             rigid_body: None,
+            camera_controller: None,
             velocity: Vector3::zero(),
             sprint_multiplier: 10.0,
         }
@@ -49,6 +51,8 @@ impl Component for FPPlayerController {
             }
         }
         self.rigid_body = rigid;
+
+        self.camera_controller = self.parent.get_component_in_children::<FPCameraController>();
     }
 
     fn update(&mut self) {
@@ -88,26 +92,37 @@ impl Component for FPPlayerController {
 
         let mut base_vel = Vector3::zero();
 
+        let mut fb_movement: f32 = 0.;
         if world.input.is_key_pressed(KeyCode::KeyW) {
             base_vel += self.parent.transform.forward();
+            fb_movement += 1.;
         }
 
         if world.input.is_key_pressed(KeyCode::KeyS) {
             base_vel -= self.parent.transform.forward();
+            fb_movement -= 1.;
         }
 
+        let mut lr_movement = 0.;
         if world.input.is_key_pressed(KeyCode::KeyA) {
             base_vel -= self.parent.transform.right();
+            lr_movement -= 1.;
         }
 
         if world.input.is_key_pressed(KeyCode::KeyD) {
             base_vel += self.parent.transform.right();
+            lr_movement += 1.;
         }
 
         if base_vel.magnitude() > 0.5 {
             base_vel = base_vel.normalize();
         }
         self.velocity += base_vel * factor;
+
+        if let Some(camera) = self.camera_controller.as_ref() {
+            let mut camera = camera.borrow_mut();
+            camera.add_roll(-lr_movement * 5. * factor, 4. - fb_movement.abs() * 2.);
+        }
 
         let mut linvel = *body.linvel();
         linvel.x = self.velocity.x;

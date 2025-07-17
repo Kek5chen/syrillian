@@ -62,3 +62,13 @@ where
         UnitQuaternion::from_euler_angles(roll.to_radians(), pitch.to_radians(), yaw.to_radians())
     }
 }
+
+pub trait FloatMathExt {
+    fn lerp(self, other: Self, t: f32) -> Self;
+}
+
+impl FloatMathExt for f32 {
+    fn lerp(self, other: Self, t: f32) -> Self {
+        self * (1.0 - t) + other * t
+    }
+}

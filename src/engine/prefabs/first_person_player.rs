@@ -1,3 +1,4 @@
+use log::warn;
 use crate::World;
 use crate::components::{Collider3D, FPCameraController, FPPlayerController, RigidBodyComponent};
 use crate::core::GameObjectId;
@@ -27,10 +28,14 @@ impl Prefab for FirstPersonPlayerPrefab {
             .unwrap()
             .set_shape(SharedShape::capsule_y(1.0, 0.25));
 
-        char_controller.add_component::<RigidBodyComponent>();
-        char_controller.add_component::<FPPlayerController>();
+        if let Some(rigid_body) = char_controller.add_component::<RigidBodyComponent>().get_body_mut() {
+            rigid_body.set_additional_mass(5., false);
+        } else {
+            warn!("Not able to set rigid body properties for First Person Player Prefab");
+        }
 
         char_controller.add_child(camera);
+        char_controller.add_component::<FPPlayerController>();
 
         world.active_camera = Some(camera);
 
