@@ -62,15 +62,3 @@ where
         UnitQuaternion::from_euler_angles(roll.to_radians(), pitch.to_radians(), yaw.to_radians())
     }
 }
-
-#[macro_export]
-macro_rules! ensure_aligned {
-    ($obj:ty { $( $member:ident ),+ }, align <= $align:literal * $total:expr => size) => {
-        $(
-            ::static_assertions::const_assert_eq!(std::mem::offset_of!($obj, $member) % $align, 0);
-        )*
-
-        ::static_assertions::const_assert_eq!(size_of::<$obj>(), $align * $total);
-        ::static_assertions::const_assert_eq!(size_of::<$obj>() % $align, 0);
-    };
-}

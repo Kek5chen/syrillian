@@ -1,14 +1,19 @@
 mod builder;
 
 use crate::assets::mesh::builder::MeshBuilder;
+use crate::assets::scene_loader::SceneLoader;
 use crate::core::{Bones, Vertex3D};
 use crate::engine::assets::generic_store::{HandleName, Store, StoreDefaults, StoreType};
 use crate::engine::assets::{H, HMaterial, HMesh};
 use crate::store_add_checked;
-use crate::utils::{CUBE_IDX, CUBE_VERT, UNIT_SQUARE_VERT};
+use crate::utils::UNIT_SQUARE_VERT;
 use nalgebra::Point;
 use std::fmt::Debug;
 use std::ops::Range;
+
+const CUBE_OBJ: &[u8] = include_bytes!("preset_meshes/cube.obj");
+const DEBUG_ARROW: &[u8] = include_bytes!("preset_meshes/debug_arrow.obj");
+const SPHERE: &[u8] = include_bytes!("preset_meshes/small_sphere.obj");
 
 #[derive(Debug, Clone)]
 pub struct Mesh {
@@ -58,43 +63,51 @@ impl MeshVertexData<Vertex3D> {
         match &self.indices {
             None => (0u32..self.vertices.len() as u32)
                 .collect::<Vec<_>>()
-                .chunks_exact(3)
-                .map(|chunk| [chunk[0], chunk[1], chunk[2]])
-                .collect::<Vec<[u32; 3]>>(),
-            Some(indices) => indices
-                .chunks_exact(3)
-                .map(|chunk| [chunk[0], chunk[1], chunk[2]])
-                .collect(),
+                .as_chunks()
+                .0
+                .to_vec(),
+            Some(indices) => indices.as_chunks().0.to_vec(),
         }
     }
 
     pub fn make_point_cloud(&self) -> Vec<Point<f32, 3>> {
-        self.vertices
-            .iter()
-            .map(|v| v.position.into())
-            .map(|v: Point<f32, 3>| v * 1.0f32)
-            .clone()
-            .collect()
+        self.vertices.iter().map(|v| v.position.into()).collect()
     }
 }
 
 impl H<Mesh> {
     const UNIT_SQUARE_ID: u32 = 0;
     const UNIT_CUBE_ID: u32 = 1;
+    const DEBUG_ARROW_ID: u32 = 2;
+    const SPHERE_ID: u32 = 3;
 
     pub const UNIT_SQUARE: HMesh = H::new(Self::UNIT_SQUARE_ID);
     pub const UNIT_CUBE: HMesh = H::new(Self::UNIT_CUBE_ID);
+    pub const DEBUG_ARROW: HMesh = H::new(Self::DEBUG_ARROW_ID);
+    pub const SPHERE: HMesh = H::new(Self::SPHERE_ID);
 }
 
 impl StoreDefaults for Mesh {
     fn populate(store: &mut Store<Self>) {
         let unit_square = Mesh::builder(UNIT_SQUARE_VERT.to_vec()).build();
-        let unit_cube = Mesh::builder(CUBE_VERT.into())
-            .with_indices(CUBE_IDX.into())
-            .build();
-
         store_add_checked!(store, HMesh::UNIT_SQUARE_ID, unit_square);
+
+        let unit_cube = SceneLoader::load_first_mesh_from_buffer(CUBE_OBJ)
+            .expect("Cube Mesh load failed")
+            .expect("Cube Mesh doesn't have a mesh");
         store_add_checked!(store, HMesh::UNIT_CUBE_ID, unit_cube);
+
+        let debug_arrow = SceneLoader::load_first_mesh_from_buffer(DEBUG_ARROW)
+            .ok()
+            .flatten()
+            .expect("Debug Arrow Mesh load failed");
+        store_add_checked!(store, HMesh::DEBUG_ARROW_ID, debug_arrow);
+
+        let sphere = SceneLoader::load_first_mesh_from_buffer(SPHERE)
+            .ok()
+            .flatten()
+            .expect("Sphere Mesh load failed");
+        store_add_checked!(store, HMesh::SPHERE_ID, sphere);
     }
 }
 

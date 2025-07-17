@@ -143,6 +143,30 @@ impl Vertex3D {
     }
 }
 
+pub type Vertex3DTuple<'a, IU, IF> = (
+    Vector3<f32>,
+    Vector2<f32>,
+    Vector3<f32>,
+    Vector3<f32>,
+    Vector3<f32>,
+    IU,
+    IF,
+);
+
+impl<'a, IU: AsRef<[u32]>, IF: AsRef<[f32]>> From<Vertex3DTuple<'a, IU, IF>> for Vertex3D {
+    fn from(value: Vertex3DTuple<IU, IF>) -> Self {
+        Vertex3D::new(
+            value.0,
+            value.1,
+            value.2,
+            value.3,
+            value.4,
+            value.5.as_ref(),
+            value.6.as_ref(),
+        )
+    }
+}
+
 /// Pads a slice to four elements using the provided default value.
 fn pad_to_four<T: Copy>(input: &[T], default: T) -> [T; 4] {
     let mut arr = [default; 4];

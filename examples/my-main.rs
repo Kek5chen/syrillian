@@ -5,16 +5,18 @@
 //!    using this for reference.
 
 use std::error::Error;
-use syrillian::assets::Material;
+use syrillian::SyrillianApp;
 use syrillian::assets::scene_loader::SceneLoader;
-use syrillian::components::{Collider3D, PointLightComponent, RigidBodyComponent, RopeComponent, RotateComponent};
+use syrillian::assets::{Material, Shader};
+use syrillian::components::{
+    Collider3D, PointLightComponent, RigidBodyComponent, RopeComponent, RotateComponent,
+};
 use syrillian::core::GameObjectId;
 use syrillian::prefabs::CubePrefab;
 use syrillian::prefabs::first_person_player::FirstPersonPlayerPrefab;
 use syrillian::prefabs::prefab::Prefab;
 use syrillian::utils::frame_counter::FrameCounter;
 use syrillian::{AppState, World};
-use syrillian::SyrillianApp;
 use winit::window::Window;
 
 const NECO_IMAGE: &[u8; 1293] = include_bytes!("assets/neco.jpg");
@@ -33,12 +35,23 @@ impl AppState for MyMain {
         let mut player = world.spawn(&FirstPersonPlayerPrefab);
         player.transform.set_position(0.0, 20.0, 0.0);
 
+        let fs = include_str!("dynamic_shader/shader.wgsl");
+        let code = include_str!("../src/engine/rendering/shaders/default_vertex3d.wgsl");
+
+        let shader = world.assets.shaders.add(
+            Shader::builder()
+                .name("Funky Shader".to_string())
+                .code(fs.to_string() + code)
+                .build()
+        );
+
         let texture = world.assets.textures.load_image_from_memory(NECO_IMAGE)?;
         let neco_material = world.assets.materials.add(
             Material::builder()
                 .name("Neco Arc".into())
                 .diffuse_texture(texture)
                 .opacity(1.0)
+                .shader(shader)
                 .build(),
         );
 
@@ -62,12 +75,18 @@ impl AppState for MyMain {
             .unwrap();
         collider.set_mass(1.0);
         collider.set_restitution(0.9);
-        let rb = cube2.add_component::<RigidBodyComponent>().get_body_mut().unwrap();
+        let rb = cube2
+            .add_component::<RigidBodyComponent>()
+            .get_body_mut()
+            .unwrap();
         rb.set_gravity_scale(0.0, false);
         rb.enable_ccd(true);
 
-
-        cube3.add_component::<RigidBodyComponent>().get_body_mut().unwrap().enable_ccd(true);
+        cube3
+            .add_component::<RigidBodyComponent>()
+            .get_body_mut()
+            .unwrap()
+            .enable_ccd(true);
         cube3.add_component::<Collider3D>();
         cube3.add_component::<RopeComponent>().connect_to(cube2);
 
@@ -99,7 +118,6 @@ impl MyMain {
             self.frame_counter.fps(),
         )
     }
-
 }
 
 pub struct City;

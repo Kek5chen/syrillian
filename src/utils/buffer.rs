@@ -87,3 +87,15 @@ pub const UNIT_SQUARE_VERT: [Vertex3D; 6] = [
     SimpleVertex3D { position: [1.0,   1.0, 0.0], normal: [0.0, 0.0, -1.0], uv: [1.0, 1.0] }.upgrade(),
     SimpleVertex3D { position: [-1.0,  1.0, 0.0], normal: [0.0, 0.0, -1.0], uv: [0.0, 1.0] }.upgrade(),
 ];
+
+#[macro_export]
+macro_rules! ensure_aligned {
+    ($obj:ty { $( $member:ident ),+ }, align <= $align:literal * $total:expr => size) => {
+        $(
+            ::static_assertions::const_assert_eq!(std::mem::offset_of!($obj, $member) % $align, 0);
+        )*
+
+        ::static_assertions::const_assert_eq!(size_of::<$obj>(), $align * $total);
+        ::static_assertions::const_assert_eq!(size_of::<$obj>() % $align, 0);
+    };
+}

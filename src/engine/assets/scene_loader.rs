@@ -8,14 +8,15 @@ use crate::assets::{H, HMaterial, HShader, HTexture, Material, Mesh};
 use crate::core::{Bones, GameObjectId, Vertex3D};
 use crate::drawables::MeshRenderer;
 use crate::utils::ExtraMatrixMath;
+use crate::utils::iter::{extend_data, interpolate_zeros};
 use itertools::{Itertools, izip};
 use log::warn;
 use nalgebra::{Matrix4, Vector2, Vector3};
-use num_traits::Zero;
 use russimp_ng::Vector3D;
 use russimp_ng::material::{DataContent, MaterialProperty, PropertyTypeInfo, TextureType};
 use russimp_ng::node::Node;
 use russimp_ng::scene::{PostProcess, Scene};
+
 
 #[allow(dead_code)]
 pub struct SceneLoader;
@@ -40,79 +41,84 @@ impl SceneLoader {
 
         let root = match &scene.root {
             Some(node) => node.clone(),
-            None => return Ok(world.new_object("EmptyLoadedObject")),
+            None => return Ok(world.new_object("Empty Scene")),
         };
 
-        let materials = Self::load_materials(&scene, world);
-        Self::update_material_indices(&mut scene, materials);
+        let materials = load_materials(&scene, world);
+        update_material_indices(&mut scene, materials);
 
-        let root_object = world.new_object(&root.name);
-        Self::load_rec(world, &scene, &root, root_object);
-
+        let root_object = Self::spawn_object(world, &scene, &root);
         Ok(root_object)
     }
 
-    fn load_rec(world: &mut World, scene: &Scene, node: &Rc<Node>, mut node_obj: GameObjectId) {
-        Self::load_data(world, scene, node, node_obj);
+    pub fn load_scene(path: &str) -> Result<Scene, Box<dyn Error>> {
+        let scene = Scene::from_file(
+            path,
+            vec![
+                PostProcess::CalculateTangentSpace,
+                PostProcess::Triangulate,
+                PostProcess::SortByPrimitiveType,
+                PostProcess::JoinIdenticalVertices,
+                PostProcess::GenerateUVCoords,
+                PostProcess::GenerateNormals,
+                PostProcess::ForceGenerateNormals,
+                PostProcess::EmbedTextures,
+                PostProcess::LimitBoneWeights,
+            ],
+        )?;
+
+        Ok(scene)
+    }
+
+    pub fn load_scene_from_buffer(model: &[u8]) -> Result<Scene, Box<dyn Error>> {
+        let scene = Scene::from_buffer(
+            model,
+            vec![
+                PostProcess::CalculateTangentSpace,
+                PostProcess::Triangulate,
+                PostProcess::SortByPrimitiveType,
+                PostProcess::JoinIdenticalVertices,
+                PostProcess::GenerateUVCoords,
+                PostProcess::GenerateNormals,
+                PostProcess::ForceGenerateNormals,
+                PostProcess::EmbedTextures,
+                PostProcess::LimitBoneWeights,
+            ],
+            "obj"
+        )?;
+
+        Ok(scene)
+    }
+
+    pub fn spawn_object(world: &mut World, scene: &Scene, node: &Node) -> GameObjectId {
+        let mut node_obj = build_object(world, scene, node);
+
         for child in node.children.borrow().iter() {
-            let obj = world.new_object(&child.name);
-            node_obj.add_child(obj);
-            Self::load_rec(world, scene, child, obj);
+            let child_obj = Self::spawn_object(world, scene, child);
+            node_obj.add_child(child_obj);
         }
+
+        node_obj
     }
 
-    fn extract_data<T, O, F>(indices: &[u32], source: &[T], converter: F) -> Vec<O>
-    where
-        F: Fn(&T) -> O,
-    {
-        indices
-            .iter()
-            .filter_map(|&idx| source.get(idx as usize).map(&converter))
-            .collect()
+    pub fn load_first_mesh_from_buffer(model: &[u8]) -> Result<Option<Mesh>, Box<dyn Error>> {
+        let scene = Self::load_scene_from_buffer(model)?;
+        Ok(Self::load_first_from_scene(&scene))
     }
 
-    fn extend_data<T, O, F>(extendable: &mut Vec<T>, indices: &[u32], source: &[O], converter: F)
-    where
-        F: Fn(&O) -> T,
-    {
-        extendable.extend(Self::extract_data(indices, source, converter));
+    pub fn load_first_mesh(path: &str) -> Result<Option<Mesh>, Box<dyn Error>> {
+        let scene = Self::load_scene(path)?;
+        Ok(Self::load_first_from_scene(&scene))
     }
 
-    // hehe, idk either
-    fn normalize_data<S, X, Y, Z, A>(
-        scalar: &mut [S],
-        x: &mut Vec<X>,
-        y: &mut Vec<Y>,
-        z: &mut Vec<Z>,
-        a: &mut Vec<A>,
-    ) where
-        S: Zero + Clone,
-        X: Zero + Clone,
-        Y: Zero + Clone,
-        Z: Zero + Clone,
-        A: Zero + Clone,
-    {
-        let len = scalar.len();
-        if x.len() != scalar.len() {
-            x.resize(len, X::zero());
-        }
-
-        if y.len() != scalar.len() {
-            y.resize(len, Y::zero());
-        }
-
-        if z.len() != scalar.len() {
-            z.resize(len, Z::zero());
-        }
-
-        if a.len() != scalar.len() {
-            a.resize(len, A::zero());
-        }
+    pub fn load_first_from_scene(scene: &Scene)  -> Option<Mesh> {
+        let mesh = load_first_from_node(&scene, scene.root.as_ref()?, 0);
+        mesh
     }
 
-    fn load_data(world: &mut World, scene: &Scene, node: &Rc<Node>, mut node_obj: GameObjectId) {
+    pub fn load_mesh(scene: &Scene, node: &Node) -> Option<Mesh> {
         if node.meshes.is_empty() {
-            return;
+            return None;
         }
 
         let mut bones = Bones::default();
@@ -125,11 +131,6 @@ impl SceneLoader {
         let mut bone_idxs: Vec<Vec<u32>> = Vec::new();
         let mut bone_weights: Vec<Vec<f32>> = Vec::new();
 
-        const VEC3_FROM_VEC3D: fn(&Vector3D) -> Vector3<f32> =
-            |v: &Vector3D| Vector3::new(v.x, v.y, v.z);
-        const VEC2_FROM_VEC3D: fn(&Vector3D) -> Vector2<f32> =
-            |v: &Vector3D| Vector2::new(v.x, v.y);
-
         let mut material_ranges = Vec::new();
         let mut mesh_vertex_count_start: usize = 0;
 
@@ -137,35 +138,35 @@ impl SceneLoader {
             let mut mesh_vertex_count = mesh_vertex_count_start;
             // filter faces with not 3 vertices.
             // 1 and 2 are point and line faces which I can't render yet
-            // 3+ shouldn't happen because of Triangulate PostProcess Assimp feature
+            // 3+ shouldn't happen because of Triangulate PostProcess Assimp feature, thanksyu
             let filtered_faces = mesh.faces.iter().filter(|face| face.0.len() == 3);
 
             for face in filtered_faces.clone() {
                 let face_indices = &face.0;
 
-                Self::extend_data(
+                extend_data(
                     &mut positions,
                     face_indices,
                     &mesh.vertices,
-                    VEC3_FROM_VEC3D,
+                    vec3_from_vec3d,
                 );
 
                 if let Some(Some(dif_tex_coords)) = mesh.texture_coords.first() {
-                    Self::extend_data(
+                    extend_data(
                         &mut tex_coords,
                         face_indices,
                         dif_tex_coords,
-                        VEC2_FROM_VEC3D,
+                        vec2_from_vec3d,
                     );
                 }
 
-                Self::extend_data(&mut normals, face_indices, &mesh.normals, VEC3_FROM_VEC3D);
-                Self::extend_data(&mut tangents, face_indices, &mesh.tangents, VEC3_FROM_VEC3D);
-                Self::extend_data(
+                extend_data(&mut normals, face_indices, &mesh.normals, vec3_from_vec3d);
+                extend_data(&mut tangents, face_indices, &mesh.tangents, vec3_from_vec3d);
+                extend_data(
                     &mut bitangents,
                     face_indices,
                     &mesh.bitangents,
-                    VEC3_FROM_VEC3D,
+                    vec3_from_vec3d,
                 );
 
                 mesh_vertex_count += 3;
@@ -174,7 +175,7 @@ impl SceneLoader {
             bone_idxs.resize_with(mesh_vertex_count, Vec::new);
             bone_weights.resize_with(mesh_vertex_count, Vec::new);
 
-            Self::map_bones(
+            map_bones(
                 bone_idxs[mesh_vertex_count_start..mesh_vertex_count].as_mut(),
                 bone_weights[mesh_vertex_count_start..mesh_vertex_count].as_mut(),
                 &mut bones,
@@ -182,7 +183,8 @@ impl SceneLoader {
                 filtered_faces,
             );
 
-            // TODO: Change material ranges to usize?
+            // TODO: Change material ranges to usize? (This is a question)
+            //   Rev1: Not sure, i don't think that's needed
             material_ranges.push((
                 H::new(mesh.material_index),
                 mesh_vertex_count_start as u32..mesh_vertex_count as u32,
@@ -191,13 +193,19 @@ impl SceneLoader {
             mesh_vertex_count_start = mesh_vertex_count;
         }
 
+        if positions.is_empty() {
+            return None;
+        }
+
         // it do work tho
-        Self::normalize_data(
-            &mut positions,
-            &mut tex_coords,
-            &mut normals,
-            &mut tangents,
-            &mut bitangents,
+        interpolate_zeros(
+            positions.len(),
+            &mut [
+                &mut tex_coords,
+                &mut normals,
+                &mut tangents,
+                &mut bitangents,
+            ],
         );
 
         let vertices: Vec<Vertex3D> = izip!(
@@ -206,217 +214,233 @@ impl SceneLoader {
             normals,
             tangents,
             bitangents,
-            bone_idxs,
-            bone_weights
+            &bone_idxs,
+            &bone_weights
         )
-        .map(
-            |(position, tex_coord, normal, tangent, bitangent, bone_indicies, bone_weights)| {
-                Vertex3D::new(
-                    position,
-                    tex_coord,
-                    normal,
-                    tangent,
-                    bitangent,
-                    &bone_indicies,
-                    &bone_weights,
-                )
-            },
-        )
+        .map(Vertex3D::from)
         .collect();
 
-        if !vertices.is_empty() {
-            let mesh = Mesh::builder(vertices)
+        let mesh = Mesh::builder(vertices)
                 .with_many_textures(material_ranges)
-                .with_bones(bones);
-            let id = world.assets.meshes.add(mesh);
+                .with_bones(bones)
+                .build();
 
-            node_obj.drawable = Some(MeshRenderer::new(id));
-        }
-
-        // set transformations
-        let t = node.transformation;
-        let (position, rotation, scale) = Matrix4::from([
-            [t.a1, t.b1, t.c1, t.d1],
-            [t.a2, t.b2, t.c2, t.d2],
-            [t.a3, t.b3, t.c3, t.d3],
-            [t.a4, t.b4, t.c4, t.d4],
-        ])
-        .decompose(); // convert row to column major (assimp to cgmath)
-
-        node_obj.transform.set_local_position_vec(position);
-        node_obj.transform.set_local_rotation(rotation);
-        node_obj.transform.set_nonuniform_local_scale(scale);
-    }
-
-    fn map_bones<'a>(
-        indices: &mut [Vec<u32>], // start from 0 to how many were defined in the raw mesh, not including point or line "faces"
-        weights: &mut [Vec<f32>], // "
-        mapped: &mut Bones, // are the total bones that this merged mesh will have, mapped to the merged vertices
-        raw: &'a russimp_ng::mesh::Mesh, // the raw bones for this specific mesh part
-        faces: impl Iterator<Item = &'a russimp_ng::face::Face>, // the faces that need to be mapped
-    ) {
-        // grab bones length before so we know where we base our ids off of. the new indices should
-        // now be bones_base + raw id
-        let original_bone_count = mapped.raw.len();
-
-        // map bones from raw into mapped bone list
-        for bone in &raw.bones {
-            mapped.names.push(bone.name.clone());
-            mapped.raw.push(bone.into())
-        }
-
-        // transpose the mapping from `Vec<weights.vertex ids>` to `vertex ids -> Vec<weights>`
-        let mapped_indices: HashMap<u32, Vec<(usize, f32)>> = raw
-            .bones
-            .iter()
-            .enumerate()
-            .flat_map(|(i, b)| {
-                b.weights
-                    .iter()
-                    .map(move |w| (w.vertex_id, (i + original_bone_count, w.weight)))
-            })
-            .into_group_map();
-
-        // map the bone weights to these face vertex ids.
-        for face in faces {
-            for v_id in &face.0 {
-                let Some(idxs) = indices.get_mut(*v_id as usize) else {
-                    unreachable!("The indices should've been prepared.");
-                };
-                let Some(weights) = weights.get_mut(*v_id as usize) else {
-                    unreachable!("The weights should've been prepared.");
-                };
-
-                let Some(bones_by_index) = mapped_indices.get(v_id) else {
-                    // no bones found for this index
-                    break;
-                };
-
-                idxs.extend(bones_by_index.iter().map(|b| b.0 as u32));
-                weights.extend(bones_by_index.iter().map(|b| b.1));
-            }
-        }
-    }
-
-    fn load_materials(scene: &Scene, world: &mut World) -> HashMap<u32, HMaterial> {
-        let mut mapping = HashMap::new();
-        for (i, material) in scene.materials.iter().enumerate() {
-            let mat_id = Self::load_material(world, material);
-            mapping.insert(i as u32, mat_id);
-        }
-        mapping
-    }
-
-    fn update_material_indices(scene: &mut Scene, mat_map: HashMap<u32, HMaterial>) {
-        for mesh in &mut scene.meshes {
-            let mapped_mat = mat_map
-                .get(&mesh.material_index)
-                .cloned()
-                .unwrap_or(HMaterial::FALLBACK);
-            mesh.material_index = mapped_mat.id();
-        }
-    }
-
-    fn load_texture(
-        world: &mut World,
-        texture: Rc<RefCell<russimp_ng::material::Texture>>,
-    ) -> HTexture {
-        // TODO: Don't load textures that were loaded before and are just shared between two materials
-        let texture = texture.borrow();
-        match &texture.data {
-            DataContent::Texel(_) => panic!("I CAN'T ADD TEXLESLSSE YET PLS HELP"),
-            DataContent::Bytes(data) => world
-                .assets
-                .textures
-                .load_image_from_memory(data)
-                .unwrap_or_else(|e| {
-                    warn!("Failed to load texture: {e}. Using fallback texture.");
-                    HTexture::FALLBACK_DIFFUSE
-                }),
-        }
-    }
-
-    fn extract_vec3_property<F>(
-        properties: &[MaterialProperty],
-        key: &str,
-        default: F,
-    ) -> Vector3<f32>
-    where
-        F: Fn() -> Vector3<f32>,
-    {
-        let prop = properties.iter().find(|prop| prop.key.contains(key));
-        match prop {
-            None => default(),
-            Some(prop) => match &prop.data {
-                PropertyTypeInfo::FloatArray(arr) => {
-                    if arr.len() == 3 {
-                        Vector3::new(arr[0], arr[1], arr[2])
-                    } else {
-                        warn!(
-                            "Property {} was expected to have 3 values but only had {}",
-                            key,
-                            arr.len()
-                        );
-                        default()
-                    }
-                }
-                _ => default(),
-            },
-        }
-    }
-
-    fn extract_string_property<F>(properties: &[MaterialProperty], key: &str, default: F) -> String
-    where
-        F: Fn() -> String,
-    {
-        let prop = properties.iter().find(|prop| prop.key.contains(key));
-        match prop {
-            None => default(),
-            Some(prop) => match &prop.data {
-                PropertyTypeInfo::String(str) => str.clone(),
-                _ => default(),
-            },
-        }
-    }
-
-    fn extract_float_property(properties: &[MaterialProperty], key: &str, default: f32) -> f32 {
-        let prop = properties.iter().find(|prop| prop.key.contains(key));
-        match prop {
-            None => default,
-            Some(prop) => match &prop.data {
-                PropertyTypeInfo::FloatArray(f) => f.first().cloned().unwrap_or(default),
-                _ => default,
-            },
-        }
-    }
-
-    fn load_material(
-        world: &mut World,
-        material: &russimp_ng::material::Material,
-    ) -> HMaterial {
-        let name =
-            Self::extract_string_property(&material.properties, "name", || "Material".to_string());
-
-        let diffuse = Self::extract_vec3_property(&material.properties, "diffuse", || {
-            Vector3::new(0.788, 0.788, 0.788)
-        });
-        let diffuse_tex = material.textures.get(&TextureType::Diffuse);
-        let diffuse_tex_id = diffuse_tex.map(|tex| Self::load_texture(world, tex.clone()));
-
-        let normal_tex = material.textures.get(&TextureType::Normals);
-        let normal_tex_id = normal_tex.map(|tex| Self::load_texture(world, tex.clone()));
-
-        let shininess = Self::extract_float_property(&material.properties, "shininess", 0.0);
-        let new_material = Material {
-            name,
-            color: diffuse,
-            shininess,
-            diffuse_texture: diffuse_tex_id,
-            normal_texture: normal_tex_id,
-            shininess_texture: None,
-            opacity: 1.0,
-            shader: HShader::DIM3,
-        };
-        world.assets.materials.add(new_material)
+        Some(mesh)
     }
 }
+
+fn load_first_from_node(scene: &Scene, node: &Node, iter: u32) -> Option<Mesh> {
+    if iter > 1000 {
+        return None;
+    }
+
+    if let Some(mesh) = SceneLoader::load_mesh(scene, node) {
+        return Some(mesh);
+    }
+
+    for child in node.children.borrow().iter() {
+        if let Some(mesh) = load_first_from_node(scene, child, iter + 1) {
+            return Some(mesh);
+        }
+    }
+
+    None
+}
+
+fn map_bones<'a>(
+    indices: &mut [Vec<u32>], // start from 0 to how many were defined in the raw mesh, not including point or line "faces"
+    weights: &mut [Vec<f32>], // "
+    mapped: &mut Bones, // are the total bones that this merged mesh will have, mapped to the merged vertices
+    raw: &'a russimp_ng::mesh::Mesh, // the raw bones for this specific mesh part
+    faces: impl Iterator<Item = &'a russimp_ng::face::Face>, // the faces that need to be mapped
+) {
+    // grab bones length before so we know where we base our ids off of. the new indices should
+    // now be bones_base + raw id
+    let original_bone_count = mapped.raw.len();
+
+    // map bones from raw into mapped bone list
+    for bone in &raw.bones {
+        mapped.names.push(bone.name.clone());
+        mapped.raw.push(bone.into())
+    }
+
+    // transpose the mapping from `Vec<weights.vertex ids>` to `vertex ids -> Vec<weights>`
+    let mapped_indices: HashMap<u32, Vec<(usize, f32)>> = raw
+        .bones
+        .iter()
+        .enumerate()
+        .flat_map(|(i, b)| {
+            b.weights
+                .iter()
+                .map(move |w| (w.vertex_id, (i + original_bone_count, w.weight)))
+        })
+        .into_group_map();
+
+    // map the bone weights to these face vertex ids.
+    for face in faces {
+        for v_id in &face.0 {
+            let Some(idxs) = indices.get_mut(*v_id as usize) else {
+                unreachable!("The indices should've been prepared.");
+            };
+            let Some(weights) = weights.get_mut(*v_id as usize) else {
+                unreachable!("The weights should've been prepared.");
+            };
+
+            let Some(bones_by_index) = mapped_indices.get(v_id) else {
+                // no bones found for this index
+                break;
+            };
+
+            idxs.extend(bones_by_index.iter().map(|b| b.0 as u32));
+            weights.extend(bones_by_index.iter().map(|b| b.1));
+        }
+    }
+}
+
+fn load_texture(
+    world: &mut World,
+    texture: Rc<RefCell<russimp_ng::material::Texture>>,
+) -> HTexture {
+    // TODO: Don't load textures that were loaded before and are just shared between two materials
+    let texture = texture.borrow();
+    match &texture.data {
+        DataContent::Texel(_) => panic!("I CAN'T ADD TEXLESLSSE YET PLS HELP"),
+        DataContent::Bytes(data) => world
+            .assets
+            .textures
+            .load_image_from_memory(data)
+            .unwrap_or_else(|e| {
+                warn!("Failed to load texture: {e}. Using fallback texture.");
+                HTexture::FALLBACK_DIFFUSE
+            }),
+    }
+}
+
+fn extract_vec3_property<F>(properties: &[MaterialProperty], key: &str, default: F) -> Vector3<f32>
+where
+    F: Fn() -> Vector3<f32>,
+{
+    let prop = properties.iter().find(|prop| prop.key.contains(key));
+    match prop {
+        None => default(),
+        Some(prop) => match &prop.data {
+            PropertyTypeInfo::FloatArray(arr) => {
+                if arr.len() == 3 {
+                    Vector3::new(arr[0], arr[1], arr[2])
+                } else {
+                    warn!(
+                        "Property {} was expected to have 3 values but only had {}",
+                        key,
+                        arr.len()
+                    );
+                    default()
+                }
+            }
+            _ => default(),
+        },
+    }
+}
+
+fn load_material(world: &mut World, material: &russimp_ng::material::Material) -> HMaterial {
+    let name = get_string_property_or(&material.properties, "name", || "Material".to_string());
+
+    let diffuse = extract_vec3_property(&material.properties, "diffuse", || {
+        Vector3::new(0.788, 0.788, 0.788)
+    });
+    let diffuse_tex = material.textures.get(&TextureType::Diffuse);
+    let diffuse_tex_id = diffuse_tex.map(|tex| load_texture(world, tex.clone()));
+
+    let normal_tex = material.textures.get(&TextureType::Normals);
+    let normal_tex_id = normal_tex.map(|tex| load_texture(world, tex.clone()));
+
+    let shininess = get_float_property_or(&material.properties, "shininess", 0.0);
+    let new_material = Material {
+        name,
+        color: diffuse,
+        shininess,
+        diffuse_texture: diffuse_tex_id,
+        normal_texture: normal_tex_id,
+        shininess_texture: None,
+        opacity: 1.0,
+        shader: HShader::DIM3,
+    };
+    world.assets.materials.add(new_material)
+}
+
+pub fn build_object(world: &mut World, scene: &Scene, node: &Node) -> GameObjectId {
+    let mut node_obj = world.new_object(&node.name);
+
+    if let Some(mesh) = SceneLoader::load_mesh(scene, node) {
+        let handle = world.assets.meshes.add(mesh);
+
+        node_obj.drawable = Some(MeshRenderer::new(handle));
+    }
+
+    let t = node.transformation;
+    let (position, rotation, scale) = Matrix4::from([
+        [t.a1, t.b1, t.c1, t.d1],
+        [t.a2, t.b2, t.c2, t.d2],
+        [t.a3, t.b3, t.c3, t.d3],
+        [t.a4, t.b4, t.c4, t.d4],
+    ])
+    .decompose(); // convert row to column major (assimp to cgmath)
+
+    node_obj.transform.set_local_position_vec(position);
+    node_obj.transform.set_local_rotation(rotation);
+    node_obj.transform.set_nonuniform_local_scale(scale);
+
+    node_obj
+}
+
+fn load_materials(scene: &Scene, world: &mut World) -> HashMap<u32, HMaterial> {
+    let mut mapping = HashMap::new();
+    for (i, material) in scene.materials.iter().enumerate() {
+        let mat_id = load_material(world, material);
+        mapping.insert(i as u32, mat_id);
+    }
+    mapping
+}
+
+fn update_material_indices(scene: &mut Scene, mat_map: HashMap<u32, HMaterial>) {
+    for mesh in &mut scene.meshes {
+        let mapped_mat = mat_map
+            .get(&mesh.material_index)
+            .cloned()
+            .unwrap_or(HMaterial::FALLBACK);
+        mesh.material_index = mapped_mat.id();
+    }
+}
+
+fn get_string_property_or<F>(properties: &[MaterialProperty], key: &str, default: F) -> String
+where
+    F: Fn() -> String,
+{
+    let prop = properties.iter().find(|prop| prop.key.contains(key));
+    match prop {
+        None => default(),
+        Some(prop) => match &prop.data {
+            PropertyTypeInfo::String(str) => str.clone(),
+            _ => default(),
+        },
+    }
+}
+
+fn get_float_property_or(properties: &[MaterialProperty], key: &str, default: f32) -> f32 {
+    let prop = properties.iter().find(|prop| prop.key.contains(key));
+    match prop {
+        None => default,
+        Some(prop) => match &prop.data {
+            PropertyTypeInfo::FloatArray(f) => f.first().cloned().unwrap_or(default),
+            _ => default,
+        },
+    }
+}
+
+fn vec3_from_vec3d(v: &Vector3D) -> Vector3<f32> {
+    Vector3::new(v.x, v.y, v.z)
+}
+
+fn vec2_from_vec3d(v: &Vector3D) -> Vector2<f32> {
+    Vector2::new(v.x, v.y)
+}
+
