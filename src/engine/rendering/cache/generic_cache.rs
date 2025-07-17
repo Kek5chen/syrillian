@@ -73,6 +73,16 @@ impl<T: CacheType> Cache<T> {
             .map(|h| h.clone())
     }
 
+    pub fn refresh_dirty(&self) -> usize {
+        let dirty = self.store.pop_dirty();
+
+        for asset in &dirty {
+            self.data.remove(asset);
+        }
+
+        dirty.len()
+    }
+
     fn try_refresh_item(
         &self,
         h: H<T>,

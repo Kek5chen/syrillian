@@ -17,7 +17,7 @@ use crate::engine::rendering::uniform::ShaderUniform;
 use crate::ensure_aligned;
 use crate::rendering::State;
 use crate::world::World;
-use log::error;
+use log::{error, trace};
 use nalgebra::{Matrix4, Perspective3, Vector2};
 use snafu::ResultExt;
 use std::fmt::Debug;
@@ -44,6 +44,7 @@ pub struct Renderer {
 
     pub debug: DebugRenderer,
 
+    frame_count: usize,
     printed_errors: u32,
 }
 
@@ -130,6 +131,7 @@ impl Renderer {
 
             debug: DebugRenderer::default(),
 
+            frame_count: 0,
             printed_errors: 0,
         })
     }
@@ -186,6 +188,8 @@ impl Renderer {
     }
 
     fn begin_render(&mut self) -> Result<FrameCtx> {
+        self.frame_count += 1;
+
         let mut output = self
             .state
             .surface
@@ -308,6 +312,14 @@ impl Renderer {
 
         ctx.output.present();
         self.window.request_redraw();
+
+        if self.frame_count % 1000 == 0 {
+            trace!("Refreshing cache...");
+            let refreshed_count = self.cache.refresh_all();
+            if cfg!(debug_assertions) && refreshed_count != 0 {
+                trace!("Refreshed cache elements {}", refreshed_count);
+            }
+        }
     }
 
     fn render_final_pass(&mut self, _world: &mut World, ctx: &mut FrameCtx) {

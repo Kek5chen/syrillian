@@ -146,7 +146,7 @@ impl Shader {
 
 impl Store<Shader> {
     pub fn add_default_shader_from_file<T>(
-        &mut self,
+        &self,
         name: &str,
         path: T,
     ) -> Result<H<Shader>, Box<dyn Error>>
@@ -157,7 +157,7 @@ impl Store<Shader> {
         Ok(self.add_default_shader(name.to_owned(), content.to_owned()))
     }
 
-    pub fn add_post_process_shader(&mut self, name: String, code: String) -> H<Shader> {
+    pub fn add_post_process_shader(&self, name: String, code: String) -> H<Shader> {
         self.add(Shader {
             name,
             code,
@@ -167,7 +167,7 @@ impl Store<Shader> {
         })
     }
 
-    pub fn add_default_shader(&mut self, name: String, code: String) -> H<Shader> {
+    pub fn add_default_shader(&self, name: String, code: String) -> H<Shader> {
         self.add(Shader {
             name,
             code,

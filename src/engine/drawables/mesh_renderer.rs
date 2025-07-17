@@ -104,15 +104,20 @@ impl Drawable for MeshRenderer {
 
     fn update(
         &mut self,
-        _world: &mut World,
+        world: &mut World,
         parent: GameObjectId,
         renderer: &Renderer,
         outer_transform: &Matrix4<f32>,
     ) {
-        let runtime_data = self
+        let runtime_data = match self
             .runtime_data
-            .as_mut()
-            .expect("Should be initialized in init");
+            .as_mut() {
+            None => {
+                self.setup(renderer, world);
+                self.runtime_data.as_mut().unwrap()
+            },
+            Some(runtime_data) => runtime_data,
+        };
 
         runtime_data.mesh_data.update(parent, outer_transform);
 

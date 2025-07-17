@@ -58,12 +58,12 @@ impl World {
             objects: HashMap::new(),
             children: vec![],
             active_camera: None,
-            last_frame_time: Instant::now(),
             physics: PhysicsSimulator::default(),
             input: InputManager::default(),
             assets: AssetStore::empty(),
             start_time: Instant::now(),
             delta_time: Duration::default(),
+            last_frame_time: Instant::now(),
             requested_shutdown: false,
             next_object_id: GameObjectId(0),
         })

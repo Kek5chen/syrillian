@@ -5,11 +5,13 @@ use dashmap::mapref::one::Ref as MapRef;
 use dashmap::mapref::one::RefMut as MapRefMut;
 use log::{trace, warn};
 use std::fmt::{Debug, Display, Formatter};
+use std::mem;
 use std::sync::RwLock;
 
 pub struct Store<T: StoreType> {
     data: DashMap<AssetKey, T>,
     next_id: RwLock<u32>,
+    dirty: RwLock<Vec<AssetKey>>,
 }
 
 impl<T: StoreType> Store<T> {
@@ -17,6 +19,7 @@ impl<T: StoreType> Store<T> {
         Self {
             data: DashMap::new(),
             next_id: RwLock::new(0),
+            dirty: RwLock::default(),
         }
     }
 }
@@ -41,7 +44,7 @@ pub enum HandleName<T: StoreType> {
 impl<T: StoreType> Display for HandleName<T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            HandleName::Static(s) => write!(f, "\"{s}\"",),
+            HandleName::Static(s) => write!(f, "\"{s}\"", ),
             HandleName::Id(id) => write!(f, "#{id}"),
         }
     }
@@ -113,7 +116,26 @@ impl<T: StoreType> Store<T> {
                 T::ident_fmt(h)
             );
             None
+        }).and_then(|v| {
+            self.set_dirty(h.into());
+            Some(v)
         })
+    }
+
+    fn set_dirty(&self, h: AssetKey) {
+        let mut dirty_store = self.dirty.write().expect("Deadlock in Asset Store");
+        if !dirty_store.contains(&h.into()) {
+            trace!("Set {} {} dirty", T::name(), T::ident(h.into()));
+            dirty_store.push(h.into());
+        }
+    }
+
+    pub(crate) fn pop_dirty(&self) -> Vec<AssetKey> {
+        let mut dirty_store = self.dirty.write().expect("Deadlock in Asset Store");
+        let mut swap_store = Vec::new();
+        mem::swap::<Vec<AssetKey>>(dirty_store.as_mut(), swap_store.as_mut());
+
+        swap_store
     }
 }
 
@@ -143,6 +165,7 @@ impl<T: StoreTypeFallback> Store<T> {
             }
         } else {
             let data = self.data.get_mut(&h.into());
+            self.set_dirty(h.into());
             match data {
                 Some(elem) => elem,
                 None => unreachable!("Item was checked previously"),

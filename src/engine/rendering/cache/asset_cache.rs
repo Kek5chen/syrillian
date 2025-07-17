@@ -103,4 +103,16 @@ impl AssetCache {
             .try_get(HBGL::POST_PROCESS, self)
             .expect("Post Process is a default layout")
     }
+    
+    pub fn refresh_all(&self) -> usize {
+        let mut refreshed_count = 0;
+        
+        refreshed_count += self.meshes.refresh_dirty();
+        refreshed_count += self.shaders.refresh_dirty();
+        refreshed_count += self.materials.refresh_dirty();
+        refreshed_count += self.textures.refresh_dirty();
+        refreshed_count += self.bgls.refresh_dirty();
+        
+        refreshed_count
+    }
 }

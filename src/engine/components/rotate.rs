@@ -6,9 +6,9 @@ use crate::core::GameObjectId;
 
 pub struct RotateComponent {
     pub rotate_speed: f32,
-    iteration: f32,
+    pub iteration: f32,
     parent: GameObjectId,
-    y_rot: f32,
+    pub y_rot: f32,
 }
 
 impl Component for RotateComponent {
