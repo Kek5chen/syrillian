@@ -33,11 +33,11 @@ fn fs_main(in: VOutput) -> @location(0) vec4<f32> {
   let meow2 = (x * ty + y * tx) % 0.3;
 
   if abs(meow) > 0.1 && abs(meow) < 0.2 {
-    color += vec4(1.0, 0.0, 0.0, 0.0);
+    color += vec4(1.0, in.uv, 0.0);
   }
 
   if tri((in.uv.x - 0.5) * 3, (in.uv.y - 0.5) * 3) {
-    color = vec4(1.0, 0.0, 1.0, 0.0) - color;
+    color = vec4(1.0, in.uv, 0.0) - color;
   }
 
   return color;
