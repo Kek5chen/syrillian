@@ -41,7 +41,7 @@ impl Component for RotateComponent {
         let combined_rotation = y_rotation * x_rotation;
 
         transform.set_rotation(combined_rotation);
-        transform.set_nonuniform_scale(self.default_scale * (self.iteration.sin() * self.scale_coefficient + 1.));
+        transform.set_nonuniform_local_scale(self.default_scale * (self.iteration.sin() * self.scale_coefficient + 1.));
         self.iteration += delta_time;
     }
 
