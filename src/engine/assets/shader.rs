@@ -1,15 +1,10 @@
 use crate::engine::assets::generic_store::{HandleName, Store, StoreDefaults, StoreType};
 use crate::engine::assets::{H, HShader, StoreTypeFallback, StoreTypeName};
-use crate::store_add_checked;
-use crate::utils::sizes::VEC3_SIZE;
 use std::borrow::Cow;
 use std::error::Error;
 use std::fs;
 use std::path::Path;
-use wgpu::{
-    PolygonMode, PrimitiveTopology, VertexAttribute, VertexBufferLayout, VertexFormat,
-    VertexStepMode,
-};
+use wgpu::{PolygonMode, PrimitiveTopology, VertexBufferLayout};
 
 #[derive(Debug, Clone)]
 pub enum Shader {
@@ -93,6 +88,10 @@ impl StoreDefaults for Shader {
 
         #[cfg(debug_assertions)]
         {
+            use crate::utils::sizes::VEC3_SIZE;
+            use crate::store_add_checked;
+            use wgpu::{VertexAttribute, VertexFormat, VertexStepMode, };
+
             store_add_checked!(
                 store,
                 HShader::DEBUG_EDGES_ID,

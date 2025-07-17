@@ -1,5 +1,4 @@
 use crate::engine::rendering::cache::AssetCache;
-use crate::rendering::DebugRenderer;
 use std::sync::{Arc, RwLock};
 use wgpu::{RenderPass, SurfaceTexture, TextureView};
 
@@ -10,7 +9,7 @@ pub struct FrameCtx {
     pub cache: Arc<AssetCache>, // TODO: Rethink this every-frame cloned Arc
 
     #[cfg(debug_assertions)]
-    pub debug: DebugRenderer,
+    pub debug: crate::rendering::DebugRenderer,
 }
 
 pub struct DrawCtx<'a> {

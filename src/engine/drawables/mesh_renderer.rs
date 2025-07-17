@@ -10,8 +10,7 @@ use log::warn;
 use nalgebra::{Matrix4, Vector3};
 use std::sync::RwLockWriteGuard;
 use syrillian_macros::UniformIndex;
-use wgpu::util::{BufferInitDescriptor, DeviceExt};
-use wgpu::{Buffer, BufferUsages, IndexFormat, RenderPass};
+use wgpu::{IndexFormat, RenderPass};
 
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, UniformIndex)]
@@ -64,10 +63,11 @@ pub struct DebugVertexNormal {
 }
 
 #[derive(Debug)]
+#[cfg(debug_assertions)]
 pub struct DebugRuntimeMeshData {
     // Data needed for rendering the vertex normal lines in debug mode
-    pattern_buf: Buffer,
-    vertices_buf: Buffer,
+    pattern_buf: wgpu::Buffer,
+    vertices_buf: wgpu::Buffer,
 }
 
 #[derive(Debug)]
@@ -82,6 +82,8 @@ pub struct MeshRenderer {
 impl Drawable for MeshRenderer {
     fn setup(&mut self, renderer: &Renderer, world: &mut World) {
         self.setup_mesh_data(renderer, world);
+
+        #[cfg(debug_assertions)]
         self.setup_debug_data(renderer, world);
     }
 
@@ -93,6 +95,8 @@ impl Drawable for MeshRenderer {
         outer_transform: &Matrix4<f32>,
     ) {
         self.update_mesh_data(world, parent, renderer, outer_transform);
+
+        #[cfg(debug_assertions)]
         self.update_debug_data(world, renderer);
     }
 
@@ -144,6 +148,8 @@ impl MeshRenderer {
         Box::new(MeshRenderer {
             mesh,
             runtime_data: None,
+
+            #[cfg(debug_assertions)]
             debug_data: None,
         })
     }
@@ -188,6 +194,7 @@ impl MeshRenderer {
         }
     }
 
+    #[cfg(debug_assertions)]
     fn update_debug_data(&mut self, world: &mut World, renderer: &Renderer) {
         match self.debug_data.as_mut() {
             None => {
@@ -227,7 +234,11 @@ impl MeshRenderer {
         true
     }
 
+    #[cfg(debug_assertions)]
     fn setup_debug_data(&mut self, renderer: &Renderer, world: &mut World) {
+        use wgpu::BufferUsages;
+        use wgpu::util::{BufferInitDescriptor, DeviceExt};
+
         let Some(mesh) = world.assets.meshes.try_get(self.mesh) else {
             warn!("Mesh not found. Can't render");
             return;
@@ -302,6 +313,7 @@ fn draw_mesh(
     }
 }
 
+#[cfg(debug_assertions)]
 fn draw_vertex_normals(
     ctx: &DrawCtx,
     mesh_data: &Mesh,
