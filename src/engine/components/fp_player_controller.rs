@@ -121,7 +121,8 @@ impl Component for FPPlayerController {
 
         if let Some(camera) = self.camera_controller.as_ref() {
             let mut camera = camera.borrow_mut();
-            camera.add_roll(-lr_movement * 5. * factor, 4. - fb_movement.abs() * 2.);
+            let delta_time = World::instance().get_delta_time().as_secs_f32();
+            camera.add_roll(-lr_movement * factor * delta_time * 500., 4. - fb_movement.abs() * 2.);
         }
 
         let mut linvel = *body.linvel();
