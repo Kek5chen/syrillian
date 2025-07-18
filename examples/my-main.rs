@@ -13,7 +13,6 @@ use syrillian::components::{
 use syrillian::core::GameObjectId;
 use syrillian::prefabs::first_person_player::FirstPersonPlayerPrefab;
 use syrillian::prefabs::prefab::Prefab;
-use syrillian::prefabs::sphere::SpherePrefab;
 use syrillian::prefabs::CubePrefab;
 use syrillian::utils::frame_counter::FrameCounter;
 use syrillian::SyrillianApp;

@@ -142,8 +142,8 @@ impl DynamicShaderExample {
     }
 
     fn respawn_cube(&mut self, world: &mut World) {
-        let mut iter = 0.;
-        let mut y_rot = 0.;
+        let mut iter = 90.;
+        let mut y_rot = 45.;
         if self.cube.exists() {
             let old_comp = self.cube.get_component::<RotateComponent>().unwrap();
             let old_comp = old_comp.borrow();
@@ -161,8 +161,8 @@ impl DynamicShaderExample {
         self.cube.transform.set_uniform_scale(2.0);
         self.cube.transform.set_position(0., 0., -5.0);
         let new_comp = self.cube.add_component::<RotateComponent>();
-        new_comp.iteration = 90.;
-        new_comp.y_rot = 45.;
+        new_comp.iteration = iter;
+        new_comp.y_rot = y_rot;
         new_comp.rotate_speed = 0.0;
     }
 }
