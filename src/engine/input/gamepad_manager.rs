@@ -53,19 +53,19 @@ impl GamePadManager {
 
     pub fn handle_gamepad_event(&mut self, event: &EventType) {
         match event {
-            EventType::ButtonPressed(button, code) | EventType::ButtonRepeated(button, code) => {
+            EventType::ButtonPressed(button, ..) | EventType::ButtonRepeated(button, ..) => {
                 self.buttons.insert(*button, true);
                 self.buttons_just_updated.push(*button);
             }
-            EventType::ButtonReleased(button, code) => {
+            EventType::ButtonReleased(button, ..) => {
                 self.buttons.insert(*button, false);
                 self.buttons_just_updated.push(*button);
             }
-            EventType::ButtonChanged(button, value, code) => {
+            EventType::ButtonChanged(button, value, ..) => {
                 self.buttons.insert(*button, *value >= 0.5);
                 self.buttons_just_updated.push(*button);
             }
-            EventType::AxisChanged(axis, value, code) => {
+            EventType::AxisChanged(axis, value, ..) => {
                 self.axis.insert(*axis, *value);
             }
             _ => {}
@@ -81,11 +81,13 @@ impl GamePadManager {
     }
 
     pub fn button_down(&self, button: Button) -> bool {
-        self.buttons.get(&button).copied().unwrap_or(false) && self.buttons_just_updated.contains(&button)
+        self.buttons.get(&button).copied().unwrap_or(false)
+            && self.buttons_just_updated.contains(&button)
     }
 
     pub fn button_up(&self, button: Button) -> bool {
-        !self.buttons.get(&button).copied().unwrap_or(false) && self.buttons_just_updated.contains(&button)
+        !self.buttons.get(&button).copied().unwrap_or(false)
+            && self.buttons_just_updated.contains(&button)
     }
 
     pub fn next_frame(&mut self) {

@@ -47,9 +47,7 @@ impl Component for RigidBodyComponent {
             .get_mut(self.body_handle);
         if let Some(rb) = rb {
             if rb.is_dynamic() {
-                self.parent()
-                    .transform
-                    .set_position_vec(*rb.translation());
+                self.parent().transform.set_position_vec(*rb.translation());
                 self.parent().transform.set_rotation(*rb.rotation());
             }
         }

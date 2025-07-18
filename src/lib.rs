@@ -5,10 +5,10 @@ pub mod windowing;
 pub use engine::*;
 pub use windowing::*;
 
+pub use ::gilrs;
 pub use ::log;
 pub use ::tokio;
 pub use ::winit;
-pub use ::gilrs;
 
 #[cfg(feature = "derive")]
 pub use ::syrillian_macros;

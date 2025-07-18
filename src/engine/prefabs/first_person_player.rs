@@ -1,8 +1,8 @@
-use log::warn;
 use crate::World;
 use crate::components::{Collider3D, FPCameraController, FPPlayerController, RigidBodyComponent};
 use crate::core::GameObjectId;
 use crate::engine::prefabs::prefab::Prefab;
+use log::warn;
 use rapier3d::geometry::SharedShape;
 
 pub struct FirstPersonPlayerPrefab;
@@ -28,7 +28,10 @@ impl Prefab for FirstPersonPlayerPrefab {
             .unwrap()
             .set_shape(SharedShape::capsule_y(1.0, 0.25));
 
-        if let Some(rigid_body) = char_controller.add_component::<RigidBodyComponent>().get_body_mut() {
+        if let Some(rigid_body) = char_controller
+            .add_component::<RigidBodyComponent>()
+            .get_body_mut()
+        {
             rigid_body.set_additional_mass(5., false);
         } else {
             warn!("Not able to set rigid body properties for First Person Player Prefab");

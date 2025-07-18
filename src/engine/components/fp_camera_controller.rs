@@ -1,9 +1,9 @@
-use gilrs::Axis;
 use crate::World;
 use crate::components::Component;
 use crate::core::GameObjectId;
-use nalgebra::{UnitQuaternion, Vector3};
 use crate::utils::FloatMathExt;
+use gilrs::Axis;
+use nalgebra::{UnitQuaternion, Vector3};
 
 pub struct FPCameraController {
     parent: GameObjectId,
@@ -49,8 +49,10 @@ impl Component for FPCameraController {
         let transform = &mut self.parent().transform;
 
         let mouse_delta = input.mouse_delta();
-        let controller_x = input.gamepad.axis(Axis::RightStickX) * self.controller_look_sensitivity * delta_time;
-        let controller_y = input.gamepad.axis(Axis::RightStickY) * self.controller_look_sensitivity * delta_time;
+        let controller_x =
+            input.gamepad.axis(Axis::RightStickX) * self.controller_look_sensitivity * delta_time;
+        let controller_y =
+            input.gamepad.axis(Axis::RightStickY) * self.controller_look_sensitivity * delta_time;
         self.yaw += mouse_delta.x * self.mouse_look_sensitivity / 30.0 + controller_x;
         self.pitch += mouse_delta.y * self.mouse_look_sensitivity / 30.0 + controller_y;
 
@@ -63,12 +65,13 @@ impl Component for FPCameraController {
 
         self.add_roll(mouse_delta.x, 3.);
         self.smooth_roll = self.smooth_roll.lerp(0., 10. * delta_time);
-        let roll_rotation = UnitQuaternion::from_axis_angle(&Vector3::z_axis(), self.smooth_roll.to_radians());
+        let roll_rotation =
+            UnitQuaternion::from_axis_angle(&Vector3::z_axis(), self.smooth_roll.to_radians());
 
         transform.set_local_rotation(pitch_rotation * roll_rotation);
         transform.set_local_position_vec(self.base_position + Vector3::y() * self.bob);
         self.bob = self.bob.lerp(0., 10. * delta_time);
-        
+
         if let Some(mut parent) = self.parent().parent {
             parent.transform.set_local_rotation(yaw_rotation);
         }

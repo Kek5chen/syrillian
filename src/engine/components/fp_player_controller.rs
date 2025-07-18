@@ -1,13 +1,13 @@
 use crate::World;
 use crate::components::{Component, FPCameraController, RigidBodyComponent};
 use crate::core::GameObjectId;
+use gilrs::{Axis, Button};
 use log::warn;
 use nalgebra::Vector3;
 use num_traits::Zero;
 use rapier3d::prelude::{LockedAxes, vector};
 use std::cell::RefCell;
 use std::rc::Rc;
-use gilrs::{Axis, Button};
 use winit::keyboard::KeyCode;
 
 pub struct FPPlayerController {
@@ -53,7 +53,9 @@ impl Component for FPPlayerController {
         }
         self.rigid_body = rigid;
 
-        self.camera_controller = self.parent.get_component_in_children::<FPCameraController>();
+        self.camera_controller = self
+            .parent
+            .get_component_in_children::<FPCameraController>();
     }
 
     fn update(&mut self) {
@@ -81,13 +83,16 @@ impl Component for FPPlayerController {
 
         self.velocity /= self.damping_factor;
 
-        if world.input.is_key_down(KeyCode::Space) || world.input.gamepad.button_down(Button::South) {
+        if world.input.is_key_down(KeyCode::Space) || world.input.gamepad.button_down(Button::South)
+        {
             body.apply_impulse(vector![0.0, 0.2 * self.jump_factor, 0.0], true);
         }
 
         let mut factor = self.move_speed;
 
-        if world.input.is_key_pressed(KeyCode::ShiftLeft) || world.input.gamepad.button(Button::RightTrigger) {
+        if world.input.is_key_pressed(KeyCode::ShiftLeft)
+            || world.input.gamepad.button(Button::RightTrigger)
+        {
             factor *= self.sprint_multiplier;
         }
 
@@ -135,7 +140,10 @@ impl Component for FPPlayerController {
             let mut camera = camera.borrow_mut();
             let world = World::instance();
             let delta_time = world.delta_time().as_secs_f32();
-            camera.add_roll(-lr_movement * factor * delta_time * 500., 4. - fb_movement.abs() * 2.);
+            camera.add_roll(
+                -lr_movement * factor * delta_time * 500.,
+                4. - fb_movement.abs() * 2.,
+            );
             camera.do_bob(base_vel.magnitude());
         }
 

@@ -1,4 +1,5 @@
 use crate::World;
+use crate::input::gamepad_manager::GamePadManager;
 use nalgebra::Vector2;
 use num_traits::Zero;
 use std::collections::HashMap;
@@ -6,7 +7,6 @@ use winit::dpi::PhysicalPosition;
 use winit::event::{DeviceEvent, ElementState, MouseButton, MouseScrollDelta, WindowEvent};
 use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::{CursorGrabMode, Window};
-use crate::input::gamepad_manager::GamePadManager;
 
 pub type KeyState = ElementState;
 
@@ -107,9 +107,9 @@ impl InputManager {
                 if let PhysicalKey::Code(code) = event.physical_key {
                     if !event.state.is_pressed()
                         || self
-                        .key_states
-                        .get(&code)
-                        .is_some_and(|state| !state.is_pressed())
+                            .key_states
+                            .get(&code)
+                            .is_some_and(|state| !state.is_pressed())
                     {
                         self.key_just_updated.push(code);
                     }
@@ -128,9 +128,9 @@ impl InputManager {
             WindowEvent::MouseInput { button, state, .. } => {
                 if !state.is_pressed()
                     || self
-                    .button_states
-                    .get(button)
-                    .is_some_and(|state| !state.is_pressed())
+                        .button_states
+                        .get(button)
+                        .is_some_and(|state| !state.is_pressed())
                 {
                     self.button_just_updated.push(*button);
                 }

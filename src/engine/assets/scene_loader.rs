@@ -100,7 +100,10 @@ impl SceneLoader {
         node_obj
     }
 
-    pub fn load_first_mesh_from_buffer(model: &[u8], hint: &str) -> Result<Option<Mesh>, Box<dyn Error>> {
+    pub fn load_first_mesh_from_buffer(
+        model: &[u8],
+        hint: &str,
+    ) -> Result<Option<Mesh>, Box<dyn Error>> {
         let scene = Self::load_scene_from_buffer(model, hint)?;
         Ok(Self::load_first_from_scene(&scene))
     }

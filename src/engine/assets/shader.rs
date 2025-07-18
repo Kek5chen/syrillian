@@ -88,9 +88,9 @@ impl StoreDefaults for Shader {
 
         #[cfg(debug_assertions)]
         {
-            use crate::utils::sizes::VEC3_SIZE;
             use crate::store_add_checked;
-            use wgpu::{VertexAttribute, VertexFormat, VertexStepMode, };
+            use crate::utils::sizes::VEC3_SIZE;
+            use wgpu::{VertexAttribute, VertexFormat, VertexStepMode};
 
             store_add_checked!(
                 store,
