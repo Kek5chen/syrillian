@@ -37,9 +37,9 @@ impl Prefab for SpherePrefab {
                 .build(),
         );
 
-        let mut cube = world.new_object(self.prefab_name());
-        cube.drawable = Some(MeshRenderer::new(mesh));
+        let mut sphere = world.new_object(self.prefab_name());
+        sphere.drawable = Some(MeshRenderer::new(mesh));
 
-        cube
+        sphere
     }
 }
