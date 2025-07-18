@@ -1,5 +1,5 @@
-use gilrs::{Axis, Button, Event, EventType, Gilrs};
-use log::debug;
+use gilrs::{Axis, Button, Event, EventType, Gilrs, GilrsBuilder};
+use log::{debug, trace};
 use std::collections::HashMap;
 use uuid::Uuid;
 
@@ -13,7 +13,12 @@ pub struct GamePadManager {
 
 impl Default for GamePadManager {
     fn default() -> Self {
-        let poller = Gilrs::new().expect("Init gamepad input failed");
+        //let poller = Gilrs::new().expect("Init gamepad input failed");
+        let poller = GilrsBuilder::new()
+            .add_env_mappings(true)
+            .add_included_mappings(false)
+            .build()
+            .unwrap();
 
         Self {
             poller,
@@ -28,6 +33,7 @@ impl GamePadManager {
     pub fn poll(&mut self) {
         self.next_frame();
         while let Some(event) = self.poller.next_event() {
+            trace!("[Gamepads] Handling Gamepad Event: {event:?}");
             match event.event {
                 EventType::Connected | EventType::Disconnected => {
                     self.handle_device_meta_event(&event)

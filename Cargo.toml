@@ -85,6 +85,7 @@ features = ["static-link"]
 
 
 
+# TODO: Probably only enforce this for the example builds
 [profile.dev]
 opt-level = 2
 

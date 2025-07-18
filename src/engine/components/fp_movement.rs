@@ -1,33 +1,35 @@
-use crate::World;
-use crate::components::{Component, FPCameraController, RigidBodyComponent};
+use crate::components::{Component, FirstPersonCameraController, RigidBodyComponent};
 use crate::core::GameObjectId;
-use gilrs::{Axis, Button};
+use crate::utils::FloatMathExt;
+use crate::World;
+use gilrs::Axis;
 use log::warn;
 use nalgebra::Vector3;
 use num_traits::Zero;
-use rapier3d::prelude::{LockedAxes, vector};
+use rapier3d::prelude::{vector, LockedAxes};
 use std::cell::RefCell;
 use std::rc::Rc;
 use winit::keyboard::KeyCode;
-use crate::utils::FloatMathExt;
 
-pub struct FPPlayerController {
+pub struct FirstPersonMovementController {
     parent: GameObjectId,
     pub move_speed: f32,
     pub jump_factor: f32,
     pub damping_factor: f32,
     rigid_body: Option<Rc<RefCell<Box<RigidBodyComponent>>>>,
-    camera_controller: Option<Rc<RefCell<Box<FPCameraController>>>>,
+    camera_controller: Option<Rc<RefCell<Box<FirstPersonCameraController>>>>,
     pub velocity: Vector3<f32>,
     pub sprint_multiplier: f32,
+    factor_smooth: f32,
+    factor_interp_t: f32,
 }
 
-impl Component for FPPlayerController {
+impl Component for FirstPersonMovementController {
     fn new(parent: GameObjectId) -> Self
     where
         Self: Sized,
     {
-        FPPlayerController {
+        FirstPersonMovementController {
             parent,
             move_speed: 2.0,
             damping_factor: 1.5,
@@ -35,7 +37,9 @@ impl Component for FPPlayerController {
             rigid_body: None,
             camera_controller: None,
             velocity: Vector3::zero(),
-            sprint_multiplier: 10.0,
+            sprint_multiplier: 2.0,
+            factor_smooth: 0.0,
+            factor_interp_t: 0.1,
         }
     }
 
@@ -56,7 +60,7 @@ impl Component for FPPlayerController {
 
         self.camera_controller = self
             .parent
-            .get_component_in_children::<FPCameraController>();
+            .get_child_component::<FirstPersonCameraController>();
     }
 
     fn update(&mut self) {
@@ -84,20 +88,17 @@ impl Component for FPPlayerController {
 
         self.velocity /= self.damping_factor;
 
-        let mut jumping = false;
-        if world.input.is_key_down(KeyCode::Space) || world.input.gamepad.button_down(Button::South)
-        {
+        let jumping = world.input.is_jump_down();
+        if jumping {
             body.apply_impulse(vector![0.0, 0.2 * self.jump_factor, 0.0], true);
-            jumping = true;
         }
 
-        let mut factor = self.move_speed;
+        let mut target_factor = self.move_speed;
 
-        if world.input.is_key_pressed(KeyCode::ShiftLeft)
-            || world.input.gamepad.button(Button::RightTrigger)
-        {
-            factor *= self.sprint_multiplier;
+        if world.input.is_sprinting() {
+            target_factor *= self.sprint_multiplier;
         }
+        self.factor_smooth = self.factor_smooth.lerp(target_factor, self.factor_interp_t);
 
         let mut base_vel = Vector3::zero();
 
@@ -137,17 +138,17 @@ impl Component for FPPlayerController {
         if base_vel.magnitude() > 0.5 {
             base_vel = base_vel.normalize();
         }
-        self.velocity += base_vel * factor;
+        self.velocity += base_vel * self.factor_smooth;
 
         if let Some(camera) = self.camera_controller.as_ref() {
             let mut camera = camera.borrow_mut();
             let world = World::instance();
             let delta_time = world.delta_time().as_secs_f32();
-            camera.add_roll(
-                -lr_movement * factor * delta_time * 500.,
+            camera.update_roll(
+                -lr_movement * self.factor_smooth * delta_time * 500.,
                 4. - fb_movement.abs() * 2.,
             );
-            camera.do_bob(base_vel.magnitude());
+            camera.update_bob(base_vel.magnitude(), self.factor_smooth);
             camera.vel_y = body.linvel().y;
             if jumping {
                 camera.signal_jump();

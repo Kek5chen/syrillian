@@ -1,5 +1,6 @@
-use crate::World;
 use crate::input::gamepad_manager::GamePadManager;
+use crate::World;
+use gilrs::Button;
 use nalgebra::Vector2;
 use num_traits::Zero;
 use std::collections::HashMap;
@@ -268,5 +269,19 @@ impl InputManager {
             self._unlock_cursor(window);
             self.unlock_on_next_frame = false;
         }
+    }
+
+    pub fn is_sprinting(&self) -> bool {
+        if cfg!(target_os = "macos") {
+            if self.gamepad.button(Button::Unknown) {
+                return true;
+            }
+        }
+
+        self.is_key_pressed(KeyCode::ShiftLeft) || self.gamepad.button(Button::LeftThumb)
+    }
+
+    pub fn is_jump_down(&self) -> bool {
+        self.is_key_down(KeyCode::Space) || self.gamepad.button_down(Button::South)
     }
 }

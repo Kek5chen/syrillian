@@ -178,7 +178,7 @@ impl GameObject {
         components
     }
 
-    pub fn get_component_in_children<C>(&mut self) -> Option<Rc<RefCell<Box<C>>>>
+    pub fn get_child_component<C>(&mut self) -> Option<Rc<RefCell<Box<C>>>>
     where
         C: Component + 'static,
     {

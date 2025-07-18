@@ -1,7 +1,7 @@
-use crate::World;
-use crate::components::{Collider3D, FPCameraController, FPPlayerController, RigidBodyComponent};
+use crate::components::{Collider3D, FirstPersonCameraController, FirstPersonMovementController, RigidBodyComponent};
 use crate::core::GameObjectId;
 use crate::engine::prefabs::prefab::Prefab;
+use crate::World;
 use log::warn;
 use rapier3d::geometry::SharedShape;
 
@@ -16,7 +16,7 @@ impl Prefab for FirstPersonPlayerPrefab {
         // Prepare camera
         let mut camera = world.new_camera();
         camera.transform.set_position(0.0, 1.0, 0.0);
-        camera.add_component::<FPCameraController>();
+        camera.add_component::<FirstPersonCameraController>();
 
         // Prepare character controller
         let mut char_controller = world.new_object(self.prefab_name());
@@ -38,7 +38,7 @@ impl Prefab for FirstPersonPlayerPrefab {
         }
 
         char_controller.add_child(camera);
-        char_controller.add_component::<FPPlayerController>();
+        char_controller.add_component::<FirstPersonMovementController>();
 
         world.active_camera = Some(camera);
 
