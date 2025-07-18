@@ -5,22 +5,22 @@
 //!    using this for reference.
 
 use std::error::Error;
-use syrillian::SyrillianApp;
 use syrillian::assets::scene_loader::SceneLoader;
 use syrillian::assets::{Material, Shader};
 use syrillian::components::{
     Collider3D, PointLightComponent, RigidBodyComponent, RopeComponent, RotateComponent,
 };
 use syrillian::core::GameObjectId;
-use syrillian::prefabs::CubePrefab;
 use syrillian::prefabs::first_person_player::FirstPersonPlayerPrefab;
 use syrillian::prefabs::prefab::Prefab;
+use syrillian::prefabs::sphere::SpherePrefab;
+use syrillian::prefabs::CubePrefab;
 use syrillian::utils::frame_counter::FrameCounter;
+use syrillian::SyrillianApp;
 use syrillian::{AppState, World};
 use wgpu::PolygonMode;
 use winit::window::Window;
-
-const NECO_IMAGE: &[u8; 1293] = include_bytes!("assets/neco.jpg");
+// const NECO_IMAGE: &[u8; 1293] = include_bytes!("assets/neco.jpg");
 
 #[derive(Debug, Default, SyrillianApp)]
 struct MyMain {
@@ -36,7 +36,8 @@ impl AppState for MyMain {
         let mut player = world.spawn(&FirstPersonPlayerPrefab);
         player.transform.set_position(0.0, 20.0, 0.0);
 
-        let fs = include_str!("dynamic_shader/shader.wgsl");
+        let fs = include_str!("dynamic_shader/shader2.wgsl");
+        let fs2 = include_str!("dynamic_shader/shader.wgsl");
         let code = include_str!("../src/engine/rendering/shaders/default_vertex3d.wgsl");
 
         let shader = world.assets.shaders.add(Shader::Default {
@@ -45,30 +46,52 @@ impl AppState for MyMain {
             polygon_mode: PolygonMode::Fill,
         });
 
-        let texture = world.assets.textures.load_image_from_memory(NECO_IMAGE)?;
-        let neco_material = world.assets.materials.add(
+        let shader2 = world.assets.shaders.add(Shader::Default {
+            name: "Funky Shader 2".to_string(),
+            code: fs2.to_string() + code,
+            polygon_mode: PolygonMode::Fill,
+        });
+
+        let shader_mat_1 = world.assets.materials.add(
             Material::builder()
                 .name("Neco Arc".into())
-                .diffuse_texture(texture)
                 .opacity(1.0)
                 .shader(shader)
                 .build(),
         );
+        let shader_mat_2 = world.assets.materials.add(
+            Material::builder()
+                .name("Neco Arc".into())
+                .opacity(1.0)
+                .shader(shader2)
+                .build(),
+        );
 
-        let cube_prefab = CubePrefab::new(neco_material);
-        let mut cube = world.spawn(&cube_prefab);
-        let mut cube2 = world.spawn(&cube_prefab);
-        let mut cube3 = world.spawn(&cube_prefab);
+
+        let cube_prefab1 = CubePrefab::new(shader_mat_1);
+        let cube_prefab2 = CubePrefab::new(shader_mat_2);
+        let mut cube = world.spawn(&cube_prefab1);
+        let mut cube2 = world.spawn(&cube_prefab1);
+        let mut cube3 = world.spawn(&cube_prefab1);
+        let mut big_cube_left = world.spawn(&cube_prefab2);
+        let mut big_cube_right = world.spawn(&cube_prefab2);
 
         cube.transform.set_position(20.0, 3.9, -20.0);
-        cube3.transform.set_position(5.0, 3.9, -20.0);
         cube2.transform.set_position(5.0, 6.9, -20.0);
+        cube3.transform.set_position(5.0, 3.9, -20.0);
+        big_cube_left.transform.set_position(10.0, 20.0, 20.0);
+        big_cube_right.transform.set_position(-10.0, 20.0, 20.0);
 
         cube.add_component::<PointLightComponent>();
-        cube.add_component::<RotateComponent>().scale_coefficient = 1.;
-        // cube.add_component::<RopeComponent>().connect_to(player);
-
         cube2.add_component::<PointLightComponent>();
+        cube3.add_component::<PointLightComponent>();
+
+        cube.add_component::<RotateComponent>().scale_coefficient = 1.;
+        big_cube_left.add_component::<RotateComponent>().rotate_speed = 30.;
+        big_cube_right.add_component::<RotateComponent>().rotate_speed = -30.;
+        big_cube_left.transform.set_uniform_scale(5.);
+        big_cube_right.transform.set_uniform_scale(5.);
+
         let collider = cube2
             .add_component::<Collider3D>()
             .get_collider_mut()

@@ -1,8 +1,8 @@
 use nalgebra::{UnitQuaternion, Vector3};
 
-use crate::World;
 use crate::components::Component;
 use crate::core::GameObjectId;
+use crate::World;
 
 pub struct RotateComponent {
     pub rotate_speed: f32,
@@ -41,9 +41,11 @@ impl Component for RotateComponent {
         let combined_rotation = y_rotation * x_rotation;
 
         transform.set_rotation(combined_rotation);
-        transform.set_nonuniform_local_scale(
-            self.default_scale * (self.iteration.sin() * self.scale_coefficient + 1.),
-        );
+        if self.scale_coefficient > f32::EPSILON {
+            transform.set_nonuniform_local_scale(
+                self.default_scale * (self.iteration.sin() * self.scale_coefficient + 1.),
+            );
+        }
         self.iteration += delta_time;
     }
 

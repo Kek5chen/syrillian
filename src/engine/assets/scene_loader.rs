@@ -3,19 +3,31 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::rc::Rc;
 
-use crate::World;
-use crate::assets::{H, HMaterial, HShader, HTexture, Material, Mesh};
+use crate::assets::{HMaterial, HShader, HTexture, Material, Mesh, H};
 use crate::core::{Bones, GameObjectId, Vertex3D};
 use crate::drawables::MeshRenderer;
-use crate::utils::ExtraMatrixMath;
 use crate::utils::iter::{extend_data, interpolate_zeros};
-use itertools::{Itertools, izip};
+use crate::utils::ExtraMatrixMath;
+use crate::World;
+use itertools::{izip, Itertools};
 use log::warn;
 use nalgebra::{Matrix4, Vector2, Vector3};
-use russimp_ng::Vector3D;
 use russimp_ng::material::{DataContent, MaterialProperty, PropertyTypeInfo, TextureType};
 use russimp_ng::node::Node;
 use russimp_ng::scene::{PostProcess, Scene};
+use russimp_ng::Vector3D;
+
+const POST_STEPS: &[PostProcess] = &[
+    PostProcess::CalculateTangentSpace,
+    PostProcess::Triangulate,
+    PostProcess::SortByPrimitiveType,
+    PostProcess::JoinIdenticalVertices,
+    PostProcess::GenerateUVCoords,
+    PostProcess::GenerateNormals,
+    PostProcess::ForceGenerateNormals,
+    PostProcess::EmbedTextures,
+    PostProcess::LimitBoneWeights,
+];
 
 #[allow(dead_code)]
 pub struct SceneLoader;
@@ -23,20 +35,7 @@ pub struct SceneLoader;
 #[allow(dead_code)]
 impl SceneLoader {
     pub fn load(world: &mut World, path: &str) -> Result<GameObjectId, Box<dyn Error>> {
-        let mut scene = Scene::from_file(
-            path,
-            vec![
-                PostProcess::CalculateTangentSpace,
-                PostProcess::Triangulate,
-                PostProcess::SortByPrimitiveType,
-                PostProcess::JoinIdenticalVertices,
-                PostProcess::GenerateUVCoords,
-                PostProcess::GenerateNormals,
-                PostProcess::ForceGenerateNormals,
-                PostProcess::EmbedTextures,
-                PostProcess::LimitBoneWeights,
-            ],
-        )?;
+        let mut scene = Self::load_scene(path)?;
 
         let root = match &scene.root {
             Some(node) => node.clone(),
@@ -51,20 +50,7 @@ impl SceneLoader {
     }
 
     pub fn load_scene(path: &str) -> Result<Scene, Box<dyn Error>> {
-        let scene = Scene::from_file(
-            path,
-            vec![
-                PostProcess::CalculateTangentSpace,
-                PostProcess::Triangulate,
-                PostProcess::SortByPrimitiveType,
-                PostProcess::JoinIdenticalVertices,
-                PostProcess::GenerateUVCoords,
-                PostProcess::GenerateNormals,
-                PostProcess::ForceGenerateNormals,
-                PostProcess::EmbedTextures,
-                PostProcess::LimitBoneWeights,
-            ],
-        )?;
+        let scene = Scene::from_file(path, POST_STEPS.to_vec())?;
 
         Ok(scene)
     }
@@ -136,7 +122,8 @@ impl SceneLoader {
         let mut material_ranges = Vec::new();
         let mut mesh_vertex_count_start: usize = 0;
 
-        for mesh in scene.meshes.iter() {
+        for mesh_id in node.meshes.iter() {
+            let mesh = scene.meshes.get(*mesh_id as usize)?;
             let mut mesh_vertex_count = mesh_vertex_count_start;
             // filter faces with not 3 vertices.
             // 1 and 2 are point and line faces which I can't render yet
@@ -160,6 +147,8 @@ impl SceneLoader {
                         dif_tex_coords,
                         vec2_from_vec3d,
                     );
+                } else {
+                    warn!("Face in Mesh {} didn't have any texture coordinates set", mesh_id);
                 }
 
                 extend_data(&mut normals, face_indices, &mesh.normals, vec3_from_vec3d);

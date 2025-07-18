@@ -14,7 +14,6 @@ pub struct FirstPersonMovementController {
     parent: GameObjectId,
     pub move_speed: f32,
     pub jump_factor: f32,
-    pub damping_factor: f32,
     rigid_body: Option<Rc<RefCell<Box<RigidBodyComponent>>>>,
     camera_controller: Option<Rc<RefCell<Box<FirstPersonCameraController>>>>,
     pub velocity: Vector3<f32>,
@@ -30,13 +29,12 @@ impl Component for FirstPersonMovementController {
         FirstPersonMovementController {
             parent,
             move_speed: 5.0,
-            damping_factor: 0.1,
             jump_factor: 100.0,
             rigid_body: None,
             camera_controller: None,
             velocity: Vector3::zero(),
             sprint_multiplier: 2.0,
-            velocity_interp_t: 0.02,
+            velocity_interp_t: 0.06,
         }
     }
 

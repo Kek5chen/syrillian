@@ -13,8 +13,8 @@ use syrillian::core::GameObjectId;
 use syrillian::prefabs::CubePrefab;
 use syrillian::{AppState, World};
 use syrillian_macros::SyrillianApp;
-use wgpu::PolygonMode;
 use wgpu::naga::valid::{Capabilities, ValidationFlags};
+use wgpu::PolygonMode;
 use winit::window::Window;
 
 const SHADER_PATH: &str = "examples/dynamic_shader/shader.wgsl";
@@ -161,8 +161,9 @@ impl DynamicShaderExample {
         self.cube.transform.set_uniform_scale(2.0);
         self.cube.transform.set_position(0., 0., -5.0);
         let new_comp = self.cube.add_component::<RotateComponent>();
-        new_comp.iteration = iter;
-        new_comp.y_rot = y_rot;
+        new_comp.iteration = 90.;
+        new_comp.y_rot = 45.;
+        new_comp.rotate_speed = 0.0;
     }
 }
 
