@@ -15,8 +15,8 @@ impl Prefab for FirstPersonPlayerPrefab {
     fn build(&self, world: &mut World) -> GameObjectId {
         // Prepare camera
         let mut camera = world.new_camera();
+        camera.transform.set_position(0.0, 1.0, 0.0);
         camera.add_component::<FPCameraController>();
-        camera.transform.set_position(0.0, 1., 0.0);
 
         // Prepare character controller
         let mut char_controller = world.new_object(self.prefab_name());

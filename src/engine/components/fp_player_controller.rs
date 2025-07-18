@@ -9,6 +9,7 @@ use rapier3d::prelude::{LockedAxes, vector};
 use std::cell::RefCell;
 use std::rc::Rc;
 use winit::keyboard::KeyCode;
+use crate::utils::FloatMathExt;
 
 pub struct FPPlayerController {
     parent: GameObjectId,
@@ -83,9 +84,11 @@ impl Component for FPPlayerController {
 
         self.velocity /= self.damping_factor;
 
+        let mut jumping = false;
         if world.input.is_key_down(KeyCode::Space) || world.input.gamepad.button_down(Button::South)
         {
             body.apply_impulse(vector![0.0, 0.2 * self.jump_factor, 0.0], true);
+            jumping = true;
         }
 
         let mut factor = self.move_speed;
@@ -145,6 +148,10 @@ impl Component for FPPlayerController {
                 4. - fb_movement.abs() * 2.,
             );
             camera.do_bob(base_vel.magnitude());
+            camera.vel_y = body.linvel().y;
+            if jumping {
+                camera.signal_jump();
+            }
         }
 
         let mut linvel = *body.linvel();
