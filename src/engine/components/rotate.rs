@@ -29,8 +29,8 @@ impl Component for RotateComponent {
     }
 
     fn update(&mut self) {
-        let transform = &mut self.get_parent().transform;
-        let delta_time = World::instance().get_delta_time().as_secs_f32();
+        let transform = &mut self.parent().transform;
+        let delta_time = World::instance().delta_time().as_secs_f32();
 
         let x_angle_radians = (self.iteration / 100.0).sin() * 45.0f32.to_radians();
         let x_rotation = UnitQuaternion::from_axis_angle(&Vector3::x_axis(), x_angle_radians);
@@ -47,7 +47,7 @@ impl Component for RotateComponent {
         self.iteration += delta_time;
     }
 
-    fn get_parent(&self) -> GameObjectId {
+    fn parent(&self) -> GameObjectId {
         self.parent
     }
 }

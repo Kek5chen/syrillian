@@ -17,7 +17,7 @@ impl FrameCounter {
     }
 
     pub fn new_frame_from_world(&mut self, world: &World) {
-        let frame_time = world.get_delta_time().as_secs_f32();
+        let frame_time = world.delta_time().as_secs_f32();
         self.new_frame(frame_time);
     }
 

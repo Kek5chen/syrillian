@@ -236,7 +236,7 @@ impl World {
         self.last_frame_time = Instant::now();
     }
 
-    pub fn get_delta_time(&self) -> Duration {
+    pub fn delta_time(&self) -> Duration {
         self.delta_time
     }
 

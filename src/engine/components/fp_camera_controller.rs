@@ -1,3 +1,4 @@
+use gilrs::Axis;
 use crate::World;
 use crate::components::Component;
 use crate::core::GameObjectId;
@@ -6,10 +7,13 @@ use crate::utils::FloatMathExt;
 
 pub struct FPCameraController {
     parent: GameObjectId,
-    pub look_sensitivity: f32,
+    pub mouse_look_sensitivity: f32,
+    pub controller_look_sensitivity: f32,
     pub yaw: f32,
     pub pitch: f32,
     pub smooth_roll: f32,
+    pub bob: f32,
+    pub base_position: Vector3<f32>,
 }
 
 impl Component for FPCameraController {
@@ -19,11 +23,18 @@ impl Component for FPCameraController {
     {
         FPCameraController {
             parent,
-            look_sensitivity: 0.6f32,
+            mouse_look_sensitivity: 0.6,
+            controller_look_sensitivity: 1.0,
             yaw: 0.0,
             pitch: 0.0,
             smooth_roll: 0.0,
+            bob: 0.0,
+            base_position: Vector3::zeros(),
         }
+    }
+
+    fn init(&mut self) {
+        self.base_position = self.parent().transform.local_position().clone();
     }
 
     fn update(&mut self) {
@@ -33,13 +44,15 @@ impl Component for FPCameraController {
             return;
         }
 
-        let delta_time = World::instance().get_delta_time().as_secs_f32();
+        let delta_time = World::instance().delta_time().as_secs_f32();
 
-        let transform = &mut self.get_parent().transform;
+        let transform = &mut self.parent().transform;
 
-        let mouse_delta = input.get_mouse_delta();
-        self.yaw += mouse_delta.x * self.look_sensitivity / 30.0;
-        self.pitch += mouse_delta.y * self.look_sensitivity / 30.0;
+        let mouse_delta = input.mouse_delta();
+        let controller_x = input.gamepad.axis(Axis::RightStickX) * self.controller_look_sensitivity * delta_time;
+        let controller_y = input.gamepad.axis(Axis::RightStickY) * self.controller_look_sensitivity * delta_time;
+        self.yaw += mouse_delta.x * self.mouse_look_sensitivity / 30.0 + controller_x;
+        self.pitch += mouse_delta.y * self.mouse_look_sensitivity / 30.0 + controller_y;
 
         self.pitch = self.pitch.clamp(-89.0f32, 89.0f32);
 
@@ -53,12 +66,15 @@ impl Component for FPCameraController {
         let roll_rotation = UnitQuaternion::from_axis_angle(&Vector3::z_axis(), self.smooth_roll.to_radians());
 
         transform.set_local_rotation(pitch_rotation * roll_rotation);
-        if let Some(mut parent) = self.get_parent().parent {
+        transform.set_local_position_vec(self.base_position + Vector3::y() * self.bob);
+        self.bob = self.bob.lerp(0., 10. * delta_time);
+        
+        if let Some(mut parent) = self.parent().parent {
             parent.transform.set_local_rotation(yaw_rotation);
         }
     }
 
-    fn get_parent(&self) -> GameObjectId {
+    fn parent(&self) -> GameObjectId {
         self.parent
     }
 }
@@ -66,5 +82,10 @@ impl Component for FPCameraController {
 impl FPCameraController {
     pub fn add_roll(&mut self, delta: f32, max: f32) {
         self.smooth_roll = (self.smooth_roll + delta / 70.0).clamp(-max, max);
+    }
+
+    pub fn do_bob(&mut self, amount: f32) {
+        let time = World::instance().time().as_secs_f32() * 10.;
+        self.bob = self.bob.lerp(time.sin() * 0.05, 0.5 * amount);
     }
 }

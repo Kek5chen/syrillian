@@ -8,6 +8,7 @@ pub use windowing::*;
 pub use ::log;
 pub use ::tokio;
 pub use ::winit;
+pub use ::gilrs;
 
 #[cfg(feature = "derive")]
 pub use ::syrillian_macros;

@@ -87,7 +87,7 @@ impl Component for Collider3D {
         );
     }
 
-    fn get_parent(&self) -> GameObjectId {
+    fn parent(&self) -> GameObjectId {
         self.parent
     }
 }

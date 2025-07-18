@@ -6,14 +6,17 @@ use winit::dpi::PhysicalPosition;
 use winit::event::{DeviceEvent, ElementState, MouseButton, MouseScrollDelta, WindowEvent};
 use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::{CursorGrabMode, Window};
+use crate::input::gamepad_manager::GamePadManager;
 
 pub type KeyState = ElementState;
 
+#[derive(Debug)]
 pub struct InputManager {
     key_states: HashMap<KeyCode, KeyState>,
     key_just_updated: Vec<KeyCode>,
     button_states: HashMap<MouseButton, ElementState>,
     button_just_updated: Vec<MouseButton>,
+    pub gamepad: GamePadManager,
     mouse_wheel_delta: f32,
     mouse_pos: PhysicalPosition<f32>,
     mouse_delta: Vector2<f32>,
@@ -31,6 +34,7 @@ impl Default for InputManager {
             key_just_updated: Vec::new(),
             button_states: HashMap::default(),
             button_just_updated: Vec::new(),
+            gamepad: GamePadManager::default(),
             mouse_wheel_delta: 0.0,
             mouse_pos: PhysicalPosition::default(),
             mouse_delta: Vector2::zero(),
@@ -84,7 +88,7 @@ impl InputManager {
         }
     }
 
-    pub(crate) fn process_event(&mut self, window: &mut Window, window_event: &WindowEvent) {
+    pub fn process_event(&mut self, window: &mut Window, event: &WindowEvent) {
         if self.auto_cursor_lock {
             self.auto_cursor_lock_loop();
         }
@@ -93,14 +97,19 @@ impl InputManager {
         }
         self.do_cursor_lock(window);
 
-        match window_event {
+        self.handle_window_event(window, event);
+        self.gamepad.poll();
+    }
+
+    pub fn handle_window_event(&mut self, window: &mut Window, event: &WindowEvent) {
+        match event {
             WindowEvent::KeyboardInput { event, .. } => {
                 if let PhysicalKey::Code(code) = event.physical_key {
                     if !event.state.is_pressed()
                         || self
-                            .key_states
-                            .get(&code)
-                            .is_some_and(|state| !state.is_pressed())
+                        .key_states
+                        .get(&code)
+                        .is_some_and(|state| !state.is_pressed())
                     {
                         self.key_just_updated.push(code);
                     }
@@ -119,9 +128,9 @@ impl InputManager {
             WindowEvent::MouseInput { button, state, .. } => {
                 if !state.is_pressed()
                     || self
-                        .button_states
-                        .get(button)
-                        .is_some_and(|state| !state.is_pressed())
+                    .button_states
+                    .get(button)
+                    .is_some_and(|state| !state.is_pressed())
                 {
                     self.button_just_updated.push(*button);
                 }
@@ -189,7 +198,7 @@ impl InputManager {
         &self.mouse_pos
     }
 
-    pub fn get_mouse_delta(&self) -> &Vector2<f32> {
+    pub fn mouse_delta(&self) -> &Vector2<f32> {
         &self.mouse_delta
     }
 

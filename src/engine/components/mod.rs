@@ -24,15 +24,15 @@
 //!     }
 //!
 //!     fn update(&mut self) {
-//!         let delta_time = World::instance().get_delta_time().as_secs_f32();
+//!         let delta_time = World::instance().delta_time().as_secs_f32();
 //!
 //!         let movement = Vector3::new(0.0, self.force * delta_time, 0.0);
 //!
-//!         let transform = &mut self.get_parent().transform;
+//!         let transform = &mut self.parent().transform;
 //!         transform.translate(movement);
 //!     }
 //!
-//!     fn get_parent(&self) -> GameObjectId {
+//!     fn parent(&self) -> GameObjectId {
 //!         self.parent
 //!     }
 //! }
@@ -84,7 +84,7 @@ pub trait Component: Any {
     fn delete(&mut self) {}
 
     #[allow(clippy::mut_from_ref)]
-    fn get_parent(&self) -> GameObjectId;
+    fn parent(&self) -> GameObjectId;
 }
 
 pub(crate) trait InternalComponentDeletion {

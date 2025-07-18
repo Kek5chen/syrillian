@@ -7,6 +7,7 @@ use num_traits::Zero;
 use rapier3d::prelude::{LockedAxes, vector};
 use std::cell::RefCell;
 use std::rc::Rc;
+use gilrs::{Axis, Button};
 use winit::keyboard::KeyCode;
 
 pub struct FPPlayerController {
@@ -38,7 +39,7 @@ impl Component for FPPlayerController {
     }
 
     fn init(&mut self) {
-        let rigid = self.get_parent().get_component::<RigidBodyComponent>();
+        let rigid = self.parent().get_component::<RigidBodyComponent>();
         if let Some(rigid) = rigid.clone() {
             if let Some(rigid) = rigid.borrow_mut().get_body_mut() {
                 rigid.set_locked_axes(
@@ -80,13 +81,13 @@ impl Component for FPPlayerController {
 
         self.velocity /= self.damping_factor;
 
-        if world.input.is_key_down(KeyCode::Space) {
+        if world.input.is_key_down(KeyCode::Space) || world.input.gamepad.button_down(Button::South) {
             body.apply_impulse(vector![0.0, 0.2 * self.jump_factor, 0.0], true);
         }
 
         let mut factor = self.move_speed;
 
-        if world.input.is_key_pressed(KeyCode::ShiftLeft) {
+        if world.input.is_key_pressed(KeyCode::ShiftLeft) || world.input.gamepad.button(Button::RightTrigger) {
             factor *= self.sprint_multiplier;
         }
 
@@ -114,6 +115,17 @@ impl Component for FPPlayerController {
             lr_movement += 1.;
         }
 
+        let axis_x = world.input.gamepad.axis(Axis::LeftStickX);
+        let axis_y = world.input.gamepad.axis(Axis::LeftStickY);
+        if fb_movement == 0.0 {
+            base_vel += self.parent.transform.forward() * axis_y;
+            fb_movement = axis_y;
+        }
+        if lr_movement == 0.0 {
+            base_vel += self.parent.transform.right() * axis_x;
+            lr_movement = axis_x;
+        }
+
         if base_vel.magnitude() > 0.5 {
             base_vel = base_vel.normalize();
         }
@@ -121,8 +133,10 @@ impl Component for FPPlayerController {
 
         if let Some(camera) = self.camera_controller.as_ref() {
             let mut camera = camera.borrow_mut();
-            let delta_time = World::instance().get_delta_time().as_secs_f32();
+            let world = World::instance();
+            let delta_time = world.delta_time().as_secs_f32();
             camera.add_roll(-lr_movement * factor * delta_time * 500., 4. - fb_movement.abs() * 2.);
+            camera.do_bob(base_vel.magnitude());
         }
 
         let mut linvel = *body.linvel();
@@ -132,7 +146,7 @@ impl Component for FPPlayerController {
         body.set_linvel(linvel, true);
     }
 
-    fn get_parent(&self) -> GameObjectId {
+    fn parent(&self) -> GameObjectId {
         self.parent
     }
 }

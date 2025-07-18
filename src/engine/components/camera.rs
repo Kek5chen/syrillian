@@ -73,10 +73,10 @@ impl Component for CameraComponent {
     }
 
     fn init(&mut self) {
-        self.get_parent().transform.set_compound_pos_first(true);
+        self.parent().transform.set_compound_pos_first(true);
     }
 
-    fn get_parent(&self) -> GameObjectId {
+    fn parent(&self) -> GameObjectId {
         self.parent
     }
 }

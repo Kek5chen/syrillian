@@ -56,7 +56,7 @@ impl Component for PointLightComponent {
         self.inner.pos = self.parent.transform.position();
     }
 
-    fn get_parent(&self) -> GameObjectId {
+    fn parent(&self) -> GameObjectId {
         self.parent
     }
 }

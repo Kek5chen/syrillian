@@ -4,5 +4,6 @@
 //! components and systems to react to user interaction.
 
 pub mod input_manager;
+mod gamepad_manager;
 
 pub use self::input_manager::*;

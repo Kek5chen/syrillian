@@ -22,15 +22,15 @@ impl Component for GravityComp {
     }
 
     fn update(&mut self) {
-        let delta_time = World::instance().get_delta_time().as_secs_f32();
+        let delta_time = World::instance().delta_time().as_secs_f32();
 
         self.velocity = (self.velocity - self.acceleration_per_sec * delta_time)
             .clamp(-self.max_acceleration, self.max_acceleration);
-        let transform = &mut self.get_parent().transform;
+        let transform = &mut self.parent().transform;
         transform.translate(Vector3::new(0.0, self.velocity, 0.0));
     }
 
-    fn get_parent(&self) -> GameObjectId {
+    fn parent(&self) -> GameObjectId {
         self.parent
     }
 }

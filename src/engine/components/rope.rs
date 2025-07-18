@@ -50,7 +50,7 @@ impl Component for RopeComponent {
         }
     }
 
-    fn get_parent(&self) -> GameObjectId {
+    fn parent(&self) -> GameObjectId {
         self.parent
     }
 }

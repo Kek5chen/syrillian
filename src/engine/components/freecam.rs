@@ -28,12 +28,12 @@ impl Component for FreecamController {
     }
 
     fn update(&mut self) {
-        let delta_time = World::instance().get_delta_time().as_secs_f32();
-        let transform = &mut self.get_parent().transform;
+        let delta_time = World::instance().delta_time().as_secs_f32();
+        let transform = &mut self.parent().transform;
 
         let input = &World::instance().input;
 
-        let mouse_delta = input.get_mouse_delta();
+        let mouse_delta = input.mouse_delta();
         self.yaw += mouse_delta.x * self.look_sensitivity / 30.0;
         self.pitch += mouse_delta.y * self.look_sensitivity / 30.0;
 
@@ -79,7 +79,7 @@ impl Component for FreecamController {
         }
     }
 
-    fn get_parent(&self) -> GameObjectId {
+    fn parent(&self) -> GameObjectId {
         self.parent
     }
 }

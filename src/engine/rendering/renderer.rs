@@ -392,7 +392,7 @@ impl Renderer {
         let render_data = &mut self.render_uniform_data;
         render_data.system_data.screen_size = window_size;
         render_data.system_data.time = world.time().as_secs_f32();
-        render_data.system_data.delta_time = world.get_delta_time().as_secs_f32();
+        render_data.system_data.delta_time = world.delta_time().as_secs_f32();
 
         self.state.queue.write_buffer(
             &render_data.uniform.buffer(RenderUniformIndex::System),
