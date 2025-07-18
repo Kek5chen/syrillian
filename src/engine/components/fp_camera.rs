@@ -36,6 +36,7 @@ pub struct FirstPersonCameraController {
     pitch: f32,
     smooth_roll: f32,
     bob_offset: Vector3<f32>,
+    bob_phase: Vector3<f32>,
 
     pub vel_y: f32,
 
@@ -76,6 +77,7 @@ impl Component for FirstPersonCameraController {
             pitch: 0.0,
             smooth_roll: 0.0,
             bob_offset: Vector3::zeros(),
+            bob_phase: Vector3::zeros(),
 
             vel_y: 0.0,
 
@@ -120,18 +122,25 @@ impl FirstPersonCameraController {
         self.smooth_roll = (self.smooth_roll + delta / 70.0).clamp(-max, max);
     }
 
-    pub fn update_bob(&mut self, amount: f32, speed_factor: f32) {
-        let time = World::instance().time().as_secs_f32();
-        let mul = (speed_factor / 2.).clamp(0.0, 2.0);
-        let sin_tx = (time * 5. * mul).sin();
-        let sin_ty = (time * 10. * mul).sin();
+    pub fn update_bob(&mut self, speed_factor: f32) {
+        const FREQ_X: f32 = 5.;
+        const FREQ_Y: f32 = 10.;
+
+        let dt = World::instance().delta_time().as_secs_f32();
+        let mul = (speed_factor / 4.).clamp(0.0, 2.0);
+
+        self.bob_phase.x = (self.bob_phase.x + dt * FREQ_X * mul) % std::f32::consts::TAU;
+        self.bob_phase.y = (self.bob_phase.y + dt * FREQ_Y * mul) % std::f32::consts::TAU;
+
+        let sin_tx = self.bob_phase.x.sin();
+        let sin_ty = self.bob_phase.y.sin();
         let target = Vector3::new(
             sin_tx * self.config.bob_amplitude.x * mul,
             sin_ty * self.config.bob_amplitude.y * mul,
             0.0,
         );
 
-        self.bob_offset = self.bob_offset.lerp(&target, 0.5 * amount);
+        self.bob_offset = self.bob_offset.lerp(&target, 0.04 * mul);
     }
 
     pub fn signal_jump(&mut self) {
@@ -175,10 +184,12 @@ impl FirstPersonCameraController {
         mouse_delta: &Vector2<f32>,
     ) {
         let controller_x = -input.gamepad.axis(Axis::RightStickX)
-            * self.config.controller_sensitivity.x * 100.
+            * self.config.controller_sensitivity.x
+            * 100.
             * delta_time;
         let controller_y = input.gamepad.axis(Axis::RightStickY)
-            * self.config.controller_sensitivity.y * 100.
+            * self.config.controller_sensitivity.y
+            * 100.
             * delta_time;
         let mouse_x = mouse_delta.x * self.config.mouse_sensitivity.x / 30.0;
         let mouse_y = mouse_delta.y * self.config.mouse_sensitivity.y / 30.0;

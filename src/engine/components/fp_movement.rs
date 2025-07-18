@@ -1,6 +1,5 @@
 use crate::components::{Component, FirstPersonCameraController, RigidBodyComponent};
 use crate::core::GameObjectId;
-use crate::utils::FloatMathExt;
 use crate::World;
 use gilrs::Axis;
 use log::warn;
@@ -20,8 +19,7 @@ pub struct FirstPersonMovementController {
     camera_controller: Option<Rc<RefCell<Box<FirstPersonCameraController>>>>,
     pub velocity: Vector3<f32>,
     pub sprint_multiplier: f32,
-    factor_smooth: f32,
-    factor_interp_t: f32,
+    velocity_interp_t: f32,
 }
 
 impl Component for FirstPersonMovementController {
@@ -31,15 +29,14 @@ impl Component for FirstPersonMovementController {
     {
         FirstPersonMovementController {
             parent,
-            move_speed: 2.0,
-            damping_factor: 1.5,
+            move_speed: 5.0,
+            damping_factor: 0.1,
             jump_factor: 100.0,
             rigid_body: None,
             camera_controller: None,
             velocity: Vector3::zero(),
             sprint_multiplier: 2.0,
-            factor_smooth: 0.0,
-            factor_interp_t: 0.1,
+            velocity_interp_t: 0.02,
         }
     }
 
@@ -86,69 +83,67 @@ impl Component for FirstPersonMovementController {
             return;
         }
 
-        self.velocity /= self.damping_factor;
-
         let jumping = world.input.is_jump_down();
         if jumping {
             body.apply_impulse(vector![0.0, 0.2 * self.jump_factor, 0.0], true);
         }
 
-        let mut target_factor = self.move_speed;
+        let mut speed_factor = self.move_speed;
 
         if world.input.is_sprinting() {
-            target_factor *= self.sprint_multiplier;
+            speed_factor *= self.sprint_multiplier;
         }
-        self.factor_smooth = self.factor_smooth.lerp(target_factor, self.factor_interp_t);
 
-        let mut base_vel = Vector3::zero();
+        let mut target_velocity = Vector3::zero();
 
         let mut fb_movement: f32 = 0.;
         if world.input.is_key_pressed(KeyCode::KeyW) {
-            base_vel += self.parent.transform.forward();
+            target_velocity += self.parent.transform.forward();
             fb_movement += 1.;
         }
 
         if world.input.is_key_pressed(KeyCode::KeyS) {
-            base_vel -= self.parent.transform.forward();
+            target_velocity -= self.parent.transform.forward();
             fb_movement -= 1.;
         }
 
-        let mut lr_movement = 0.;
+        let mut lr_movement: f32 = 0.;
         if world.input.is_key_pressed(KeyCode::KeyA) {
-            base_vel -= self.parent.transform.right();
+            target_velocity -= self.parent.transform.right();
             lr_movement -= 1.;
         }
 
         if world.input.is_key_pressed(KeyCode::KeyD) {
-            base_vel += self.parent.transform.right();
+            target_velocity += self.parent.transform.right();
             lr_movement += 1.;
         }
 
         let axis_x = world.input.gamepad.axis(Axis::LeftStickX);
         let axis_y = world.input.gamepad.axis(Axis::LeftStickY);
-        if fb_movement == 0.0 {
-            base_vel += self.parent.transform.forward() * axis_y;
+        if fb_movement.abs() < f32::EPSILON {
+            target_velocity += self.parent.transform.forward() * axis_y;
             fb_movement = axis_y;
         }
-        if lr_movement == 0.0 {
-            base_vel += self.parent.transform.right() * axis_x;
+        if lr_movement.abs() < f32::EPSILON {
+            target_velocity += self.parent.transform.right() * axis_x;
             lr_movement = axis_x;
         }
 
-        if base_vel.magnitude() > 0.5 {
-            base_vel = base_vel.normalize();
+        if target_velocity.magnitude() > 0.5 {
+            target_velocity = target_velocity.normalize();
         }
-        self.velocity += base_vel * self.factor_smooth;
+        target_velocity *= speed_factor;
+        self.velocity = self.velocity.lerp(&target_velocity, self.velocity_interp_t);
 
         if let Some(camera) = self.camera_controller.as_ref() {
             let mut camera = camera.borrow_mut();
             let world = World::instance();
             let delta_time = world.delta_time().as_secs_f32();
             camera.update_roll(
-                -lr_movement * self.factor_smooth * delta_time * 500.,
+                -lr_movement * speed_factor * delta_time * 100.,
                 4. - fb_movement.abs() * 2.,
             );
-            camera.update_bob(base_vel.magnitude(), self.factor_smooth);
+            camera.update_bob(self.velocity.magnitude());
             camera.vel_y = body.linvel().y;
             if jumping {
                 camera.signal_jump();
