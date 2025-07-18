@@ -1,6 +1,7 @@
 use gilrs::{Axis, Button, Event, EventType, Gilrs};
 use log::debug;
 use std::collections::HashMap;
+use uuid::Uuid;
 
 #[derive(Debug)]
 pub struct GamePadManager {
@@ -39,7 +40,7 @@ impl GamePadManager {
     fn handle_device_meta_event(&self, event: &Event) {
         let gamepad = self.poller.gamepad(event.id);
         let name = gamepad.name();
-        let uuid = gamepad.uuid().map(|num| format!("{num:03}")).join("");
+        let uuid = Uuid::from_bytes(gamepad.uuid());
         match event.event {
             EventType::Connected => debug!("[Gamepads] Connected Gamepad: {name} ({uuid})"),
             EventType::Disconnected => {
@@ -53,22 +54,18 @@ impl GamePadManager {
     pub fn handle_gamepad_event(&mut self, event: &EventType) {
         match event {
             EventType::ButtonPressed(button, code) | EventType::ButtonRepeated(button, code) => {
-                debug!("[Gamepads] ButtonPressed {button:?} ({code:?})");
                 self.buttons.insert(*button, true);
                 self.buttons_just_updated.push(*button);
             }
             EventType::ButtonReleased(button, code) => {
-                debug!("[Gamepads] ButtonReleased {button:?} ({code:?})");
                 self.buttons.insert(*button, false);
                 self.buttons_just_updated.push(*button);
             }
             EventType::ButtonChanged(button, value, code) => {
-                debug!("[Gamepads] ButtonChanged {button:?} ({code:?})");
                 self.buttons.insert(*button, *value >= 0.5);
                 self.buttons_just_updated.push(*button);
             }
             EventType::AxisChanged(axis, value, code) => {
-                debug!("{code:?}");
                 self.axis.insert(*axis, *value);
             }
             _ => {}
