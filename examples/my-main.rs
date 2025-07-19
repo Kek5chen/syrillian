@@ -4,6 +4,10 @@
 //!    with new features. Therefore, it should contain the latest and greatest. I can recommend
 //!    using this for reference.
 
+use log::info;
+use nalgebra::UnitQuaternion;
+use rapier3d::parry::query::Ray;
+use rapier3d::prelude::QueryFilter;
 use std::error::Error;
 use syrillian::assets::scene_loader::SceneLoader;
 use syrillian::assets::{Material, Shader};
@@ -18,12 +22,25 @@ use syrillian::utils::frame_counter::FrameCounter;
 use syrillian::SyrillianApp;
 use syrillian::{AppState, World};
 use wgpu::PolygonMode;
+use winit::event::MouseButton;
 use winit::window::Window;
 // const NECO_IMAGE: &[u8; 1293] = include_bytes!("assets/neco.jpg");
 
-#[derive(Debug, Default, SyrillianApp)]
+#[derive(Debug, SyrillianApp)]
 struct MyMain {
     frame_counter: FrameCounter,
+    player: GameObjectId,
+    picked_up: Option<GameObjectId>,
+}
+
+impl Default for MyMain {
+    fn default() -> Self {
+        Self {
+            frame_counter: FrameCounter::default(),
+            player: GameObjectId::invalid(),
+            picked_up: None,
+        }
+    }
 }
 
 impl AppState for MyMain {
@@ -32,8 +49,8 @@ impl AppState for MyMain {
         world.input.set_quit_on_escape(true);
 
         world.spawn(&City);
-        let mut player = world.spawn(&FirstPersonPlayerPrefab);
-        player.transform.set_position(0.0, 20.0, 0.0);
+        self.player = world.spawn(&FirstPersonPlayerPrefab);
+        self.player.transform.set_position(0.0, 20.0, 0.0);
 
         let fs = include_str!("dynamic_shader/shader2.wgsl");
         let fs2 = include_str!("dynamic_shader/shader.wgsl");
@@ -66,7 +83,6 @@ impl AppState for MyMain {
                 .build(),
         );
 
-
         let cube_prefab1 = CubePrefab::new(shader_mat_1);
         let cube_prefab2 = CubePrefab::new(shader_mat_2);
         let mut cube = world.spawn(&cube_prefab1);
@@ -86,8 +102,12 @@ impl AppState for MyMain {
         cube3.add_component::<PointLightComponent>();
 
         cube.add_component::<RotateComponent>().scale_coefficient = 1.;
-        big_cube_left.add_component::<RotateComponent>().rotate_speed = 30.;
-        big_cube_right.add_component::<RotateComponent>().rotate_speed = -30.;
+        big_cube_left
+            .add_component::<RotateComponent>()
+            .rotate_speed = 30.;
+        big_cube_right
+            .add_component::<RotateComponent>()
+            .rotate_speed = -30.;
         big_cube_left.transform.set_uniform_scale(5.);
         big_cube_right.transform.set_uniform_scale(5.);
 
@@ -122,6 +142,11 @@ impl AppState for MyMain {
     fn update(&mut self, world: &mut World, window: &Window) -> Result<(), Box<dyn Error>> {
         self.frame_counter.new_frame_from_world(world);
         window.set_title(&self.format_title());
+        Ok(())
+    }
+
+    fn late_update(&mut self, world: &mut World, _window: &Window) -> Result<(), Box<dyn Error>> {
+        self.do_raycast_test(world);
 
         Ok(())
     }
@@ -141,6 +166,59 @@ impl MyMain {
             syrillian::ENGINE_STR,
             self.frame_counter.fps(),
         )
+    }
+
+    fn do_raycast_test(&mut self, world: &mut World) -> Option<()> {
+        let camera = world.active_camera?;
+
+        if world.input.is_button_down(MouseButton::Left) {
+            let ray = Ray::new(
+                camera.transform.position().into(),
+                camera.transform.forward(),
+            );
+            let player_collider = self
+                .player
+                .get_component::<Collider3D>()?
+                .borrow()
+                .phys_handle;
+            let intersect = world.physics.cast_ray(
+                &ray,
+                100.,
+                false,
+                QueryFilter::only_dynamic().exclude_collider(player_collider),
+            );
+
+            match intersect {
+                None => info!("No ray intersection"),
+                Some((dt, obj)) => {
+                    info!("Intersection after {dt}s, against: {}", obj.name);
+                    self.picked_up = Some(obj);
+                }
+            }
+        } else if world.input.is_button_released(MouseButton::Left) {
+            if let Some(obj) = self.picked_up {
+                let rb = obj.get_component::<RigidBodyComponent>()?;
+                rb.borrow_mut().set_kinematic(false);
+            }
+            self.picked_up = None;
+        }
+
+        if let Some(mut obj) = self.picked_up {
+            let scale = obj.transform.scale();
+            let target_position = camera.transform.position()
+                + camera.transform.forward() * scale.magnitude().max(1.) * 2.;
+            let position = obj.transform.position();
+            let target_rotation = camera.transform.rotation();
+            let rotation = obj.transform.rotation();
+            let unit_quat = UnitQuaternion::from_quaternion(rotation.lerp(&target_rotation, 0.03));
+            obj.transform
+                .set_position_vec(position.lerp(&target_position, 1.03));
+            obj.transform.set_rotation(unit_quat);
+            let rb = obj.get_component::<RigidBodyComponent>()?;
+            rb.borrow_mut().set_kinematic(true);
+        }
+
+        None
     }
 }
 

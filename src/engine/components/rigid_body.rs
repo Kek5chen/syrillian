@@ -1,13 +1,14 @@
 use crate::utils::math::QuaternionEuler;
 use rapier3d::prelude::*;
 
-use crate::World;
 use crate::components::Component;
 use crate::core::GameObjectId;
+use crate::World;
 
 pub struct RigidBodyComponent {
     parent: GameObjectId,
     pub body_handle: RigidBodyHandle,
+    kinematic: bool,
 }
 
 impl Component for RigidBodyComponent {
@@ -15,6 +16,7 @@ impl Component for RigidBodyComponent {
         let initial_translation = parent.transform.position();
         let initial_rotation = parent.transform.rotation().euler_vector();
         let rigid_body = RigidBodyBuilder::dynamic()
+            .user_data(parent.0 as u128)
             .translation(initial_translation)
             .rotation(initial_rotation)
             .build();
@@ -24,6 +26,7 @@ impl Component for RigidBodyComponent {
         RigidBodyComponent {
             parent,
             body_handle,
+            kinematic: false,
         }
     }
 
@@ -33,8 +36,13 @@ impl Component for RigidBodyComponent {
             .rigid_body_set
             .get_mut(self.body_handle);
         if let Some(rb) = rb {
-            rb.set_translation(self.parent.transform.position(), false);
-            rb.set_rotation(self.parent.transform.rotation(), false);
+            if rb.is_dynamic() {
+                rb.set_translation(self.parent.transform.position(), false);
+                rb.set_rotation(self.parent.transform.rotation(), false);
+            } else if rb.is_kinematic() {
+                rb.set_next_kinematic_translation(self.parent.transform.position());
+                rb.set_next_kinematic_rotation(self.parent.transform.rotation());
+            }
         } else {
             todo!("de-synced - remake_rigid_body();")
         }
@@ -84,5 +92,16 @@ impl RigidBodyComponent {
             .physics
             .rigid_body_set
             .get_mut(self.body_handle)
+    }
+
+    pub fn set_kinematic(&mut self, kinematic: bool) {
+        let rb = self.get_body_mut()
+            .expect("Rigid body de-synced");
+        if kinematic {
+            rb.set_body_type(RigidBodyType::KinematicPositionBased, false);
+        } else {
+            rb.set_body_type(RigidBodyType::Dynamic, false);
+        }
+        self.kinematic = kinematic;
     }
 }

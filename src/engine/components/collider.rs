@@ -1,4 +1,3 @@
-use crate::World;
 use crate::components::ColliderError::{
     DesyncedCollider, InvalidMesh, InvalidMeshRef, NoMeshRenderer,
 };
@@ -6,6 +5,7 @@ use crate::components::{Component, RigidBodyComponent};
 use crate::core::GameObjectId;
 use crate::drawables::MeshRenderer;
 use crate::engine::assets::Mesh;
+use crate::World;
 use log::{trace, warn};
 use nalgebra::Vector3;
 use rapier3d::prelude::*;
@@ -42,7 +42,7 @@ impl Component for Collider3D {
     {
         let scale = parent.transform.scale();
         let shape = SharedShape::cuboid(scale.x / 2., scale.y / 2., scale.z / 2.);
-        let collider = Self::default_collider(shape);
+        let collider = Self::default_collider(parent, shape);
         let phys_handle = World::instance()
             .physics
             .collider_set
@@ -104,10 +104,11 @@ impl Collider3D {
             .get_mut(self.phys_handle)
     }
 
-    fn default_collider(shape: SharedShape) -> Collider {
+    fn default_collider(parent: GameObjectId, shape: SharedShape) -> Collider {
         ColliderBuilder::new(shape)
             .density(1.0)
             .friction(0.999)
+            .user_data(parent.0 as u128)
             .build()
     }
 

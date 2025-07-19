@@ -1,9 +1,10 @@
+use crate::core::GameObjectId;
 use nalgebra::Vector3;
 use rapier3d::prelude::*;
 use std::time::{Duration, Instant};
 
 pub struct PhysicsSimulator {
-    pub gravity: Vector3<Real>,
+    pub gravity: Vector3<f32>,
     pub rigid_body_set: RigidBodySet,
     pub collider_set: ColliderSet,
     pub integration_parameters: IntegrationParameters,
@@ -64,5 +65,14 @@ impl PhysicsSimulator {
             &(), // no events yet
         );
         self.query_pipeline.update(&self.collider_set)
+    }
+
+    pub fn cast_ray(&self, ray: &Ray, max_toi: f32, solid: bool, filter: QueryFilter) -> Option<(f32, GameObjectId)> {
+        let (collider, distance) = self.query_pipeline.cast_ray(&self.rigid_body_set, &self.collider_set, ray, max_toi, solid, filter)?;
+
+        let object_id = self.collider_set.get(collider)?.user_data as usize;
+        let object = GameObjectId(object_id);
+
+        object.exists().then_some((distance, object))
     }
 }

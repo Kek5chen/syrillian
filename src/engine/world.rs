@@ -168,6 +168,11 @@ impl World {
 
         unsafe {
             self.execute_component_func(Component::update);
+        }
+    }
+
+    pub fn late_update(&mut self) {
+        unsafe {
             self.execute_component_func(Component::late_update);
 
             while self.physics.last_update.elapsed() > self.physics.timestep {
@@ -176,7 +181,9 @@ impl World {
                 self.execute_component_func(Component::post_update);
             }
         }
+    }
 
+    pub fn next_frame(&mut self) {
         self.input.next_frame();
     }
 

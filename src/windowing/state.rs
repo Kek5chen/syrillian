@@ -12,6 +12,9 @@ pub trait AppState: Sized {
     fn update(&mut self, world: &mut World, window: &Window) -> Result<(), Box<dyn Error>> {
         Ok(())
     }
+    fn late_update(&mut self, world: &mut World, window: &Window) -> Result<(), Box<dyn Error>> {
+        Ok(())
+    }
     fn destroy(&mut self, world: &mut World, window: &Window) -> Result<(), Box<dyn Error>> {
         Ok(())
     }

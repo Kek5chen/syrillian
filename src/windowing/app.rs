@@ -1,7 +1,7 @@
-use crate::AppState;
 use crate::components::CameraComponent;
 use crate::rendering::Renderer;
 use crate::world::World;
+use crate::AppState;
 use futures::executor::block_on;
 use log::{error, info};
 use std::error::Error;
@@ -132,6 +132,14 @@ impl<S: AppState> ApplicationHandler for App<S> {
                 }
 
                 world.update();
+                world.late_update();
+
+                if let Err(e) = self.state.late_update(world, renderer.window()) {
+                    error!("Error happened when calling late update function hook: {e}");
+                }
+
+                world.next_frame();
+
                 renderer.state.update();
                 if !renderer.render_world(world) {
                     event_loop.exit();
