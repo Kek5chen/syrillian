@@ -56,21 +56,7 @@ impl SceneLoader {
     }
 
     pub fn load_scene_from_buffer(model: &[u8], hint: &str) -> Result<Scene, Box<dyn Error>> {
-        let scene = Scene::from_buffer(
-            model,
-            vec![
-                PostProcess::CalculateTangentSpace,
-                PostProcess::Triangulate,
-                PostProcess::SortByPrimitiveType,
-                PostProcess::JoinIdenticalVertices,
-                PostProcess::GenerateUVCoords,
-                PostProcess::GenerateNormals,
-                PostProcess::ForceGenerateNormals,
-                PostProcess::EmbedTextures,
-                PostProcess::LimitBoneWeights,
-            ],
-            hint,
-        )?;
+        let scene = Scene::from_buffer(model, POST_STEPS.to_vec(), hint)?;
 
         Ok(scene)
     }
@@ -148,7 +134,10 @@ impl SceneLoader {
                         vec2_from_vec3d,
                     );
                 } else {
-                    warn!("Face in Mesh {} didn't have any texture coordinates set", mesh_id);
+                    warn!(
+                        "Face in Mesh {} didn't have any texture coordinates set",
+                        mesh_id
+                    );
                 }
 
                 extend_data(&mut normals, face_indices, &mesh.normals, vec3_from_vec3d);
