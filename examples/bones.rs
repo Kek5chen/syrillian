@@ -21,7 +21,7 @@ impl AppState for BonesExample {
         let mut boney_obj = SceneLoader::load(world, "./testmodels/hampter/hampter.fbx")?;
         boney_obj.name = "Boney thing".to_owned();
 
-        boney_obj.transform.set_uniform_scale(0.01);
+        boney_obj.transform.set_scale(0.01);
         boney_obj.transform.set_position(0.0, -5.0, -20.0);
 
         world.add_child(boney_obj);

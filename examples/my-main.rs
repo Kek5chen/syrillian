@@ -10,21 +10,24 @@ use rapier3d::parry::query::Ray;
 use rapier3d::prelude::QueryFilter;
 use std::error::Error;
 use syrillian::assets::scene_loader::SceneLoader;
+use syrillian::assets::StoreType;
 use syrillian::assets::{Material, Shader};
 use syrillian::components::{
     Collider3D, PointLightComponent, RigidBodyComponent, RopeComponent, RotateComponent,
 };
-use syrillian::core::GameObjectId;
+use syrillian::core::{GameObjectExt, GameObjectId};
 use syrillian::prefabs::first_person_player::FirstPersonPlayerPrefab;
 use syrillian::prefabs::prefab::Prefab;
 use syrillian::prefabs::CubePrefab;
 use syrillian::utils::frame_counter::FrameCounter;
 use syrillian::SyrillianApp;
 use syrillian::{AppState, World};
-use wgpu::PolygonMode;
 use winit::event::MouseButton;
 use winit::window::Window;
 // const NECO_IMAGE: &[u8; 1293] = include_bytes!("assets/neco.jpg");
+
+const SHADER1: &str = include_str!("dynamic_shader/shader.wgsl");
+const SHADER2: &str = include_str!("dynamic_shader/shader2.wgsl");
 
 #[derive(Debug, SyrillianApp)]
 struct MyMain {
@@ -50,89 +53,69 @@ impl AppState for MyMain {
 
         world.spawn(&City);
         self.player = world.spawn(&FirstPersonPlayerPrefab);
-        self.player.transform.set_position(0.0, 20.0, 0.0);
+        self.player.at(0.0, 20.0, 0.0);
 
-        let fs = include_str!("dynamic_shader/shader2.wgsl");
-        let fs2 = include_str!("dynamic_shader/shader.wgsl");
-        let code = include_str!("../src/engine/rendering/shaders/default_vertex3d.wgsl");
+        let shader = Shader::new_fragment("Funky Shader", SHADER1).store(world);
+        let shader2 = Shader::new_fragment("Funky Shader 2", SHADER2).store(world);
 
-        let shader = world.assets.shaders.add(Shader::Default {
-            name: "Funky Shader".to_string(),
-            code: fs.to_string() + code,
-            polygon_mode: PolygonMode::Fill,
-        });
-
-        let shader2 = world.assets.shaders.add(Shader::Default {
-            name: "Funky Shader 2".to_string(),
-            code: fs2.to_string() + code,
-            polygon_mode: PolygonMode::Fill,
-        });
-
-        let shader_mat_1 = world.assets.materials.add(
-            Material::builder()
-                .name("Neco Arc".into())
-                .opacity(1.0)
-                .shader(shader)
-                .build(),
-        );
-        let shader_mat_2 = world.assets.materials.add(
-            Material::builder()
-                .name("Neco Arc".into())
-                .opacity(1.0)
-                .shader(shader2)
-                .build(),
-        );
+        let shader_mat_1 = Material::builder()
+            .name("Cube Material 1".into())
+            .shader(shader)
+            .store(&world);
+        let shader_mat_2 = Material::builder()
+            .name("Cube Material 2".into())
+            .shader(shader2)
+            .store(&world);
 
         let cube_prefab1 = CubePrefab::new(shader_mat_1);
         let cube_prefab2 = CubePrefab::new(shader_mat_2);
-        let mut cube = world.spawn(&cube_prefab1);
-        let mut cube2 = world.spawn(&cube_prefab1);
-        let mut cube3 = world.spawn(&cube_prefab1);
-        let mut big_cube_left = world.spawn(&cube_prefab2);
-        let mut big_cube_right = world.spawn(&cube_prefab2);
 
-        cube.transform.set_position(20.0, 3.9, -20.0);
-        cube2.transform.set_position(5.0, 6.9, -20.0);
-        cube3.transform.set_position(5.0, 3.9, -20.0);
-        big_cube_left.transform.set_position(10.0, 20.0, 20.0);
-        big_cube_right.transform.set_position(-10.0, 20.0, 20.0);
+        let mut big_cube_left = world.spawn(&cube_prefab1);
+        let mut big_cube_right = world.spawn(&cube_prefab1);
+        let mut cube = world.spawn(&cube_prefab2);
+        let mut cube2 = world.spawn(&cube_prefab2);
+        let mut cube3 = world.spawn(&cube_prefab2);
 
-        cube.add_component::<PointLightComponent>();
-        cube2.add_component::<PointLightComponent>();
-        cube3.add_component::<PointLightComponent>();
+        cube.at(20., 3.9, -20.)
+            .build_component::<PointLightComponent>()
+            .build_component::<Collider3D>()
+            .mass(1.0)
+            .restitution(0.9)
+            .build_component::<RotateComponent>()
+            .scaling(1.);
 
-        cube.add_component::<RotateComponent>().scale_coefficient = 1.;
-        big_cube_left
-            .add_component::<RotateComponent>()
-            .rotate_speed = 30.;
-        big_cube_right
-            .add_component::<RotateComponent>()
-            .rotate_speed = -30.;
-        big_cube_left.transform.set_uniform_scale(5.);
-        big_cube_right.transform.set_uniform_scale(5.);
-
-        let collider = cube2
-            .add_component::<Collider3D>()
-            .get_collider_mut()
-            .unwrap();
-        collider.set_mass(1.0);
-        collider.set_restitution(0.9);
-        let rb = cube2
-            .add_component::<RigidBodyComponent>()
-            .get_body_mut()
-            .unwrap();
-        rb.set_gravity_scale(0.0, false);
-        rb.set_angular_damping(0.5);
-        rb.set_linear_damping(0.5);
-        rb.enable_ccd(true);
+        cube2
+            .at(5.0, 6.9, -20.0)
+            .build_component::<PointLightComponent>()
+            .build_component::<Collider3D>()
+            .mass(1.0)
+            .restitution(0.9)
+            .build_component::<RigidBodyComponent>()
+            .enable_ccd()
+            .gravity_scale(0.0)
+            .angular_damping(0.5)
+            .linear_damping(0.5);
 
         cube3
-            .add_component::<RigidBodyComponent>()
-            .get_body_mut()
-            .unwrap()
-            .enable_ccd(true);
-        cube3.add_component::<Collider3D>();
-        cube3.add_component::<RopeComponent>().connect_to(cube2);
+            .at(5.0, 3.9, -20.0)
+            .build_component::<PointLightComponent>()
+            .build_component::<Collider3D>()
+            .build_component::<RigidBodyComponent>()
+            .enable_ccd()
+            .build_component::<RopeComponent>()
+            .connect_to(cube2);
+
+        big_cube_left
+            .at(10.0, 20.0, 20.0)
+            .scale(5.)
+            .build_component::<RotateComponent>()
+            .speed(30.);
+
+        big_cube_right
+            .at(-10.0, 20.0, 20.0)
+            .scale(5.)
+            .build_component::<RotateComponent>()
+            .speed(-30.);
 
         world.print_objects();
 
@@ -235,7 +218,7 @@ impl Prefab for City {
             );
         };
 
-        city.transform.set_uniform_scale(0.01);
+        city.transform.set_scale(0.01);
 
         // add colliders to city
         city.add_child_components_then(Collider3D::please_use_mesh);

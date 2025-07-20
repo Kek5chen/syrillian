@@ -1,5 +1,6 @@
 use crate::engine::assets::generic_store::{HandleName, Store, StoreDefaults, StoreType};
-use crate::engine::assets::{H, HShader, StoreTypeFallback, StoreTypeName};
+use crate::engine::assets::{HShader, StoreTypeFallback, StoreTypeName, H};
+use crate::{store_add_checked, store_add_checked_many};
 use std::borrow::Cow;
 use std::error::Error;
 use std::fs;
@@ -7,21 +8,27 @@ use std::path::Path;
 use wgpu::{PolygonMode, PrimitiveTopology, VertexBufferLayout};
 
 #[derive(Debug, Clone)]
+pub enum ShaderCode {
+    Full(String),
+    Fragment(String),
+}
+
+#[derive(Debug, Clone)]
 pub enum Shader {
     Default {
         name: String,
-        code: String,
+        code: ShaderCode,
         polygon_mode: PolygonMode,
     },
 
     PostProcess {
         name: String,
-        code: String,
+        code: ShaderCode,
     },
 
     Custom {
         name: String,
-        code: String,
+        code: ShaderCode,
         polygon_mode: PolygonMode,
         topology: PrimitiveTopology,
         vertex_buffers: &'static [VertexBufferLayout<'static>],
@@ -59,45 +66,35 @@ impl H<Shader> {
     pub const DEBUG_VERTEX_NORMALS: H<Shader> = H::new(Self::DEBUG_VERTEX_NORMALS_ID);
 }
 
+const SHADER_FALLBACK3D: &str = include_str!("../rendering/shaders/fallback_shader3d.wgsl");
+const SHADER_DIM3: &str = include_str!("../rendering/shaders/shader3d.wgsl");
+const SHADER_DIM2: &str = include_str!("../rendering/shaders/shader2d.wgsl");
+const SHADER_FS_COPY: &str = include_str!("../rendering/shaders/fullscreen_passhthrough.wgsl");
+
 impl StoreDefaults for Shader {
     fn populate(store: &mut Store<Self>) {
-        let shader = store.add_default_shader(
-            "Fallback".to_string(),
-            include_str!("../rendering/shaders/fallback_shader3d.wgsl").to_string(),
+        store_add_checked_many!(store,
+            HShader::FALLBACK_ID => Shader::new_default("Fallback", SHADER_FALLBACK3D),
+            HShader::DIM3_ID => Shader::new_fragment("3D Default Pipeline", SHADER_DIM3),
+            HShader::DIM2_ID => Shader::new_default("2D Default Pipeline", SHADER_DIM2),
+            HShader::POST_PROCESS_ID => Shader::new_post_process("Post Process", SHADER_FS_COPY),
         );
-        assert_eq!(shader, HShader::FALLBACK);
-
-        let shader = store.add_default_shader(
-            "3D Default Pipeline".to_string(),
-            include_str!("../rendering/shaders/shader3d.wgsl").to_string(),
-        );
-
-        assert_eq!(shader, HShader::DIM3);
-
-        let shader = store.add_default_shader(
-            "2D Default Pipeline".to_string(),
-            include_str!("../rendering/shaders/shader2d.wgsl").to_string(),
-        );
-        assert_eq!(shader, HShader::DIM2);
-
-        let shader = store.add_post_process_shader(
-            "PostProcess".to_string(),
-            include_str!("../rendering/shaders/fullscreen_passhthrough.wgsl").to_string(),
-        );
-        assert_eq!(shader, HShader::POST_PROCESS);
 
         #[cfg(debug_assertions)]
         {
-            use crate::store_add_checked;
             use crate::utils::sizes::VEC3_SIZE;
             use wgpu::{VertexAttribute, VertexFormat, VertexStepMode};
+
+            const DEBUG_EDGES_SHADER: &str = include_str!("../rendering/shaders/debug/edges.wgsl");
+            const VERTEX_NORMALS_SHADER: &str =
+                include_str!("../rendering/shaders/debug/vertex_normals.wgsl");
 
             store_add_checked!(
                 store,
                 HShader::DEBUG_EDGES_ID,
                 Shader::Default {
                     name: "Mesh Debug Edges Shader".to_owned(),
-                    code: include_str!("../rendering/shaders/debug/edges.wgsl").to_string(),
+                    code: ShaderCode::Full(DEBUG_EDGES_SHADER.to_string()),
                     polygon_mode: PolygonMode::Line,
                 }
             );
@@ -135,8 +132,7 @@ impl StoreDefaults for Shader {
                 HShader::DEBUG_VERTEX_NORMALS_ID,
                 Shader::Custom {
                     name: "Mesh Debug Vertices Shader".to_owned(),
-                    code: include_str!("../rendering/shaders/debug/vertex_normals.wgsl")
-                        .to_string(),
+                    code: ShaderCode::Full(VERTEX_NORMALS_SHADER.to_string()),
                     topology: PrimitiveTopology::LineList,
                     polygon_mode: PolygonMode::Line,
                     vertex_buffers: DEBUG_VERTEX_NORMALS_VBL,
@@ -185,8 +181,63 @@ const POST_PROCESS_SHADER_PRE_CONTEXT: &str =
     include_str!("../rendering/shaders/engine_reserved_groups/post_process.wgsl");
 const SHADER_PRE_CONTEXT: &str =
     include_str!("../rendering/shaders/engine_reserved_groups/basic.wgsl");
+const DEFAULT_VERT_3D: &str = include_str!("../rendering/shaders/default_vertex3d.wgsl");
+const DEFAULT_VERT_POST: &str = include_str!("../rendering/shaders/default_vertex_post.wgsl");
 
 impl Shader {
+    pub fn load_default<S, T>(name: S, path: T) -> Result<Shader, Box<dyn Error>>
+    where
+        S: Into<String>,
+        T: AsRef<Path>,
+    {
+        let content = fs::read_to_string(path)?;
+        Ok(Self::new_default(name, content))
+    }
+
+    pub fn load_fragment<S, T>(name: S, path: T) -> Result<Shader, Box<dyn Error>>
+    where
+        S: Into<String>,
+        T: AsRef<Path>,
+    {
+        let code = fs::read_to_string(path)?;
+        Ok(Self::new_fragment(name, code))
+    }
+
+    pub fn new_post_process<S, S2>(name: S, code: S2) -> Shader
+    where
+        S: Into<String>,
+        S2: Into<String>,
+    {
+        Shader::PostProcess {
+            name: name.into(),
+            code: ShaderCode::Full(code.into()),
+        }
+    }
+
+    pub fn new_fragment<S, S2>(name: S, code: S2) -> Shader
+    where
+        S: Into<String>,
+        S2: Into<String>,
+    {
+        Shader::Default {
+            name: name.into(),
+            code: ShaderCode::Fragment(code.into()),
+            polygon_mode: PolygonMode::Fill,
+        }
+    }
+
+    pub fn new_default<S, S2>(name: S, code: S2) -> Shader
+    where
+        S: Into<String>,
+        S2: Into<String>,
+    {
+        Shader::Default {
+            name: name.into(),
+            code: ShaderCode::Full(code.into()),
+            polygon_mode: PolygonMode::Fill,
+        }
+    }
+
     pub fn name(&self) -> &str {
         match self {
             Shader::Default { name, .. } => name,
@@ -214,46 +265,57 @@ impl Shader {
         match self {
             Shader::Default { code, .. }
             | Shader::PostProcess { code, .. }
-            | Shader::Custom { code, .. } => *code = source,
+            | Shader::Custom { code, .. } => *code = ShaderCode::Full(source),
+        }
+    }
+
+    pub fn set_fragment_code(&mut self, source: String) {
+        match self {
+            Shader::Default { code, .. }
+            | Shader::PostProcess { code, .. }
+            | Shader::Custom { code, .. } => *code = ShaderCode::Fragment(source),
         }
     }
 
     pub fn gen_code(&self) -> Cow<'static, str> {
         let code = match self {
-            Shader::Default { code, .. } | Shader::Custom { code, .. } => {
-                format!("{}\n{}", code, SHADER_PRE_CONTEXT)
+            Shader::Default {
+                code: ShaderCode::Full(code),
+                ..
             }
-            Shader::PostProcess { code, .. } => {
-                format!("{}\n{}", code, POST_PROCESS_SHADER_PRE_CONTEXT)
+            | Shader::Custom {
+                code: ShaderCode::Full(code),
+                ..
+            } => {
+                format!("{}\n{}", SHADER_PRE_CONTEXT, code)
+            }
+            Shader::Default {
+                code: ShaderCode::Fragment(code),
+                ..
+            }
+            | Shader::Custom {
+                code: ShaderCode::Fragment(code),
+                ..
+            } => {
+                format!("{}\n{}\n{}", SHADER_PRE_CONTEXT, DEFAULT_VERT_3D, code)
+            }
+            Shader::PostProcess {
+                code: ShaderCode::Full(code),
+                ..
+            } => {
+                format!("{}\n{}", POST_PROCESS_SHADER_PRE_CONTEXT, code)
+            }
+            Shader::PostProcess {
+                code: ShaderCode::Fragment(code),
+                ..
+            } => {
+                format!(
+                    "{}\n{}\n{}",
+                    POST_PROCESS_SHADER_PRE_CONTEXT, DEFAULT_VERT_POST, code
+                )
             }
         };
 
         Cow::Owned(code)
-    }
-}
-
-impl Store<Shader> {
-    pub fn add_default_shader_from_file<T>(
-        &self,
-        name: &str,
-        path: T,
-    ) -> Result<H<Shader>, Box<dyn Error>>
-    where
-        T: AsRef<Path>,
-    {
-        let content = fs::read_to_string(path)?;
-        Ok(self.add_default_shader(name.to_owned(), content.to_owned()))
-    }
-
-    pub fn add_post_process_shader(&self, name: String, code: String) -> H<Shader> {
-        self.add(Shader::PostProcess { name, code })
-    }
-
-    pub fn add_default_shader(&self, name: String, code: String) -> H<Shader> {
-        self.add(Shader::Default {
-            name,
-            code,
-            polygon_mode: PolygonMode::Fill,
-        })
     }
 }

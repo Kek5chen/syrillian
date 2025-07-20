@@ -1,17 +1,52 @@
 use crate::engine::assets::key::AssetKey;
-use crate::engine::assets::{H, HShader};
-use dashmap::DashMap;
+use crate::engine::assets::{HShader, H};
 use dashmap::mapref::one::Ref as MapRef;
 use dashmap::mapref::one::RefMut as MapRefMut;
+use dashmap::DashMap;
 use log::{trace, warn};
 use std::fmt::{Debug, Display, Formatter};
 use std::mem;
 use std::sync::RwLock;
 
+type Ref<'a, T> = MapRef<'a, AssetKey, T>;
+type RefMut<'a, T> = MapRefMut<'a, AssetKey, T>;
+
 pub struct Store<T: StoreType> {
     data: DashMap<AssetKey, T>,
     next_id: RwLock<u32>,
     dirty: RwLock<Vec<AssetKey>>,
+}
+
+pub trait StoreDefaults: StoreType {
+    fn populate(store: &mut Store<Self>);
+}
+
+pub trait StoreType: Sized + Debug {
+    fn name() -> &'static str;
+    fn ident_fmt(handle: H<Self>) -> HandleName<Self>;
+    fn ident(handle: H<Self>) -> String {
+        match Self::ident_fmt(handle) {
+            HandleName::Static(name) => name.to_string(),
+            HandleName::Id(id) => format!("{} #{id}", Self::name()),
+        }
+    }
+
+    fn store<S: AsRef<Store<Self>>>(self, store: &S) -> H<Self> {
+        store.as_ref().add(self)
+    }
+}
+
+pub trait StoreTypeFallback: StoreType {
+    fn fallback() -> H<Self>;
+}
+
+pub trait StoreTypeName: StoreType {
+    fn name(&self) -> &str;
+}
+
+pub enum HandleName<T: StoreType> {
+    Static(&'static str),
+    Id(H<T>),
 }
 
 impl<T: StoreType> Store<T> {
@@ -36,11 +71,6 @@ impl<T: StoreDefaults> Store<T> {
     }
 }
 
-pub enum HandleName<T: StoreType> {
-    Static(&'static str),
-    Id(H<T>),
-}
-
 impl<T: StoreType> Display for HandleName<T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -49,32 +79,6 @@ impl<T: StoreType> Display for HandleName<T> {
         }
     }
 }
-
-pub trait StoreDefaults: StoreType {
-    fn populate(store: &mut Store<Self>);
-}
-
-pub trait StoreType: Sized + Debug {
-    fn name() -> &'static str;
-    fn ident_fmt(handle: H<Self>) -> HandleName<Self>;
-    fn ident(handle: H<Self>) -> String {
-        match Self::ident_fmt(handle) {
-            HandleName::Static(name) => name.to_string(),
-            HandleName::Id(id) => format!("{} #{id}", Self::name()),
-        }
-    }
-}
-
-pub trait StoreTypeFallback: StoreType {
-    fn fallback() -> H<Self>;
-}
-
-pub trait StoreTypeName: StoreType {
-    fn name(&self) -> &str;
-}
-
-type Ref<'a, T> = MapRef<'a, AssetKey, T>;
-type RefMut<'a, T> = MapRefMut<'a, AssetKey, T>;
 
 impl<T: StoreType> Store<T> {
     fn next_id(&self) -> H<T> {
@@ -201,4 +205,11 @@ macro_rules! store_add_checked {
     ($store:ident, $expected_id:path, $elem:expr) => {
         $store.add($elem);
     };
+}
+
+#[macro_export]
+macro_rules! store_add_checked_many {
+    ($store:ident, $( $expected_id:path => $elem:expr ),+ $(,)?) => {
+        $( store_add_checked!($store, $expected_id, $elem); )*
+    }
 }

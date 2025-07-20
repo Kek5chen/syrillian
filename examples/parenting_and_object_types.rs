@@ -24,7 +24,7 @@ impl AppState for ParentingAndObjectTypes {
 
         camera.transform.set_position(0.0, 1.0, 50.0);
 
-        obj2.transform.set_uniform_scale(0.03);
+        obj2.transform.set_scale(0.03);
         obj2.add_component::<RotateComponent>();
         obj1.add_child(obj2);
         world.add_child(obj1);

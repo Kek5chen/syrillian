@@ -4,11 +4,11 @@
 
 use nalgebra::UnitQuaternion;
 use std::error::Error;
-use syrillian::AppState;
 use syrillian::assets::scene_loader::SceneLoader;
 use syrillian::core::GameObjectId;
 use syrillian::prefabs::prefab::Prefab;
 use syrillian::world::World;
+use syrillian::AppState;
 use syrillian_macros::SyrillianApp;
 use winit::window::Window;
 
@@ -44,7 +44,7 @@ impl Prefab for NineCubes {
         scene
             .transform
             .set_rotation(UnitQuaternion::from_euler_angles(0.0, 90.0, 0.0));
-        scene.transform.set_uniform_scale(0.01);
+        scene.transform.set_scale(0.01);
 
         world.add_child(scene);
 

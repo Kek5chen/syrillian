@@ -62,29 +62,42 @@ impl Component for PointLightComponent {
 }
 
 impl PointLightComponent {
+    #[inline]
     pub fn radius(&self) -> f32 {
         self.inner.radius
     }
 
+    #[inline]
     pub fn intensity(&self) -> f32 {
         self.inner.intensity
     }
 
+    #[inline]
     pub fn color(&self) -> &Vector3<f32> {
         &self.inner.color
     }
 
+    #[inline]
     pub fn set_radius(&mut self, radius: f32) {
         let radius = radius.max(0.0);
         self.inner.radius = radius;
     }
 
+    #[inline]
     pub fn set_intensity(&mut self, intensity: f32) {
         let intensity = intensity.max(0.0);
         self.inner.intensity = intensity;
     }
 
-    pub fn set_color_rgb(&mut self, color: Vector3<f32>) {
+    #[inline]
+    pub fn set_color_rgb(&mut self, r: f32, g: f32, b: f32) {
+        self.inner.color.x = r;
+        self.inner.color.y = g;
+        self.inner.color.z = b;
+    }
+
+    #[inline]
+    pub fn set_color_rgb_vec(&mut self, color: Vector3<f32>) {
         self.inner.color = color;
     }
 
@@ -92,6 +105,7 @@ impl PointLightComponent {
         self.inner.pos = self.parent.transform.position();
     }
 
+    #[inline]
     pub(crate) fn inner(&self) -> &PointLightUniform {
         &self.inner
     }

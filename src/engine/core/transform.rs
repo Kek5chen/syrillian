@@ -200,7 +200,12 @@ impl Transform {
     }
 
     /// Sets the global scale, preserving the current global orientation.
-    pub fn set_nonuniform_scale(&mut self, scale: Vector3<f32>) {
+    pub fn set_nonuniform_scale(&mut self, x: f32, y: f32, z: f32) {
+        self.set_nonuniform_scale_vec(Vector3::new(x, y, z));
+    }
+
+    /// Sets the global scale, preserving the current global orientation.
+    pub fn set_nonuniform_scale_vec(&mut self, scale: Vector3<f32>) {
         let global_scale = self.scale();
         let scale_delta = scale.component_div(&global_scale);
         let new_local_scale = self.scale.component_mul(&scale_delta);
@@ -209,8 +214,8 @@ impl Transform {
     }
 
     /// Sets the global scale uniformly.
-    pub fn set_uniform_scale(&mut self, factor: f32) {
-        self.set_nonuniform_scale(Vector3::new(factor, factor, factor));
+    pub fn set_scale(&mut self, factor: f32) {
+        self.set_nonuniform_scale_vec(Vector3::new(factor, factor, factor));
     }
 
     /// Returns the global scale factors.

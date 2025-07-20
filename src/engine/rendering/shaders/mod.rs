@@ -3,14 +3,8 @@ macro_rules! test_shader {
         #[test]
         fn $fn_name() {
             use crate::assets::Shader;
-            use wgpu::PolygonMode;
 
-            let shader = Shader::Default {
-                name: $name.to_string(),
-                code: include_str!($path).to_string(),
-                polygon_mode: PolygonMode::Fill,
-            }
-            .gen_code();
+            let shader = Shader::new_default($name, include_str!($path)).gen_code();
 
             wgpu::naga::front::wgsl::parse_str(&shader).unwrap();
         }
@@ -23,11 +17,7 @@ macro_rules! test_post_shader {
         fn $fn_name() {
             use crate::assets::Shader;
 
-            let shader = Shader::PostProcess {
-                name: $name.to_string(),
-                code: include_str!($path).to_string(),
-            }
-            .gen_code();
+            let shader = Shader::new_post_process($name, include_str!($path)).gen_code();
 
             wgpu::naga::front::wgsl::parse_str(&shader).unwrap();
         }

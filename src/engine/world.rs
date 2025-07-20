@@ -5,6 +5,7 @@
 //! It maintains the scene graph, input state and physics simulation and
 //! offers utility such as methods to create, find and remove game objects.
 
+use crate::assets::{Material, Mesh, Shader, Store, Texture, BGL};
 use crate::components::Component;
 use crate::core::{GameObject, GameObjectId, Transform};
 use crate::engine::assets::AssetStore;
@@ -285,5 +286,35 @@ impl World {
 
     pub fn is_shutting_down(&self) -> bool {
         self.requested_shutdown
+    }
+}
+
+impl AsRef<Store<Mesh>> for World {
+    fn as_ref(&self) -> &Store<Mesh> {
+        &self.assets.meshes
+    }
+}
+
+impl AsRef<Store<Shader>> for World {
+    fn as_ref(&self) -> &Store<Shader> {
+        &self.assets.shaders
+    }
+}
+
+impl AsRef<Store<Texture>> for World {
+    fn as_ref(&self) -> &Store<Texture> {
+        &self.assets.textures
+    }
+}
+
+impl AsRef<Store<Material>> for World {
+    fn as_ref(&self) -> &Store<Material> {
+        &self.assets.materials
+    }
+}
+
+impl AsRef<Store<BGL>> for World {
+    fn as_ref(&self) -> &Store<BGL> {
+        &self.assets.bgls
     }
 }

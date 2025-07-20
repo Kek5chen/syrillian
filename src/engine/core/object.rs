@@ -22,7 +22,7 @@ pub struct GameObjectId(pub(crate) usize);
 #[allow(dead_code)]
 impl GameObjectId {
     pub fn exists(&self) -> bool {
-        World::instance().objects.contains_key(self)
+        !self.is_invalid() && World::instance().objects.contains_key(self)
     }
 
     pub fn invalid() -> GameObjectId {
@@ -31,6 +31,13 @@ impl GameObjectId {
 
     pub fn is_invalid(&self) -> bool {
         self.0 == usize::MAX
+    }
+
+    pub fn tap<F: Fn(&mut GameObject)>(mut self, f: F) -> Self {
+        if self.exists() {
+            f(self.deref_mut())
+        }
+        self
     }
 }
 

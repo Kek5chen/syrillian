@@ -20,6 +20,15 @@ pub struct Material {
     pub shader: HShader,
 }
 
+impl<S: material_builder::State> MaterialBuilder<S>
+where
+    S: material_builder::IsComplete,
+{
+    pub fn store<A: AsRef<Store<Material>>>(self, store: &A) -> HMaterial {
+        store.as_ref().add(self.build())
+    }
+}
+
 impl StoreDefaults for Material {
     fn populate(store: &mut Store<Self>) {
         let fallback = Material {
@@ -29,7 +38,7 @@ impl StoreDefaults for Material {
             normal_texture: None,
             shininess_texture: None,
             shininess: 0.0,
-            shader: HShader::DIM3,
+            shader: HShader::FALLBACK,
             opacity: 1.0,
         };
 

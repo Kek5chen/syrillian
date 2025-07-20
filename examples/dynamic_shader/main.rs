@@ -7,14 +7,13 @@ use std::fs;
 use std::sync::mpsc;
 use std::sync::mpsc::TryRecvError;
 use std::time::Instant;
-use syrillian::assets::{HMaterial, HShader, Material, Shader};
+use syrillian::assets::{HMaterial, HShader, Material, Shader, StoreType};
 use syrillian::components::RotateComponent;
 use syrillian::core::GameObjectId;
 use syrillian::prefabs::CubePrefab;
 use syrillian::{AppState, World};
 use syrillian_macros::SyrillianApp;
 use wgpu::naga::valid::{Capabilities, ValidationFlags};
-use wgpu::PolygonMode;
 use winit::window::Window;
 
 const SHADER_PATH: &str = "examples/dynamic_shader/shader.wgsl";
@@ -56,12 +55,7 @@ impl Default for DynamicShaderExample {
 
 impl DynamicShaderExample {
     fn check_valid(source: &str) -> Result<(), String> {
-        let code = Shader::Default {
-            name: "Dynamic Shader".to_string(),
-            code: source.to_string(),
-            polygon_mode: PolygonMode::Fill,
-        }
-        .gen_code();
+        let code = Shader::new_default("Dynamic Shader", source).gen_code();
 
         let module =
             wgpu::naga::front::wgsl::parse_str(&code).map_err(|e| e.emit_to_string(&code))?;
@@ -80,16 +74,11 @@ impl DynamicShaderExample {
         self.last_successful_shader = Some(source);
 
         if self.shader_id == HShader::FALLBACK {
-            let shader = world
-                .assets
-                .shaders
-                .add_default_shader("Dynamic Shader".to_string(), source_2);
-            let material = world.assets.materials.add(
-                Material::builder()
+            let shader = Shader::new_default("Dynamic Shader".to_string(), source_2).store(world);
+            let material = Material::builder()
                     .name("Dynamic Shader Material".to_string())
                     .shader(shader)
-                    .build(),
-            );
+                .store(world);
 
             self.shader_id = shader;
             self.material_id = material;
@@ -102,7 +91,7 @@ impl DynamicShaderExample {
         }
     }
 
-    fn try_laod_shader(&mut self, world: &mut World) -> Result<(), Box<dyn Error>> {
+    fn try_load_shader(&mut self, world: &mut World) -> Result<(), Box<dyn Error>> {
         let mut source = fs::read_to_string(SHADER_PATH)?;
         source.insert_str(0, DEFAULT_VERT);
 
@@ -117,7 +106,7 @@ impl DynamicShaderExample {
     }
 
     fn refresh_shader(&mut self, world: &mut World) -> Result<(), Box<dyn Error>> {
-        self.try_laod_shader(world)?;
+        self.try_load_shader(world)?;
         self.respawn_cube(world);
         info!("Shader refreshed");
 
@@ -158,7 +147,7 @@ impl DynamicShaderExample {
             material: self.material_id,
         });
 
-        self.cube.transform.set_uniform_scale(2.0);
+        self.cube.transform.set_scale(2.0);
         self.cube.transform.set_position(0., 0., -5.0);
         let new_comp = self.cube.add_component::<RotateComponent>();
         new_comp.iteration = iter;
@@ -169,7 +158,7 @@ impl DynamicShaderExample {
 
 impl AppState for DynamicShaderExample {
     fn init(&mut self, world: &mut World, _window: &Window) -> Result<(), Box<dyn Error>> {
-        _ = self.try_laod_shader(world);
+        _ = self.try_load_shader(world);
         self.respawn_cube(world);
 
         world.new_camera();
