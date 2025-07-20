@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::rc::Rc;
 
-use crate::assets::{HMaterial, HShader, HTexture, Material, Mesh, H};
+use crate::assets::{HMaterial, HShader, HTexture, Material, Mesh, StoreType, Texture, H};
 use crate::core::{Bones, GameObjectId, Vertex3D};
 use crate::drawables::MeshRenderer;
 use crate::utils::iter::{extend_data, interpolate_zeros};
@@ -285,10 +285,8 @@ fn load_texture(
     let texture = texture.borrow();
     match &texture.data {
         DataContent::Texel(_) => panic!("I CAN'T ADD TEXLESLSSE YET PLS HELP"),
-        DataContent::Bytes(data) => world
-            .assets
-            .textures
-            .load_image_from_memory(data)
+        DataContent::Bytes(data) => Texture::load_image_from_memory(data)
+            .map(|t| t.store(world))
             .unwrap_or_else(|e| {
                 warn!("Failed to load texture: {e}. Using fallback texture.");
                 HTexture::FALLBACK_DIFFUSE

@@ -2,7 +2,7 @@
 
 use std::error::Error;
 
-use syrillian::assets::Material;
+use syrillian::assets::{Material, StoreType, Texture};
 use syrillian::components::RotateComponent;
 use syrillian::drawables::{Image, ImageScalingMode};
 use syrillian::prefabs::CubePrefab;
@@ -20,7 +20,7 @@ impl AppState for NecoArc {
         world.input.set_quit_on_escape(true);
         world.new_camera();
 
-        let texture = world.assets.textures.load_image_from_memory(NECO_IMAGE)?;
+        let texture = Texture::load_image_from_memory(NECO_IMAGE)?.store(world);
 
         let material = world.assets.materials.add(
             Material::builder()

@@ -3,7 +3,7 @@ use nalgebra::Vector3;
 use rapier3d::prelude::*;
 use std::time::{Duration, Instant};
 
-pub struct PhysicsSimulator {
+pub struct PhysicsManager {
     pub gravity: Vector3<f32>,
     pub rigid_body_set: RigidBodySet,
     pub collider_set: ColliderSet,
@@ -24,9 +24,9 @@ pub struct PhysicsSimulator {
 
 const EARTH_GRAVITY: f32 = 9.81;
 
-impl Default for PhysicsSimulator {
+impl Default for PhysicsManager {
     fn default() -> Self {
-        PhysicsSimulator {
+        PhysicsManager {
             gravity: Vector3::new(0.0, -EARTH_GRAVITY, 0.0),
             rigid_body_set: RigidBodySet::default(),
             collider_set: ColliderSet::default(),
@@ -47,7 +47,7 @@ impl Default for PhysicsSimulator {
     }
 }
 
-impl PhysicsSimulator {
+impl PhysicsManager {
     pub fn step(&mut self) {
         self.physics_pipeline.step(
             &self.gravity,

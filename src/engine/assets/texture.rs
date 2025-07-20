@@ -1,5 +1,5 @@
 use crate::engine::assets::generic_store::{HandleName, Store, StoreDefaults, StoreType};
-use crate::engine::assets::{H, HTexture, StoreTypeFallback};
+use crate::engine::assets::{HTexture, StoreTypeFallback, H};
 use crate::store_add_checked;
 use std::error::Error;
 use std::fs;
@@ -53,6 +53,33 @@ impl Texture {
             usage: TextureUsages::TEXTURE_BINDING,
             view_formats: &[TextureFormat::Bgra8UnormSrgb],
         }
+    }
+
+    pub fn load_image(path: &str) -> Result<Texture, Box<dyn Error>> {
+        let bytes = fs::read(path)?;
+        Self::load_image_from_memory(&bytes)
+    }
+
+    pub fn load_image_from_memory(bytes: &[u8]) -> Result<Texture, Box<dyn Error>> {
+        let image = image::load_from_memory(bytes)?;
+        let rgba = image.into_rgba8();
+
+        let mut data = Vec::with_capacity((rgba.width() * rgba.height() * 4) as usize);
+        for pixel in rgba.pixels() {
+            data.push(pixel[2]); // B
+            data.push(pixel[1]); // G
+            data.push(pixel[0]); // R
+            data.push(pixel[3]); // A
+        }
+
+        let tex = Texture {
+            width: rgba.width(),
+            height: rgba.height(),
+            format: TextureFormat::Bgra8UnormSrgb,
+            data: Some(data),
+        };
+
+        Ok(tex)
     }
 }
 
@@ -118,30 +145,4 @@ impl StoreTypeFallback for Texture {
 }
 
 impl Store<Texture> {
-    pub fn load_image(&self, path: &str) -> Result<H<Texture>, Box<dyn Error>> {
-        let bytes = fs::read(path)?;
-        self.load_image_from_memory(&bytes)
-    }
-
-    pub fn load_image_from_memory(&self, bytes: &[u8]) -> Result<H<Texture>, Box<dyn Error>> {
-        let image = image::load_from_memory(bytes)?;
-        let rgba = image.into_rgba8();
-
-        let mut data = Vec::with_capacity((rgba.width() * rgba.height() * 4) as usize);
-        for pixel in rgba.pixels() {
-            data.push(pixel[2]); // B
-            data.push(pixel[1]); // G
-            data.push(pixel[0]); // R
-            data.push(pixel[3]); // A
-        }
-
-        let tex = self.add(Texture {
-            width: rgba.width(),
-            height: rgba.height(),
-            format: TextureFormat::Bgra8UnormSrgb,
-            data: Some(data),
-        });
-
-        Ok(tex)
-    }
 }
