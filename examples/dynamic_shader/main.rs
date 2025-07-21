@@ -17,7 +17,7 @@ use wgpu::naga::valid::{Capabilities, ValidationFlags};
 use winit::window::Window;
 
 const SHADER_PATH: &str = "examples/dynamic_shader/shader.wgsl";
-const DEFAULT_VERT: &str = include_str!("../../src/engine/rendering/shaders/default_vertex3d.wgsl");
+const DEFAULT_VERT: &str = include_str!("../../src/engine/assets/shader/shaders/default_vertex3d.wgsl");
 
 #[derive(SyrillianApp)]
 struct DynamicShaderExample {

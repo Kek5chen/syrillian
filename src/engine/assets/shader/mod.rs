@@ -1,7 +1,13 @@
+mod shader_gen;
+
+// this module only has tests for the built-in shaders and can be safely ignored
+mod shaders;
+
+use crate::assets::shader::shader_gen::ShaderGen;
+use crate::assets::HBGL;
 use crate::engine::assets::generic_store::{HandleName, Store, StoreDefaults, StoreType};
 use crate::engine::assets::{HShader, StoreTypeFallback, StoreTypeName, H};
 use crate::{store_add_checked, store_add_checked_many};
-use std::borrow::Cow;
 use std::error::Error;
 use std::fs;
 use std::path::Path;
@@ -11,6 +17,25 @@ use wgpu::{PolygonMode, PrimitiveTopology, VertexBufferLayout};
 pub enum ShaderCode {
     Full(String),
     Fragment(String),
+}
+
+impl ShaderCode {
+    pub fn is_only_fragment_shader(&self) -> bool {
+        matches!(self, ShaderCode::Fragment(_))
+    }
+
+    pub fn code(&self) -> &str {
+        match self {
+            ShaderCode::Full(code) => code,
+            ShaderCode::Fragment(code) => code,
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum PipelineStage {
+    Default,
+    PostProcess,
 }
 
 #[derive(Debug, Clone)]
@@ -72,10 +97,17 @@ impl H<Shader> {
     pub const DEBUG_RAYS: H<Shader> = H::new(Self::DEBUG_RAYS_ID);
 }
 
-const SHADER_FALLBACK3D: &str = include_str!("../rendering/shaders/fallback_shader3d.wgsl");
-const SHADER_DIM3: &str = include_str!("../rendering/shaders/shader3d.wgsl");
-const SHADER_DIM2: &str = include_str!("../rendering/shaders/shader2d.wgsl");
-const SHADER_FS_COPY: &str = include_str!("../rendering/shaders/fullscreen_passhthrough.wgsl");
+const SHADER_FALLBACK3D: &str = include_str!("shaders/fallback_shader3d.wgsl");
+const SHADER_DIM3: &str = include_str!("shaders/shader3d.wgsl");
+const SHADER_DIM2: &str = include_str!("shaders/shader2d.wgsl");
+const SHADER_FS_COPY: &str = include_str!("shaders/fullscreen_passhthrough.wgsl");
+
+#[cfg(debug_assertions)]
+const DEBUG_EDGES_SHADER: &str = include_str!("shaders/debug/edges.wgsl");
+#[cfg(debug_assertions)]
+const DEBUG_VERTEX_NORMAL_SHADER: &str = include_str!("shaders/debug/vertex_normals.wgsl");
+#[cfg(debug_assertions)]
+const DEBUG_RAY_SHADER: &str = include_str!("shaders/debug/rays.wgsl");
 
 impl StoreDefaults for Shader {
     fn populate(store: &mut Store<Self>) {
@@ -90,12 +122,6 @@ impl StoreDefaults for Shader {
         {
             use crate::utils::sizes::VEC3_SIZE;
             use wgpu::{VertexAttribute, VertexFormat, VertexStepMode};
-
-            const DEBUG_EDGES_SHADER: &str = include_str!("../rendering/shaders/debug/edges.wgsl");
-            const DEBUG_VERTEX_NORMAL_SHADER: &str =
-                include_str!("../rendering/shaders/debug/vertex_normals.wgsl");
-            const DEBUG_RAY_SHADER: &str =
-                include_str!("../rendering/shaders/debug/rays.wgsl");
 
             store_add_checked!(
                 store,
@@ -230,13 +256,6 @@ impl StoreType for Shader {
     }
 }
 
-const POST_PROCESS_SHADER_PRE_CONTEXT: &str =
-    include_str!("../rendering/shaders/engine_reserved_groups/post_process.wgsl");
-const SHADER_PRE_CONTEXT: &str =
-    include_str!("../rendering/shaders/engine_reserved_groups/basic.wgsl");
-const DEFAULT_VERT_3D: &str = include_str!("../rendering/shaders/default_vertex3d.wgsl");
-const DEFAULT_VERT_POST: &str = include_str!("../rendering/shaders/default_vertex_post.wgsl");
-
 impl Shader {
     pub fn load_default<S, T>(name: S, path: T) -> Result<Shader, Box<dyn Error>>
     where
@@ -322,6 +341,14 @@ impl Shader {
         }
     }
 
+    pub fn code(&self) -> &ShaderCode {
+        match self {
+            Shader::Default { code, .. }
+            | Shader::PostProcess { code, .. }
+            | Shader::Custom { code, .. } => code,
+        }
+    }
+
     pub fn set_fragment_code(&mut self, source: String) {
         match self {
             Shader::Default { code, .. }
@@ -330,45 +357,46 @@ impl Shader {
         }
     }
 
-    pub fn gen_code(&self) -> Cow<'static, str> {
-        let code = match self {
-            Shader::Default {
-                code: ShaderCode::Full(code),
-                ..
-            }
-            | Shader::Custom {
-                code: ShaderCode::Full(code),
-                ..
-            } => {
-                format!("{}\n{}", SHADER_PRE_CONTEXT, code)
-            }
-            Shader::Default {
-                code: ShaderCode::Fragment(code),
-                ..
-            }
-            | Shader::Custom {
-                code: ShaderCode::Fragment(code),
-                ..
-            } => {
-                format!("{}\n{}\n{}", SHADER_PRE_CONTEXT, DEFAULT_VERT_3D, code)
-            }
-            Shader::PostProcess {
-                code: ShaderCode::Full(code),
-                ..
-            } => {
-                format!("{}\n{}", POST_PROCESS_SHADER_PRE_CONTEXT, code)
-            }
-            Shader::PostProcess {
-                code: ShaderCode::Fragment(code),
-                ..
-            } => {
-                format!(
-                    "{}\n{}\n{}",
-                    POST_PROCESS_SHADER_PRE_CONTEXT, DEFAULT_VERT_POST, code
-                )
-            }
-        };
+    pub fn stage(&self) -> PipelineStage {
+        match self {
+            Shader::Default { .. } => PipelineStage::Default,
+            Shader::PostProcess { .. } => PipelineStage::PostProcess,
+            Shader::Custom { .. } => PipelineStage::Default,
+        }
+    }
 
-        Cow::Owned(code)
+    pub fn is_custom(&self) -> bool {
+        matches!(self, Shader::Custom { .. })
+    }
+
+    pub fn gen_code(&self) -> String {
+        ShaderGen::new(self).generate()
+    }
+
+    pub fn needs_bgl(&self, bgl: HBGL) -> bool {
+        if !self.is_custom() {
+            return true;
+        }
+
+        let use_name = match bgl.id() {
+            HBGL::MODEL_ID => "model",
+            HBGL::LIGHT_ID => "light",
+
+            HBGL::RENDER_ID => return true,
+            _ => return false,
+        };
+        let source = self.code().code();
+
+        for line in source.lines() {
+            let Some(i) = line.find("#use ") else {
+                continue;
+            };
+
+            if line[i + 5..].trim() == use_name {
+                return true;
+            }
+        }
+
+        false
     }
 }

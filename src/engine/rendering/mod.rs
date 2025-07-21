@@ -57,6 +57,3 @@ pub use cache::*;
 pub use context::*;
 pub(crate) use renderer::*;
 pub(crate) use state::*;
-
-// this module only has tests for the built-in shaders and can be safely ignored
-mod shaders;

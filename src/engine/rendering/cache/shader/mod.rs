@@ -1,9 +1,11 @@
-use wgpu::*;
-
+use crate::assets::HBGL;
 use crate::engine::assets::Shader;
-use crate::engine::rendering::cache::AssetCache;
 use crate::engine::rendering::cache::generic_cache::CacheType;
+use crate::engine::rendering::cache::AssetCache;
 use crate::rendering::RenderPipelineBuilder;
+use std::borrow::Cow;
+use std::sync::Arc;
+use wgpu::*;
 
 pub mod builder;
 
@@ -20,7 +22,7 @@ impl CacheType for Shader {
     fn upload(&self, device: &Device, _queue: &Queue, cache: &AssetCache) -> Self::Hot {
         let module = device.create_shader_module(ShaderModuleDescriptor {
             label: Some(self.name()),
-            source: ShaderSource::Wgsl(self.gen_code()),
+            source: ShaderSource::Wgsl(Cow::Owned(self.gen_code())),
         });
 
         let pipeline_layout = make_layout(self, device, cache);
@@ -41,14 +43,22 @@ fn make_layout(shader: &Shader, device: &Device, cache: &AssetCache) -> Pipeline
 
     match shader {
         Shader::Default { .. } | Shader::Custom { .. } => {
-            let render_bgl = cache.bgl_render();
-            let model_bgl = cache.bgl_model();
-            let mat_bgl = cache.bgl_material();
-            let light_bgl = cache.bgl_light();
+            let mut bgls: Vec<Arc<BindGroupLayout>> = Vec::new();
+
+            bgls.push(cache.bgl_render());
+            if shader.needs_bgl(HBGL::MODEL) {
+                bgls.push(cache.bgl_model());
+                bgls.push(cache.bgl_material());
+            }
+            if shader.needs_bgl(HBGL::LIGHT) {
+                bgls.push(cache.bgl_light());
+            }
+
+            let bind_group_layouts: Vec<&BindGroupLayout> = bgls.iter().map(Arc::as_ref).collect();
 
             device.create_pipeline_layout(&PipelineLayoutDescriptor {
                 label: Some(&layout_name),
-                bind_group_layouts: &[&render_bgl, &model_bgl, &mat_bgl, &light_bgl],
+                bind_group_layouts: &bind_group_layouts,
                 push_constant_ranges: &[],
             })
         }

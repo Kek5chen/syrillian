@@ -81,23 +81,20 @@ impl PhysicsManager {
         object.exists().then_some((distance, object))
     }
 
-    pub fn cursor_ray(&self, max_toi: f32, filter: QueryFilter) -> Option<(f32, GameObjectId)> {
+    // TODO: hmmmmmmmmmm..
+    pub fn cursor_ray(&self) -> Option<Ray> {
         let world = World::instance();
         let camera = world.active_camera?;
         let camera_component = camera.get_component::<CameraComponent>()?;
         let camera_comp = camera_component.borrow();
-
         let cursor_pos = world.input.mouse_position();
         let ray = camera_comp.click_ray(cursor_pos.x, cursor_pos.y);
 
-        drop(camera_comp);
+        Some(ray)
+    }
 
-        #[cfg(debug_assertions)]
-        {
-            let mut camera_comp = camera_component.borrow_mut();
-            camera_comp.push_debug_ray(ray, max_toi);
-        }
-
-        self.cast_ray(&ray, max_toi, false, filter)
+    pub fn cast_cursor_ray(&self, max_toi: f32, solid: bool, filter: QueryFilter) -> Option<(f32, GameObjectId)> {
+        let ray = self.cursor_ray()?;
+        self.cast_ray(&ray, max_toi, solid, filter)
     }
 }

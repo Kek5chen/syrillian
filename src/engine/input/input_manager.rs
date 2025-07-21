@@ -87,6 +87,11 @@ impl InputManager {
                 self.mouse_pos = PhysicalPosition::new(position.x as f32, position.y as f32);
             }
         }
+
+        #[cfg(target_os = "macos")]
+        {
+            self.mouse_pos = PhysicalPosition::new(position.x as f32, position.y as f32);
+        }
     }
 
     pub fn process_event(&mut self, window: &mut Window, event: &WindowEvent) {
@@ -195,8 +200,9 @@ impl InputManager {
             && self.button_just_updated.contains(&button)
     }
 
-    pub fn mouse_position(&self) -> &PhysicalPosition<f32> {
-        &self.mouse_pos
+    #[inline]
+    pub fn mouse_position(&self) -> PhysicalPosition<f32> {
+        self.mouse_pos
     }
 
     pub fn mouse_delta(&self) -> &Vector2<f32> {

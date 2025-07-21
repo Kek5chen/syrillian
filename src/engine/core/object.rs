@@ -1,5 +1,6 @@
 use std::any::{Any, TypeId};
 use std::cell::RefCell;
+use std::fmt::{Debug, Formatter};
 use std::mem;
 use std::ops::{Deref, DerefMut};
 use std::rc::Rc;
@@ -15,9 +16,19 @@ use crate::{ensure_aligned, utils};
 use crate::components::InternalComponentDeletion;
 use crate::core::Transform;
 
-#[derive(Debug, Copy, Clone, Eq, Ord, PartialOrd, PartialEq, Hash)]
+#[derive(Copy, Clone, Eq, Ord, PartialOrd, PartialEq, Hash)]
 #[repr(transparent)]
 pub struct GameObjectId(pub(crate) usize);
+
+impl Debug for GameObjectId {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if self.exists() {
+            write!(f, "GameObject: {}", self.name)
+        } else {
+            f.write_str("Invalid GameObjectId")
+        }
+    }
+}
 
 #[allow(dead_code)]
 impl GameObjectId {

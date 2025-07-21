@@ -1,4 +1,4 @@
-use crate::engine::assets::{H, HandleName, Store, StoreDefaults, StoreType};
+use crate::engine::assets::{HandleName, Store, StoreDefaults, StoreType, H};
 use crate::store_add_checked;
 use wgpu::{
     BindGroupLayoutEntry, BindingType, BufferBindingType, SamplerBindingType, ShaderStages,
@@ -14,11 +14,11 @@ pub struct BGL {
 pub type HBGL = H<BGL>;
 
 impl H<BGL> {
-    const RENDER_ID: u32 = 0;
-    const MODEL_ID: u32 = 1;
-    const MATERIAL_ID: u32 = 2;
-    const LIGHT_ID: u32 = 3;
-    const POST_PROCESS_ID: u32 = 4;
+    pub(super) const RENDER_ID: u32 = 0;
+    pub(super) const MODEL_ID: u32 = 1;
+    pub(super) const MATERIAL_ID: u32 = 2;
+    pub(super) const LIGHT_ID: u32 = 3;
+    pub(super) const POST_PROCESS_ID: u32 = 4;
 
     pub const RENDER: HBGL = HBGL::new(Self::RENDER_ID);
     pub const MODEL: HBGL = HBGL::new(Self::MODEL_ID);

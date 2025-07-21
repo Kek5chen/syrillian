@@ -62,37 +62,39 @@ impl CameraComponent {
 
     #[inline]
     pub fn mouse_viewport_position(&self, x: f32, y: f32) -> Vector2<f32> {
-        let x = x / self.width;
-        let y = y / self.height;
         Vector2::new(x.max(0.), y.max(0.))
     }
 
     #[inline]
-    pub fn mouse_viewport_ndc_position(&self, x: f32, y: f32) -> Vector2<f32> {
-        let mut viewport = self.mouse_viewport_position(x, y);
-        viewport.x = (viewport.x * 2.0 - 1.0).clamp(-1.0, 1.0);
-        viewport.y = (viewport.y * 2.0 - 1.0).clamp(-1.0, 1.0);
-        viewport
+    pub fn mouse_viewport_ndc(&self, x: f32, y: f32) -> Vector2<f32> {
+        let nx = (x / self.width).clamp(0.0, 1.0);
+        let ny = 1.0 - (y / self.height).clamp(0.0, 1.0);
+        Vector2::new(nx * 2.0 - 1.0, ny * 2.0 - 1.0)
     }
 
     #[inline]
-    pub fn mouse_eye_clip_dir(&self, x: f32, y: f32) -> Vector4<f32> {
-        let ndc = self.mouse_viewport_ndc_position(x, y);
-        Vector4::new(ndc.x, ndc.y, -1.0, 0.0)
+    pub fn mouse_eye_dir(&self, x: f32, y: f32) -> Vector4<f32> {
+        let ndc = self.mouse_viewport_ndc(x, y);
+        let clip = Vector4::new(ndc.x, ndc.y, 0.0, 1.0);
+        let mut eye = self.projection_inverse * clip;
+        eye /= eye.w;
+        eye.w = 0.0;
+        eye
     }
 
     pub fn click_ray(&self, x: f32, y: f32) -> Ray {
-        let eye = self.mouse_eye_clip_dir(x, y);
-        let view = self
+        let eye = self.mouse_eye_dir(x, y);
+
+        let cam_to_world = self
             .parent()
             .transform
             .get_global_transform_matrix()
             .to_homogeneous();
 
-        let world = view * eye;
-        let dir = world.xyz().normalize();
+        let dir_world = (cam_to_world * eye).xyz().normalize();
+        let origin = cam_to_world.transform_point(&Point3::origin());
 
-        Ray::new(view.transform_point(&Point3::new(0., 0., 0.)), dir)
+        Ray::new(origin, dir_world)
     }
 
     pub fn regenerate(&mut self) {

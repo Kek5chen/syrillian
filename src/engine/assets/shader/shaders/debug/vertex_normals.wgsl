@@ -1,9 +1,10 @@
+#use model
+
 struct VSIn {
     // 0 = base, 1 = tip
     @location(0) index: u32,
-    @location(1) origin: vec3<f32>,
-    @location(2) direction: vec3<f32>,
-    @location(3) toi: f32,
+    @location(1) position: vec3<f32>,
+    @location(2) normal: vec3<f32>,
 }
 
 struct VSOut {
@@ -15,16 +16,16 @@ struct VSOut {
 fn vs_main(in: VSIn) -> VSOut {
     var out: VSOut;
 
-    out.position = vec4(in.origin, 1.0);
+    var world_pos = vec4(in.position, 1.0);
 
     if in.index == 0 {
-        out.color = vec4(0.7, 0.2, 0.2, 1.0);
+        out.color = vec4(0.5, 0.0, 1.0, 1.0);
     } else {
-        out.position += vec4(normalize(in.direction) * in.toi, 0.0);
-        out.color = vec4(0.8, 0.4, 0.2, 1.0);
+        world_pos += vec4(normalize(in.normal) / 2, 0.0);
+        out.color = vec4(0.0, 0.5, 1.0, 0.0);
     }
 
-    out.position = camera.view_proj_mat * out.position;
+    out.position = camera.view_proj_mat * model.transform * world_pos;
 
     return out;
 }
