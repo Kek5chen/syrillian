@@ -33,7 +33,8 @@ syrillian_utils = { path = "syrillian_utils" }
 dashmap = "6.1"
 bon = "3.6"
 const_format = "0.2.34"
-gilrs = "0.11.0"
+gilrs = { path = "../gilrs/gilrs" }
+gilrs-core = { path = "../gilrs/gilrs-core" }
 uuid = { version = "1.17.0", features = ["v4"] }
 
 [build-dependencies]

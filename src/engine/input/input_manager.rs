@@ -195,7 +195,7 @@ impl InputManager {
             && self.button_just_updated.contains(&button)
     }
 
-    pub fn get_mouse_pos(&self) -> &PhysicalPosition<f32> {
+    pub fn mouse_position(&self) -> &PhysicalPosition<f32> {
         &self.mouse_pos
     }
 
@@ -273,15 +273,15 @@ impl InputManager {
 
     pub fn is_sprinting(&self) -> bool {
         if cfg!(target_os = "macos") {
-            if self.gamepad.button(Button::Unknown) {
+            if self.gamepad.is_button_pressed(Button::Unknown) {
                 return true;
             }
         }
 
-        self.is_key_pressed(KeyCode::ShiftLeft) || self.gamepad.button(Button::LeftThumb)
+        self.is_key_pressed(KeyCode::ShiftLeft) || self.gamepad.is_button_pressed(Button::LeftThumb)
     }
 
     pub fn is_jump_down(&self) -> bool {
-        self.is_key_down(KeyCode::Space) || self.gamepad.button_down(Button::South)
+        self.is_key_down(KeyCode::Space) || self.gamepad.is_button_down(Button::South)
     }
 }

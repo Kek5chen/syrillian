@@ -18,6 +18,22 @@ pub struct Transform {
     compound_pos_first: bool,
 }
 
+impl Clone for Transform {
+    fn clone(&self) -> Self {
+        Transform {
+            pos: self.pos,
+            rot: self.rot,
+            scale: self.scale,
+            pos_mat: self.pos_mat,
+            scale_mat: self.scale_mat,
+            compound_mat: self.compound_mat,
+            invert_position: self.invert_position,
+            owner: GameObjectId::invalid(),
+            compound_pos_first: self.compound_pos_first,
+        }
+    }
+}
+
 #[allow(dead_code)]
 impl Transform {
     /// Creates a new [`Transform`] owned by the given [`GameObjectId`].

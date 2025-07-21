@@ -1,4 +1,6 @@
+use crate::components::camera::CameraComponent;
 use crate::core::GameObjectId;
+use crate::World;
 use nalgebra::Vector3;
 use rapier3d::prelude::*;
 use std::time::{Duration, Instant};
@@ -64,6 +66,9 @@ impl PhysicsManager {
             &(), // no hooks yet
             &(), // no events yet
         );
+    }
+
+    pub fn update(&mut self) {
         self.query_pipeline.update(&self.collider_set)
     }
 
@@ -74,5 +79,25 @@ impl PhysicsManager {
         let object = GameObjectId(object_id);
 
         object.exists().then_some((distance, object))
+    }
+
+    pub fn cursor_ray(&self, max_toi: f32, filter: QueryFilter) -> Option<(f32, GameObjectId)> {
+        let world = World::instance();
+        let camera = world.active_camera?;
+        let camera_component = camera.get_component::<CameraComponent>()?;
+        let camera_comp = camera_component.borrow();
+
+        let cursor_pos = world.input.mouse_position();
+        let ray = camera_comp.click_ray(cursor_pos.x, cursor_pos.y);
+
+        drop(camera_comp);
+
+        #[cfg(debug_assertions)]
+        {
+            let mut camera_comp = camera_component.borrow_mut();
+            camera_comp.push_debug_ray(ray, max_toi);
+        }
+
+        self.cast_ray(&ray, max_toi, false, filter)
     }
 }

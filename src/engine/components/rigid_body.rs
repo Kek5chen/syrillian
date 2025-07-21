@@ -37,8 +37,8 @@ impl Component for RigidBodyComponent {
             .get_mut(self.body_handle);
         if let Some(rb) = rb {
             if rb.is_dynamic() {
-                rb.set_translation(self.parent.transform.position(), false);
-                rb.set_rotation(self.parent.transform.rotation(), false);
+                rb.set_translation(self.parent.transform.position(), true);
+                rb.set_rotation(self.parent.transform.rotation(), true);
             } else if rb.is_kinematic() {
                 rb.set_next_kinematic_translation(self.parent.transform.position());
                 rb.set_next_kinematic_rotation(self.parent.transform.rotation());

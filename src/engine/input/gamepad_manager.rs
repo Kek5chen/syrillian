@@ -7,7 +7,7 @@ use uuid::Uuid;
 pub struct GamePadManager {
     poller: Gilrs,
     axis: HashMap<Axis, f32>,
-    buttons: HashMap<Button, bool>,
+    buttons: HashMap<Button, f32>,
     buttons_just_updated: Vec<Button>,
 }
 
@@ -60,15 +60,15 @@ impl GamePadManager {
     pub fn handle_gamepad_event(&mut self, event: &EventType) {
         match event {
             EventType::ButtonPressed(button, ..) | EventType::ButtonRepeated(button, ..) => {
-                self.buttons.insert(*button, true);
+                self.buttons.insert(*button, 1.0);
                 self.buttons_just_updated.push(*button);
             }
             EventType::ButtonReleased(button, ..) => {
-                self.buttons.insert(*button, false);
+                self.buttons.insert(*button, 0.0);
                 self.buttons_just_updated.push(*button);
             }
             EventType::ButtonChanged(button, value, ..) => {
-                self.buttons.insert(*button, *value >= 0.5);
+                self.buttons.insert(*button, *value);
                 self.buttons_just_updated.push(*button);
             }
             EventType::AxisChanged(axis, value, ..) => {
@@ -82,17 +82,21 @@ impl GamePadManager {
         self.axis.get(&axis).copied().unwrap_or(0.0)
     }
 
-    pub fn button(&self, button: Button) -> bool {
-        self.buttons.get(&button).copied().unwrap_or(false)
+    pub fn button(&self, button: Button) -> f32 {
+        self.buttons.get(&button).copied().unwrap_or(0.0)
     }
 
-    pub fn button_down(&self, button: Button) -> bool {
-        self.buttons.get(&button).copied().unwrap_or(false)
+    pub fn is_button_pressed(&self, button: Button) -> bool {
+        self.button(button) > 0.5
+    }
+
+    pub fn is_button_down(&self, button: Button) -> bool {
+        self.is_button_pressed(button)
             && self.buttons_just_updated.contains(&button)
     }
 
-    pub fn button_up(&self, button: Button) -> bool {
-        !self.buttons.get(&button).copied().unwrap_or(false)
+    pub fn is_button_released(&self, button: Button) -> bool {
+        !self.is_button_pressed(button)
             && self.buttons_just_updated.contains(&button)
     }
 

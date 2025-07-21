@@ -198,6 +198,7 @@ impl World {
 
         unsafe {
             self.execute_component_func(Component::update);
+            self.execute_component_func(Component::late_update);
         }
     }
 
@@ -205,15 +206,16 @@ impl World {
     ///
     /// If you're using the App runtime, this will be handled for you. Only call this function
     /// if you are trying to use a detached world context.
-    pub fn late_update(&mut self) {
+    pub fn post_update(&mut self) {
         unsafe {
-            self.execute_component_func(Component::late_update);
+            self.physics.update();
 
             while self.physics.last_update.elapsed() > self.physics.timestep {
                 self.physics.last_update += self.physics.timestep;
                 self.physics.step();
-                self.execute_component_func(Component::post_update);
             }
+
+            self.execute_component_func(Component::post_update);
         }
     }
 

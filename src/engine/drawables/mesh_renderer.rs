@@ -1,4 +1,3 @@
-use crate::World;
 use crate::assets::{HShader, Mesh};
 use crate::core::{Bone, GameObjectId, ModelUniform, Vertex3D};
 use crate::drawables::Drawable;
@@ -6,6 +5,7 @@ use crate::engine::assets::HMesh;
 use crate::engine::rendering::uniform::ShaderUniform;
 use crate::engine::rendering::{DrawCtx, Renderer};
 use crate::rendering::RuntimeMesh;
+use crate::World;
 use log::warn;
 use nalgebra::{Matrix4, Vector3};
 use std::sync::RwLockWriteGuard;
@@ -63,20 +63,13 @@ pub struct DebugVertexNormal {
 }
 
 #[derive(Debug)]
-#[cfg(debug_assertions)]
-pub struct DebugRuntimeMeshData {
-    // Data needed for rendering the vertex normal lines in debug mode
-    pattern_buf: wgpu::Buffer,
-    vertices_buf: wgpu::Buffer,
-}
-
-#[derive(Debug)]
 pub struct MeshRenderer {
     mesh: HMesh,
     runtime_data: Option<RuntimeMeshData>,
 
+    // Data needed for rendering the vertex normal lines in debug mode
     #[cfg(debug_assertions)]
-    debug_data: Option<DebugRuntimeMeshData>,
+    debug_data: Option<super::DebugRuntimePatternData>,
 }
 
 impl Drawable for MeshRenderer {
@@ -263,10 +256,10 @@ impl MeshRenderer {
         let vertices_buf = device.create_buffer_init(&BufferInitDescriptor {
             label: Some("Vertex Normal Debug Vertices"),
             contents: bytemuck::cast_slice(&vertex_normal_data[..]),
-            usage: BufferUsages::VERTEX,
+            usage: BufferUsages::VERTEX | BufferUsages::COPY_DST,
         });
 
-        let debug_data = DebugRuntimeMeshData {
+        let debug_data = super::DebugRuntimePatternData {
             pattern_buf,
             vertices_buf,
         };
@@ -318,7 +311,7 @@ fn draw_vertex_normals(
     ctx: &DrawCtx,
     mesh_data: &Mesh,
     runtime_data: &RuntimeMeshData,
-    debug_data: &DebugRuntimeMeshData,
+    debug_data: &super::DebugRuntimePatternData,
     pass: &mut RwLockWriteGuard<RenderPass>,
 ) {
     pass.set_vertex_buffer(0, debug_data.pattern_buf.slice(..));

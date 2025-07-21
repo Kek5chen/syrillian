@@ -132,7 +132,7 @@ impl<S: AppState> ApplicationHandler for App<S> {
                 }
 
                 world.update();
-                world.late_update();
+                world.post_update();
 
                 if let Err(e) = self.state.late_update(world, renderer.window()) {
                     error!("Error happened when calling late update function hook: {e}");

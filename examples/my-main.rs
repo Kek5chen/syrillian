@@ -4,6 +4,7 @@
 //!    with new features. Therefore, it should contain the latest and greatest. I can recommend
 //!    using this for reference.
 
+use gilrs::Button;
 use log::info;
 use nalgebra::UnitQuaternion;
 use rapier3d::parry::query::Ray;
@@ -12,9 +13,7 @@ use std::error::Error;
 use syrillian::assets::scene_loader::SceneLoader;
 use syrillian::assets::StoreType;
 use syrillian::assets::{Material, Shader};
-use syrillian::components::{
-    Collider3D, PointLightComponent, RigidBodyComponent, RopeComponent, RotateComponent,
-};
+use syrillian::components::{Collider3D, FirstPersonCameraController, PointLightComponent, RigidBodyComponent, RopeComponent, RotateComponent};
 use syrillian::core::{GameObjectExt, GameObjectId};
 use syrillian::prefabs::first_person_player::FirstPersonPlayerPrefab;
 use syrillian::prefabs::prefab::Prefab;
@@ -125,6 +124,19 @@ impl AppState for MyMain {
     fn update(&mut self, world: &mut World, window: &Window) -> Result<(), Box<dyn Error>> {
         self.frame_counter.new_frame_from_world(world);
         window.set_title(&self.format_title());
+
+        let mut zoom_down = world.input.gamepad.button(Button::LeftTrigger2);
+        if world.input.is_button_pressed(MouseButton::Right) {
+            zoom_down = 1.0;
+        }
+
+        if let Some(camera) = world.active_camera {
+            if let Some(camera) = camera.get_component::<FirstPersonCameraController>() {
+                let mut camera = camera.borrow_mut();
+                camera.set_zoom(zoom_down);
+            }
+        }
+
         Ok(())
     }
 
@@ -154,7 +166,10 @@ impl MyMain {
     fn do_raycast_test(&mut self, world: &mut World) -> Option<()> {
         let camera = world.active_camera?;
 
-        if world.input.is_button_down(MouseButton::Left) {
+        let pick_up = world.input.gamepad.is_button_down(Button::RightTrigger) || world.input.is_button_down(MouseButton::Left);
+        let drop = world.input.gamepad.is_button_released(Button::RightTrigger) || world.input.is_button_released(MouseButton::Left);
+
+        if pick_up {
             let ray = Ray::new(
                 camera.transform.position().into(),
                 camera.transform.forward(),
@@ -166,10 +181,18 @@ impl MyMain {
                 .phys_handle;
             let intersect = world.physics.cast_ray(
                 &ray,
-                100.,
+                5.,
                 false,
                 QueryFilter::only_dynamic().exclude_collider(player_collider),
             );
+
+            #[cfg(debug_assertions)]
+            {
+                use syrillian::components::CameraComponent;
+                if let Some(camera) = camera.get_component::<CameraComponent>() {
+                    camera.borrow_mut().push_debug_ray(ray, 5.);
+                }
+            }
 
             match intersect {
                 None => info!("No ray intersection"),
@@ -178,7 +201,7 @@ impl MyMain {
                     self.picked_up = Some(obj);
                 }
             }
-        } else if world.input.is_button_released(MouseButton::Left) {
+        } else if drop {
             if let Some(obj) = self.picked_up {
                 let rb = obj.get_component::<RigidBodyComponent>()?;
                 rb.borrow_mut().set_kinematic(false);

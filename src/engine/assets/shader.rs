@@ -44,6 +44,8 @@ impl H<Shader> {
     pub const DEBUG_EDGES_ID: u32 = 4;
     #[cfg(debug_assertions)]
     pub const DEBUG_VERTEX_NORMALS_ID: u32 = 5;
+    #[cfg(debug_assertions)]
+    pub const DEBUG_RAYS_ID: u32 = 6;
 
     // The fallback shader if a pipeline fails
     pub const FALLBACK: H<Shader> = H::new(Self::FALLBACK_ID);
@@ -61,9 +63,13 @@ impl H<Shader> {
     #[cfg(debug_assertions)]
     pub const DEBUG_EDGES: H<Shader> = H::new(Self::DEBUG_EDGES_ID);
 
-    // An addon shader ID that is used for drawing debug edges on meshes
+    // An addon shader ID that is used for drawing debug vertex normals on meshes
     #[cfg(debug_assertions)]
     pub const DEBUG_VERTEX_NORMALS: H<Shader> = H::new(Self::DEBUG_VERTEX_NORMALS_ID);
+
+    // An addon shader ID that is used for drawing debug rays
+    #[cfg(debug_assertions)]
+    pub const DEBUG_RAYS: H<Shader> = H::new(Self::DEBUG_RAYS_ID);
 }
 
 const SHADER_FALLBACK3D: &str = include_str!("../rendering/shaders/fallback_shader3d.wgsl");
@@ -86,8 +92,10 @@ impl StoreDefaults for Shader {
             use wgpu::{VertexAttribute, VertexFormat, VertexStepMode};
 
             const DEBUG_EDGES_SHADER: &str = include_str!("../rendering/shaders/debug/edges.wgsl");
-            const VERTEX_NORMALS_SHADER: &str =
+            const DEBUG_VERTEX_NORMAL_SHADER: &str =
                 include_str!("../rendering/shaders/debug/vertex_normals.wgsl");
+            const DEBUG_RAY_SHADER: &str =
+                include_str!("../rendering/shaders/debug/rays.wgsl");
 
             store_add_checked!(
                 store,
@@ -132,10 +140,55 @@ impl StoreDefaults for Shader {
                 HShader::DEBUG_VERTEX_NORMALS_ID,
                 Shader::Custom {
                     name: "Mesh Debug Vertices Shader".to_owned(),
-                    code: ShaderCode::Full(VERTEX_NORMALS_SHADER.to_string()),
+                    code: ShaderCode::Full(DEBUG_VERTEX_NORMAL_SHADER.to_string()),
                     topology: PrimitiveTopology::LineList,
                     polygon_mode: PolygonMode::Line,
                     vertex_buffers: DEBUG_VERTEX_NORMALS_VBL,
+                }
+            );
+
+            const DEBUG_RAYS_VBL: &[VertexBufferLayout] = &[
+                VertexBufferLayout {
+                    array_stride: 0,
+                    step_mode: VertexStepMode::Vertex,
+                    attributes: &[VertexAttribute {
+                        format: VertexFormat::Uint32,
+                        offset: 0,
+                        shader_location: 0,
+                    }],
+                },
+                VertexBufferLayout {
+                    array_stride: 0,
+                    step_mode: VertexStepMode::Instance,
+                    attributes: &[
+                        VertexAttribute {
+                            format: VertexFormat::Float32x3,
+                            offset: 0,
+                            shader_location: 1,
+                        },
+                        VertexAttribute {
+                            format: VertexFormat::Float32x3,
+                            offset: VEC3_SIZE,
+                            shader_location: 2,
+                        },
+                        VertexAttribute {
+                            format: VertexFormat::Float32,
+                            offset: VEC3_SIZE * 2,
+                            shader_location: 3,
+                        },
+                    ],
+                },
+            ];
+
+            store_add_checked!(
+                store,
+                HShader::DEBUG_RAYS_ID,
+                Shader::Custom {
+                    name: "Ray Debug".to_owned(),
+                    code: ShaderCode::Full(DEBUG_RAY_SHADER.to_string()),
+                    topology: PrimitiveTopology::LineList,
+                    polygon_mode: PolygonMode::Line,
+                    vertex_buffers: DEBUG_RAYS_VBL,
                 }
             );
         }

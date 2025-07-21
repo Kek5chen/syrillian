@@ -1,9 +1,10 @@
-use crate::components::Component;
+use crate::components::{CameraComponent, Component};
 use crate::core::{GameObjectId, Transform};
 use crate::input::InputManager;
 use crate::utils::FloatMathExt;
 use crate::World;
 use gilrs::Axis;
+use log::warn;
 use nalgebra::{UnitQuaternion, Vector2, Vector3};
 
 /// All tweakable parameters for the FPS Camera
@@ -25,6 +26,12 @@ pub struct FPSCameraConfig {
     pub jump_bob_height: f32,
     /// How fast jump bob resets. Default: 5.0
     pub jump_bob_speed: f32,
+    /// The normal unzoomed fov
+    pub normal_fov: f32,
+    /// Maximum zoom FOV
+    pub zoom_fov: f32,
+    /// Enable the zoom feature
+    pub enable_zoom: bool,
 }
 
 #[derive(Debug)]
@@ -45,6 +52,7 @@ pub struct FirstPersonCameraController {
     jump_bob_interp_t: f32,
     is_jumping: bool,
     is_falling: bool,
+    zoom_factor: f32,
 
     pub base_position: Vector3<f32>,
 }
@@ -61,6 +69,9 @@ impl Default for FPSCameraConfig {
             smoothing_speed: 10.0,
             jump_bob_height: 0.5,
             jump_bob_speed: 5.0,
+            normal_fov: 60.0,
+            zoom_fov: 30.0,
+            enable_zoom: true,
         }
     }
 }
@@ -86,6 +97,7 @@ impl Component for FirstPersonCameraController {
             jump_bob_interp_t: 0.,
             is_jumping: false,
             is_falling: false,
+            zoom_factor: 0.0,
 
             base_position: Vector3::zeros(),
         }
@@ -110,6 +122,7 @@ impl Component for FirstPersonCameraController {
         let mouse_delta = input.mouse_delta();
         self.calculate_rotation(input, delta_time, mouse_delta);
         self.update_rotation(transform, delta_time, mouse_delta);
+        self.update_zoom();
     }
 
     fn parent(&self) -> GameObjectId {
@@ -118,6 +131,10 @@ impl Component for FirstPersonCameraController {
 }
 
 impl FirstPersonCameraController {
+    pub fn set_zoom(&mut self, zoom_factor: f32) {
+        self.zoom_factor = zoom_factor;
+    }
+
     pub fn update_roll(&mut self, delta: f32, max: f32) {
         self.smooth_roll = (self.smooth_roll + delta / 70.0).clamp(-max, max);
     }
@@ -228,5 +245,24 @@ impl FirstPersonCameraController {
             (right * self.bob_offset.x) + up * (self.bob_offset.y + self.jump_bob_interp);
 
         transform.set_local_position_vec(self.base_position + bob_offset);
+    }
+
+    fn calculate_zoom(&self) -> f32 {
+        if !self.config.enable_zoom {
+            return self.config.normal_fov;
+        }
+        let delta = self.config.normal_fov - self.config.zoom_fov;
+        self.config.normal_fov - delta * self.zoom_factor.clamp(0.0, 1.0)
+    }
+
+    fn update_zoom(&mut self) {
+        let Some(camera) = self.parent().get_component::<CameraComponent>() else {
+            warn!("Camera component not found");
+            return;
+        };
+
+        let mut camera = camera.borrow_mut();
+
+        camera.set_fov_target(self.calculate_zoom());
     }
 }
