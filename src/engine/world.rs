@@ -381,16 +381,15 @@ fn print_objects_rec(children: &Vec<GameObjectId>, i: i32) {
     for child in children {
         info!("{}- {}", "  ".repeat(i as usize), &child.name);
         info!(
-                "{}-> Components: {}",
-                "  ".repeat(i as usize + 1),
-                child.components.len()
-            );
+            "{}-> Components: {}",
+            "  ".repeat(i as usize + 1),
+            child.components.len()
+        );
         info!(
-                "{}-> Has Drawable: {}",
-                "  ".repeat(i as usize + 1),
-                child.drawable.is_some()
-            );
+            "{}-> Has Drawable: {}",
+            "  ".repeat(i as usize + 1),
+            child.drawable.is_some()
+        );
         print_objects_rec(&child.children, i + 1);
     }
 }
-

@@ -72,8 +72,21 @@ impl PhysicsManager {
         self.query_pipeline.update(&self.collider_set)
     }
 
-    pub fn cast_ray(&self, ray: &Ray, max_toi: f32, solid: bool, filter: QueryFilter) -> Option<(f32, GameObjectId)> {
-        let (collider, distance) = self.query_pipeline.cast_ray(&self.rigid_body_set, &self.collider_set, ray, max_toi, solid, filter)?;
+    pub fn cast_ray(
+        &self,
+        ray: &Ray,
+        max_toi: f32,
+        solid: bool,
+        filter: QueryFilter,
+    ) -> Option<(f32, GameObjectId)> {
+        let (collider, distance) = self.query_pipeline.cast_ray(
+            &self.rigid_body_set,
+            &self.collider_set,
+            ray,
+            max_toi,
+            solid,
+            filter,
+        )?;
 
         let object_id = self.collider_set.get(collider)?.user_data as usize;
         let object = GameObjectId(object_id);
@@ -93,7 +106,12 @@ impl PhysicsManager {
         Some(ray)
     }
 
-    pub fn cast_cursor_ray(&self, max_toi: f32, solid: bool, filter: QueryFilter) -> Option<(f32, GameObjectId)> {
+    pub fn cast_cursor_ray(
+        &self,
+        max_toi: f32,
+        solid: bool,
+        filter: QueryFilter,
+    ) -> Option<(f32, GameObjectId)> {
         let ray = self.cursor_ray()?;
         self.cast_ray(&ray, max_toi, solid, filter)
     }

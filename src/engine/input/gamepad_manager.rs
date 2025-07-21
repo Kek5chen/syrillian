@@ -91,13 +91,11 @@ impl GamePadManager {
     }
 
     pub fn is_button_down(&self, button: Button) -> bool {
-        self.is_button_pressed(button)
-            && self.buttons_just_updated.contains(&button)
+        self.is_button_pressed(button) && self.buttons_just_updated.contains(&button)
     }
 
     pub fn is_button_released(&self, button: Button) -> bool {
-        !self.is_button_pressed(button)
-            && self.buttons_just_updated.contains(&button)
+        !self.is_button_pressed(button) && self.buttons_just_updated.contains(&button)
     }
 
     pub fn next_frame(&mut self) {

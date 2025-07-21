@@ -30,7 +30,13 @@ impl Prefab for SpherePrefab {
 
     fn build(&self, world: &mut World) -> GameObjectId {
         // TODO: Move materials out of mesh and into the MeshRenderer
-        let sphere = world.assets.meshes.try_get(HMesh::SPHERE).expect("Sphere should exist").data.clone();
+        let sphere = world
+            .assets
+            .meshes
+            .try_get(HMesh::SPHERE)
+            .expect("Sphere should exist")
+            .data
+            .clone();
         let mesh = world.assets.meshes.add(
             Mesh::builder(sphere.vertices)
                 .with_one_texture(self.material)

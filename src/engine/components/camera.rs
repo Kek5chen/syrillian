@@ -125,7 +125,6 @@ impl CameraComponent {
 
         debug.push_ray(ray, max_toi);
     }
-
 }
 
 impl Component for CameraComponent {
@@ -157,7 +156,9 @@ impl Component for CameraComponent {
         let delta_time = World::instance().delta_time().as_secs_f32();
 
         if self.fov_target != 0.0 && (self.fov_active - self.fov_target).abs() > f32::EPSILON {
-            self.fov_active = self.fov_active.lerp(self.fov_target, self.zoom_speed * delta_time);
+            self.fov_active = self
+                .fov_active
+                .lerp(self.fov_target, self.zoom_speed * delta_time);
             self.regenerate();
         }
     }

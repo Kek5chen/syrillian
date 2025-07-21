@@ -1,4 +1,6 @@
-use crate::components::{Collider3D, FirstPersonCameraController, FirstPersonMovementController, RigidBodyComponent};
+use crate::components::{
+    Collider3D, FirstPersonCameraController, FirstPersonMovementController, RigidBodyComponent,
+};
 use crate::core::GameObjectId;
 use crate::engine::prefabs::prefab::Prefab;
 use crate::World;

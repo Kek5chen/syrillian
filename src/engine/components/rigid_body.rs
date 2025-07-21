@@ -95,8 +95,7 @@ impl RigidBodyComponent {
     }
 
     pub fn set_kinematic(&mut self, kinematic: bool) {
-        let rb = self.get_body_mut()
-            .expect("Rigid body de-synced");
+        let rb = self.get_body_mut().expect("Rigid body de-synced");
         if kinematic {
             rb.set_body_type(RigidBodyType::KinematicPositionBased, false);
         } else {

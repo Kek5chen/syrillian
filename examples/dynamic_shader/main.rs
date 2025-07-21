@@ -17,7 +17,8 @@ use wgpu::naga::valid::{Capabilities, ValidationFlags};
 use winit::window::Window;
 
 const SHADER_PATH: &str = "examples/dynamic_shader/shader.wgsl";
-const DEFAULT_VERT: &str = include_str!("../../src/engine/assets/shader/shaders/default_vertex3d.wgsl");
+const DEFAULT_VERT: &str =
+    include_str!("../../src/engine/assets/shader/shaders/default_vertex3d.wgsl");
 
 #[derive(SyrillianApp)]
 struct DynamicShaderExample {
@@ -76,8 +77,8 @@ impl DynamicShaderExample {
         if self.shader_id == HShader::FALLBACK {
             let shader = Shader::new_default("Dynamic Shader".to_string(), source_2).store(world);
             let material = Material::builder()
-                    .name("Dynamic Shader Material".to_string())
-                    .shader(shader)
+                .name("Dynamic Shader Material".to_string())
+                .shader(shader)
                 .store(world);
 
             self.shader_id = shader;

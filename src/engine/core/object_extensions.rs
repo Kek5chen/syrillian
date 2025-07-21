@@ -1,4 +1,6 @@
-use crate::components::{Collider3D, Component, PointLightComponent, RigidBodyComponent, RopeComponent, RotateComponent};
+use crate::components::{
+    Collider3D, Component, PointLightComponent, RigidBodyComponent, RopeComponent, RotateComponent,
+};
 use crate::core::{GameObject, GameObjectId};
 use rapier3d::dynamics::RigidBody;
 use rapier3d::prelude::Collider;
@@ -24,7 +26,6 @@ pub struct GORigidBodyExt<'a>(&'a mut RigidBody, &'a mut GameObject);
 pub struct GOLightExt<'a>(&'a mut PointLightComponent, &'a mut GameObject);
 pub struct GORotateExt<'a>(&'a mut RotateComponent, &'a mut GameObject);
 pub struct GORopeExt<'a>(&'a mut RopeComponent, &'a mut GameObject);
-
 
 impl GameObjectExt for GameObject {
     #[inline]

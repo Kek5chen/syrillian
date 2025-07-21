@@ -60,7 +60,9 @@ impl CameraDebug {
     pub fn timeout_rays(&mut self) {
         let mut i = 0;
         while i < self.rays.len() {
-            if let Some(time) = self.ray_times.get(i) && time.elapsed() < self.lifetime {
+            if let Some(time) = self.ray_times.get(i)
+                && time.elapsed() < self.lifetime
+            {
                 i += 1;
                 continue;
             }

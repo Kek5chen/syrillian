@@ -5,9 +5,9 @@
 
 pub mod bone;
 pub mod object;
+pub mod object_extensions;
 pub mod transform;
 pub mod vertex;
-pub mod object_extensions;
 
 pub use bone::*;
 pub use object::*;

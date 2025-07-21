@@ -144,5 +144,4 @@ impl StoreTypeFallback for Texture {
     }
 }
 
-impl Store<Texture> {
-}
+impl Store<Texture> {}

@@ -95,7 +95,10 @@ impl NecoArc {
                 return;
             };
 
-            match world.physics.cast_ray(&ray, 100., false, QueryFilter::new()) {
+            match world
+                .physics
+                .cast_ray(&ray, 100., false, QueryFilter::new())
+            {
                 None => {
                     info!("No click ray hit");
                     return;
@@ -120,7 +123,9 @@ impl NecoArc {
             };
 
             let new_pos = ray.point_at(self.drag_distance).coords;
-            dragging.transform.set_position_vec(new_pos - self.drag_offset);
+            dragging
+                .transform
+                .set_position_vec(new_pos - self.drag_offset);
         }
     }
 }

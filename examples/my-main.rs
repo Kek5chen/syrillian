@@ -13,7 +13,10 @@ use std::error::Error;
 use syrillian::assets::scene_loader::SceneLoader;
 use syrillian::assets::StoreType;
 use syrillian::assets::{Material, Shader};
-use syrillian::components::{Collider3D, FirstPersonCameraController, PointLightComponent, RigidBodyComponent, RopeComponent, RotateComponent};
+use syrillian::components::{
+    Collider3D, FirstPersonCameraController, PointLightComponent, RigidBodyComponent,
+    RopeComponent, RotateComponent,
+};
 use syrillian::core::{GameObjectExt, GameObjectId};
 use syrillian::prefabs::first_person_player::FirstPersonPlayerPrefab;
 use syrillian::prefabs::prefab::Prefab;
@@ -166,8 +169,10 @@ impl MyMain {
     fn do_raycast_test(&mut self, world: &mut World) -> Option<()> {
         let camera = world.active_camera?;
 
-        let pick_up = world.input.gamepad.is_button_down(Button::RightTrigger) || world.input.is_button_down(MouseButton::Left);
-        let drop = world.input.gamepad.is_button_released(Button::RightTrigger) || world.input.is_button_released(MouseButton::Left);
+        let pick_up = world.input.gamepad.is_button_down(Button::RightTrigger)
+            || world.input.is_button_down(MouseButton::Left);
+        let drop = world.input.gamepad.is_button_released(Button::RightTrigger)
+            || world.input.is_button_released(MouseButton::Left);
 
         if pick_up {
             let ray = Ray::new(
