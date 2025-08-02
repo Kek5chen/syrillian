@@ -11,7 +11,7 @@ use rapier3d::parry::query::Ray;
 use rapier3d::prelude::QueryFilter;
 use std::error::Error;
 use syrillian::assets::scene_loader::SceneLoader;
-use syrillian::assets::StoreType;
+use syrillian::assets::{HMaterial, StoreType};
 use syrillian::assets::{Material, Shader};
 use syrillian::components::{
     Collider3D, FirstPersonCameraController, PointLightComponent, RigidBodyComponent,
@@ -25,6 +25,7 @@ use syrillian::utils::frame_counter::FrameCounter;
 use syrillian::SyrillianApp;
 use syrillian::{AppState, World};
 use winit::event::MouseButton;
+use winit::keyboard::KeyCode;
 use winit::window::Window;
 // const NECO_IMAGE: &[u8; 1293] = include_bytes!("assets/neco.jpg");
 
@@ -140,10 +141,6 @@ impl AppState for MyMain {
             }
         }
 
-        Ok(())
-    }
-
-    fn late_update(&mut self, world: &mut World, _window: &Window) -> Result<(), Box<dyn Error>> {
         self.do_raycast_test(world);
 
         Ok(())
@@ -227,6 +224,17 @@ impl MyMain {
             obj.transform.set_rotation(unit_quat);
             let rb = obj.get_component::<RigidBodyComponent>()?;
             rb.borrow_mut().set_kinematic(true);
+        }
+
+        if world.input.is_key_down(KeyCode::KeyC) || world.input.gamepad.is_button_down(Button::West) {
+            let pos = camera.transform.position() + camera.transform.forward() * 3.;
+            world.spawn(&CubePrefab { material: HMaterial::DEFAULT })
+                .at_vec(pos)
+                .build_component::<Collider3D>()
+                .build_component::<RigidBodyComponent>();
+
+            let sleeping_bodies = world.physics.rigid_body_set.iter().filter(|c| c.1.is_sleeping()).count();
+            println!("{sleeping_bodies} Bodies are currently sleeping");
         }
 
         None

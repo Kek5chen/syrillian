@@ -2,12 +2,14 @@ use crate::components::{
     Collider3D, Component, PointLightComponent, RigidBodyComponent, RopeComponent, RotateComponent,
 };
 use crate::core::{GameObject, GameObjectId};
+use nalgebra::Vector3;
 use rapier3d::dynamics::RigidBody;
 use rapier3d::prelude::Collider;
 use std::ops::{Deref, DerefMut};
 
 pub trait GameObjectExt {
     fn at(&mut self, x: f32, y: f32, z: f32) -> &mut Self;
+    fn at_vec(&mut self, pos: Vector3<f32>) -> &mut Self;
     fn scale(&mut self, scale: f32) -> &mut Self;
     fn non_uniform_scale(&mut self, x: f32, y: f32, z: f32) -> &mut Self;
 }
@@ -31,6 +33,12 @@ impl GameObjectExt for GameObject {
     #[inline]
     fn at(&mut self, x: f32, y: f32, z: f32) -> &mut Self {
         self.transform.set_position(x, y, z);
+        self
+    }
+
+    #[inline]
+    fn at_vec(&mut self, pos: Vector3<f32>) -> &mut Self {
+        self.transform.set_position_vec(pos);
         self
     }
 

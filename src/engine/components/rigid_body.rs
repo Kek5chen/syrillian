@@ -37,8 +37,8 @@ impl Component for RigidBodyComponent {
             .get_mut(self.body_handle);
         if let Some(rb) = rb {
             if rb.is_dynamic() {
-                rb.set_translation(self.parent.transform.position(), true);
-                rb.set_rotation(self.parent.transform.rotation(), true);
+                rb.set_translation(self.parent.transform.position(), false);
+                rb.set_rotation(self.parent.transform.rotation(), false);
             } else if rb.is_kinematic() {
                 rb.set_next_kinematic_translation(self.parent.transform.position());
                 rb.set_next_kinematic_rotation(self.parent.transform.rotation());
@@ -70,7 +70,7 @@ impl Component for RigidBodyComponent {
             &mut world.physics.collider_set,
             &mut world.physics.impulse_joint_set,
             &mut world.physics.multibody_joint_set,
-            true,
+            false,
         );
     }
 

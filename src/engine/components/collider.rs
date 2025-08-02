@@ -83,7 +83,7 @@ impl Component for Collider3D {
             self.phys_handle,
             &mut world.physics.island_manager,
             &mut world.physics.rigid_body_set,
-            true,
+            false,
         );
     }
 
