@@ -193,6 +193,12 @@ impl Transform {
         self.get_global_rotation_ext(true)
     }
 
+    /// Returns the global rotation euler angles
+    pub fn euler_rotation(&self) -> Vector3<f32> {
+        let (x, y, z) = self.get_global_rotation_ext(true).euler_angles();
+        Vector3::new(x, y, z)
+    }
+
     /// Applies a relative rotation to the transform.
     pub fn rotate(&mut self, rot: UnitQuaternion<f32>) {
         self.rot *= rot;

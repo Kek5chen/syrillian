@@ -45,7 +45,7 @@ pub struct FirstPersonCameraController {
     bob_offset: Vector3<f32>,
     bob_phase: Vector3<f32>,
 
-    pub vel_y: f32,
+    pub vel: Vector3<f32>,
 
     jump_offset: f32,
     jump_bob_interp: f32,
@@ -90,7 +90,7 @@ impl Component for FirstPersonCameraController {
             bob_offset: Vector3::zeros(),
             bob_phase: Vector3::zeros(),
 
-            vel_y: 0.0,
+            vel: Vector3::zeros(),
 
             jump_offset: 0.0,
             jump_bob_interp: 0.0,
@@ -162,7 +162,7 @@ impl FirstPersonCameraController {
 
     pub fn signal_jump(&mut self) {
         self.is_jumping = true;
-        self.is_falling = self.vel_y < f32::EPSILON;
+        self.is_falling = self.vel.y < f32::EPSILON;
         self.jump_offset = self.config.jump_bob_height;
     }
 
@@ -176,8 +176,10 @@ impl FirstPersonCameraController {
             UnitQuaternion::from_axis_angle(&Vector3::y_axis(), self.yaw.to_radians());
         let pitch_rotation =
             UnitQuaternion::from_axis_angle(&Vector3::x_axis(), self.pitch.to_radians());
+        if self.vel.xz().magnitude() < 0.01 || self.vel.xz().normalize().dot(&transform.forward().xz()) > 0.9 {
+            self.update_roll(mouse_delta.x, self.config.max_roll);
+        }
 
-        self.update_roll(mouse_delta.x, self.config.max_roll);
         self.smooth_roll = self
             .smooth_roll
             .lerp(0., self.config.smoothing_speed * delta_time);
@@ -218,11 +220,11 @@ impl FirstPersonCameraController {
 
     fn calculate_jump_bob(&mut self, delta_time: f32) {
         if self.is_jumping {
-            if !self.is_falling && self.vel_y <= 0. {
+            if !self.is_falling && self.vel.y <= 0. {
                 self.is_falling = true;
                 self.jump_offset = -self.config.jump_bob_height;
                 self.jump_bob_interp_t = 0.;
-            } else if self.is_falling && self.vel_y.abs() < f32::EPSILON * 10000. {
+            } else if self.is_falling && self.vel.y.abs() < f32::EPSILON * 10000. {
                 self.is_jumping = false;
                 self.is_falling = false;
                 self.jump_offset = 0.;

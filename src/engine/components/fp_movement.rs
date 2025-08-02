@@ -137,7 +137,7 @@ impl Component for FirstPersonMovementController {
                 4. - fb_movement.abs() * 2.,
             );
             camera.update_bob(self.velocity.magnitude());
-            camera.vel_y = body.linvel().y;
+            camera.vel = *body.linvel();
             if jumping {
                 camera.signal_jump();
             }
