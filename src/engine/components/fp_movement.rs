@@ -42,12 +42,7 @@ impl Component for FirstPersonMovementController {
         let rigid = self.parent().get_component::<RigidBodyComponent>();
         if let Some(rigid) = rigid.clone() {
             if let Some(rigid) = rigid.borrow_mut().get_body_mut() {
-                rigid.set_locked_axes(
-                    LockedAxes::ROTATION_LOCKED_X
-                        | LockedAxes::ROTATION_LOCKED_Y
-                        | LockedAxes::ROTATION_LOCKED_Z,
-                    false,
-                );
+                rigid.set_locked_axes(LockedAxes::ROTATION_LOCKED, false);
                 rigid.enable_ccd(true);
             }
         }

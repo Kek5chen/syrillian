@@ -56,7 +56,9 @@ impl Component for RigidBodyComponent {
         if let Some(rb) = rb {
             if rb.is_dynamic() {
                 self.parent().transform.set_position_vec(*rb.translation());
-                self.parent().transform.set_rotation(*rb.rotation());
+                if rb.is_rotation_locked().iter().all(|l| !l) {
+                    self.parent().transform.set_rotation(*rb.rotation());
+                }
             }
         }
     }
