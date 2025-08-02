@@ -2,6 +2,7 @@ use crate::components::camera::CameraComponent;
 use crate::core::GameObjectId;
 use crate::World;
 use nalgebra::Vector3;
+use rapier3d::parry::query::DefaultQueryDispatcher;
 use rapier3d::prelude::*;
 use std::time::{Duration, Instant};
 
@@ -12,12 +13,11 @@ pub struct PhysicsManager {
     pub integration_parameters: IntegrationParameters,
     pub physics_pipeline: PhysicsPipeline,
     pub island_manager: IslandManager,
-    pub broad_phase: Box<dyn BroadPhase>,
+    pub broad_phase: BroadPhaseBvh,
     pub narrow_phase: NarrowPhase,
     pub impulse_joint_set: ImpulseJointSet,
     pub multibody_joint_set: MultibodyJointSet,
     pub ccd_solver: CCDSolver,
-    pub query_pipeline: QueryPipeline,
     pub physics_hooks: (),
     pub event_handler: (),
     pub last_update: Instant,
@@ -35,12 +35,11 @@ impl Default for PhysicsManager {
             integration_parameters: IntegrationParameters::default(),
             physics_pipeline: PhysicsPipeline::default(),
             island_manager: IslandManager::default(),
-            broad_phase: Box::<DefaultBroadPhase>::default(),
+            broad_phase: DefaultBroadPhase::default(),
             narrow_phase: NarrowPhase::default(),
             impulse_joint_set: ImpulseJointSet::default(),
             multibody_joint_set: MultibodyJointSet::default(),
             ccd_solver: CCDSolver::default(),
-            query_pipeline: QueryPipeline::default(),
             physics_hooks: (),
             event_handler: (),
             last_update: Instant::now(),
@@ -55,21 +54,16 @@ impl PhysicsManager {
             &self.gravity,
             &self.integration_parameters,
             &mut self.island_manager,
-            self.broad_phase.as_mut(),
+            &mut self.broad_phase,
             &mut self.narrow_phase,
             &mut self.rigid_body_set,
             &mut self.collider_set,
             &mut self.impulse_joint_set,
             &mut self.multibody_joint_set,
             &mut self.ccd_solver,
-            Some(&mut self.query_pipeline),
             &(), // no hooks yet
             &(), // no events yet
         );
-    }
-
-    pub fn update(&mut self) {
-        self.query_pipeline.update(&self.collider_set)
     }
 
     pub fn cast_ray(
@@ -79,14 +73,13 @@ impl PhysicsManager {
         solid: bool,
         filter: QueryFilter,
     ) -> Option<(f32, GameObjectId)> {
-        let (collider, distance) = self.query_pipeline.cast_ray(
+        let qp = self.broad_phase.as_query_pipeline(
+            &DefaultQueryDispatcher,
             &self.rigid_body_set,
             &self.collider_set,
-            ray,
-            max_toi,
-            solid,
             filter,
-        )?;
+        );
+        let (collider, distance) = qp.cast_ray(ray, max_toi, solid)?;
 
         let object_id = self.collider_set.get(collider)?.user_data as usize;
         let object = GameObjectId(object_id);

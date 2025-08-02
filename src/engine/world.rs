@@ -208,8 +208,6 @@ impl World {
     /// if you are trying to use a detached world context.
     pub fn post_update(&mut self) {
         unsafe {
-            self.physics.update();
-
             while self.physics.last_update.elapsed() > self.physics.timestep {
                 self.physics.last_update += self.physics.timestep;
                 self.physics.step();
