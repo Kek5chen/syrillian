@@ -16,7 +16,7 @@ pub struct FPSCameraConfig {
     pub controller_sensitivity: Vector2<f32>,
     /// Maximum up-down (pitch) angle. Default: 89.9
     pub max_pitch: f32,
-    /// Maximum tilt (in degrees) when turning. Default: 3.0
+    /// Maximum tilt (in degrees) when turning. Default: 1.5
     pub max_roll: f32,
     /// Bobbing amplitude on X and Y axes. Default: X = 0.05, Y = 0.05, Z = 0.0
     pub bob_amplitude: Vector3<f32>,
@@ -64,7 +64,7 @@ impl Default for FPSCameraConfig {
             mouse_sensitivity: Vector2::new(0.6, 0.6),
             controller_sensitivity: Vector2::new(1.0, 1.0),
             max_pitch: 89.9,
-            max_roll: 3.0,
+            max_roll: 1.5,
             bob_amplitude: Vector3::new(0.05, 0.05, 0.0),
             smoothing_speed: 10.0,
             jump_bob_height: 0.5,
