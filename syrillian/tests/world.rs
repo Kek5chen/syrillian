@@ -13,6 +13,7 @@ fn new_object_add_find_delete() {
     assert!(world.get_object(&id).is_some());
     world.delete_object(id);
     assert!(world.get_object(&id).is_none());
+    assert_eq!(world.children.len(), 0);
 }
 
 #[test]
