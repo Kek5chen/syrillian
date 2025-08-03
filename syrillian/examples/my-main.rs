@@ -138,7 +138,7 @@ impl AppState for MyMain {
             let mut text = world.new_object("Text 3D");
             let mut text3d = Text3D::new("Meow 3D".to_string(), "Helvetica".to_string(), 100., None);
 
-            text.transform.set_position(0., 10., -20.);
+            text.transform.set_position(0., 1., -20.);
             text3d.text_mut().rainbow_mode(true);
 
             text.set_drawable(text3d);
@@ -147,6 +147,17 @@ impl AppState for MyMain {
         }
 
         world.print_objects();
+
+        Ok(())
+    }
+
+    #[cfg(debug_assertions)]
+    fn draw(&mut self, world: &mut World, renderer: &mut syrillian::rendering::renderer::Renderer) -> Result<(), Box<dyn Error>> {
+        if world.input.is_key_down(KeyCode::KeyL) {
+            let debug_on = renderer.debug.draw_edges;
+            renderer.debug.draw_edges = !debug_on;
+            renderer.debug.draw_vertex_normals = !debug_on;
+        }
 
         Ok(())
     }

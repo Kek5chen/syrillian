@@ -109,7 +109,7 @@ fn render_font_atlas(font: &Font, glyph_size: i32) -> Canvas {
                     origin.x() + point_size_f * x + point_size_f / 8.,
                     origin.y() + point_size_f * y - point_size_f / 8.,
                 )),
-                HintingOptions::None,
+                HintingOptions::Full(point_size_f),
                 RasterizationOptions::GrayscaleAa,
             )
                 .unwrap();

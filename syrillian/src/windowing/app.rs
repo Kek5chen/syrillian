@@ -138,12 +138,16 @@ impl<S: AppState> ApplicationHandler for App<S> {
                     error!("Error happened when calling late update function hook: {e}");
                 }
 
-                world.next_frame();
-
                 renderer.state.update();
                 if !renderer.render_world(world) {
                     event_loop.exit();
                 }
+
+                if let Err(e) = self.state.draw(world, renderer) {
+                    error!("Error happened when calling late update function hook: {e}");
+                }
+
+                world.next_frame();
             }
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Resized(size) => {

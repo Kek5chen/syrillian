@@ -39,7 +39,7 @@ fn vs_main(in: GlyphIn) -> GlyphOut {
 fn fs_main(data: GlyphOut) -> @location(0) vec4<f32> {
     let color = textureSample(t_diffuse, s_diffuse, data.atlas_uv);
 
-    if (color.a < 0.5) {
+    if (color.a < 0.1) {
         discard;
     }
 
