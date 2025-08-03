@@ -174,7 +174,7 @@ fn add_debug_drawable(_parent: GameObjectId) {
         use crate::drawables::CameraDebug;
 
         let mut parent = _parent;
-        parent.set_drawable(Box::new(CameraDebug::default()));
+        parent.set_drawable(CameraDebug::default());
     }
 }
 
