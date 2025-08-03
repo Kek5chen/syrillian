@@ -51,6 +51,10 @@ impl<T: StoreType> H<T> {
     pub fn ident_fmt(&self) -> HandleName<T> {
         T::ident_fmt(*self)
     }
+
+    pub fn is_builtin(&self) -> bool {
+        T::is_builtin(*self)
+    }
 }
 
 impl<T: StoreType> Display for H<T> {

@@ -138,7 +138,7 @@ impl AppState for MyMain {
             let mut text = world.new_object("Text 3D");
             let mut text3d = Text3D::new("Meow 3D".to_string(), "Helvetica".to_string(), 100., None);
 
-            text.transform.set_position(0., 1., -20.);
+            text.transform.set_position(0., 10., -20.);
             text3d.text_mut().rainbow_mode(true);
 
             text.set_drawable(text3d);

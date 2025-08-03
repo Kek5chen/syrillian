@@ -80,6 +80,7 @@ impl H<Mesh> {
     const UNIT_CUBE_ID: u32 = 1;
     const DEBUG_ARROW_ID: u32 = 2;
     const SPHERE_ID: u32 = 3;
+    const MAX_BUILTIN_ID: u32 = 3;
 
     pub const UNIT_SQUARE: HMesh = H::new(Self::UNIT_SQUARE_ID);
     pub const UNIT_CUBE: HMesh = H::new(Self::UNIT_CUBE_ID);
@@ -122,5 +123,9 @@ impl StoreType for Mesh {
             HMesh::UNIT_CUBE_ID => HandleName::Static("Unit Cube"),
             _ => HandleName::Id(handle),
         }
+    }
+
+    fn is_builtin(handle: H<Self>) -> bool {
+        handle.id() <= H::<Self>::MAX_BUILTIN_ID
     }
 }

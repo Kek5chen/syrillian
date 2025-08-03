@@ -34,6 +34,7 @@ pub trait StoreType: Sized + Debug {
     fn store<S: AsRef<Store<Self>>>(self, store: &S) -> H<Self> {
         store.as_ref().add(self)
     }
+    fn is_builtin(handle: H<Self>) -> bool;
 }
 
 pub trait StoreTypeFallback: StoreType {
@@ -143,6 +144,16 @@ impl<T: StoreType> Store<T> {
         mem::swap::<Vec<AssetKey>>(dirty_store.as_mut(), swap_store.as_mut());
 
         swap_store
+    }
+
+    pub fn remove(&self, h: H<T>) -> Option<T> {
+        if h.is_builtin() {
+            return None;
+        }
+        let key = h.into();
+        let item = self.data.remove(&key);
+        self.set_dirty(key);
+        Some(item?.1)
     }
 }
 

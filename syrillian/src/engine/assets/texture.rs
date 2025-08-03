@@ -18,6 +18,7 @@ impl H<Texture> {
     const FALLBACK_DIFFUSE_ID: u32 = 0;
     const FALLBACK_NORMAL_ID: u32 = 1;
     const FALLBACK_SHININESS_ID: u32 = 2;
+    const MAX_BUILTIN_ID: u32 = 2;
 
     pub const FALLBACK_DIFFUSE: H<Texture> = H::new(Self::FALLBACK_DIFFUSE_ID);
     pub const FALLBACK_NORMAL: H<Texture> = H::new(Self::FALLBACK_NORMAL_ID);
@@ -137,6 +138,10 @@ impl StoreType for Texture {
             HTexture::FALLBACK_SHININESS_ID => HandleName::Static("Diffuse Fallback"),
             _ => HandleName::Id(handle),
         }
+    }
+
+    fn is_builtin(handle: H<Self>) -> bool {
+        handle.id() <= H::<Self>::MAX_BUILTIN_ID
     }
 }
 

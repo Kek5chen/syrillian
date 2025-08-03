@@ -62,6 +62,7 @@ impl StoreDefaults for Material {
 impl HMaterial {
     const FALLBACK_ID: u32 = 0;
     const DEFAULT_ID: u32 = 1;
+    const MAX_BUILTIN_ID: u32 = 1;
 
     pub const FALLBACK: HMaterial = HMaterial::new(Self::FALLBACK_ID);
     pub const DEFAULT: HMaterial = HMaterial::new(Self::DEFAULT_ID);
@@ -78,6 +79,10 @@ impl StoreType for Material {
             HMaterial::DEFAULT_ID => HandleName::Static("Default Material"),
             _ => HandleName::Id(handle),
         }
+    }
+
+    fn is_builtin(handle: H<Self>) -> bool {
+        handle.id() <= H::<Self>::MAX_BUILTIN_ID
     }
 }
 
