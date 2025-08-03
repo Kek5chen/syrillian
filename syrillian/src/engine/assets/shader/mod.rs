@@ -73,12 +73,16 @@ impl H<Shader> {
     pub const POST_PROCESS_ID: u32 = 3;
     pub const TEXT_2D_ID: u32 = 4;
     pub const TEXT_3D_ID: u32 = 5;
+    #[cfg(not(debug_assertions))]
+    pub const MAX_BUILTIN_ID: u32 = 5;
     #[cfg(debug_assertions)]
     pub const DEBUG_EDGES_ID: u32 = 6;
     #[cfg(debug_assertions)]
     pub const DEBUG_VERTEX_NORMALS_ID: u32 = 7;
     #[cfg(debug_assertions)]
     pub const DEBUG_RAYS_ID: u32 = 8;
+    #[cfg(debug_assertions)]
+    pub const MAX_BUILTIN_ID: u32 = 8;
 
     // The fallback shader if a pipeline fails
     pub const FALLBACK: H<Shader> = H::new(Self::FALLBACK_ID);
@@ -307,6 +311,10 @@ impl StoreType for Shader {
 
             _ => HandleName::Id(handle),
         }
+    }
+
+    fn is_builtin(handle: H<Self>) -> bool {
+        handle.id() <= H::MAX_BUILTIN_ID
     }
 }
 

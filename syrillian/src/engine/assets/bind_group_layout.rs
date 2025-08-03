@@ -20,6 +20,8 @@ impl H<BGL> {
     pub(super) const LIGHT_ID: u32 = 3;
     pub(super) const POST_PROCESS_ID: u32 = 4;
 
+    const MAX_BUILTIN_ID: u32 = 4;
+
     pub const RENDER: HBGL = HBGL::new(Self::RENDER_ID);
     pub const MODEL: HBGL = HBGL::new(Self::MODEL_ID);
     pub const MATERIAL: HBGL = HBGL::new(Self::MATERIAL_ID);
@@ -41,6 +43,10 @@ impl StoreType for BGL {
             HBGL::POST_PROCESS_ID => HandleName::Static("Post Process Bind Group Layout"),
             _ => HandleName::Id(handle),
         }
+    }
+
+    fn is_builtin(handle: H<Self>) -> bool {
+        handle.id() <= H::<Self>::MAX_BUILTIN_ID
     }
 }
 

@@ -190,6 +190,7 @@ impl<DIM: TextDim> TextLayouter<DIM> {
             wgpu::TextureFormat::Bgra8UnormSrgb,
         );
 
+        world.assets.textures.remove(self.font_atlas);
         self.font_atlas = world.assets.textures.add(texture);
 
         let material = Material::builder()
@@ -197,6 +198,7 @@ impl<DIM: TextDim> TextLayouter<DIM> {
             .diffuse_texture(self.font_atlas)
             .build();
 
+        world.assets.materials.remove(self.font_atlas_mat);
         self.font_atlas_mat = world.assets.materials.add(material);
     }
 
