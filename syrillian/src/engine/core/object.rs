@@ -6,7 +6,7 @@ use std::ops::{Deref, DerefMut};
 use std::rc::Rc;
 
 use itertools::Itertools;
-use nalgebra::Matrix4;
+use nalgebra::{Matrix4, Translation3, Vector3};
 
 use crate::components::Component;
 use crate::drawables::drawable::Drawable;
@@ -100,7 +100,12 @@ impl GameObject {
         child.parent = Some(self.id);
     }
 
-    pub fn set_drawable(&mut self, drawable: Box<dyn Drawable>) {
+    pub fn set_drawable(&mut self, drawable: impl Drawable) {
+        self.set_drawable_box(Box::new(drawable));
+    }
+
+    #[inline]
+    pub fn set_drawable_box(&mut self, drawable: Box<dyn Drawable>) {
         self.drawable = Some(drawable);
     }
 
@@ -245,6 +250,24 @@ impl ModelUniform {
     pub fn empty() -> Self {
         ModelUniform {
             model_mat: Matrix4::identity(),
+        }
+    }
+
+    pub fn new_at(x: f32, y: f32, z: f32) -> Self {
+        ModelUniform {
+            model_mat: Translation3::new(x, y, z).to_homogeneous(),
+        }
+    }
+
+    pub fn new_at_vec(pos: Vector3<f32>) -> Self {
+        ModelUniform {
+            model_mat: Translation3::from(pos).to_homogeneous(),
+        }
+    }
+
+    pub fn from_translation(translation: Translation3<f32>) -> Self {
+        ModelUniform {
+            model_mat: translation.to_homogeneous(),
         }
     }
 

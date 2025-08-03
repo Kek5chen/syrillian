@@ -55,7 +55,7 @@ impl AppState for NecoArc {
             .build_component::<Collider3D>();
 
         let mut image_obj = world.new_object("Image");
-        image_obj.set_drawable(Image::new_with_size(
+        image_obj.set_drawable_box(Image::new_with_size(
             material,
             ImageScalingMode::RelativeStretch {
                 left: 0.0,
@@ -67,7 +67,7 @@ impl AppState for NecoArc {
         world.add_child(image_obj);
 
         let mut image_obj = world.new_object("Image 2");
-        image_obj.set_drawable(Image::new_with_size(
+        image_obj.set_drawable_box(Image::new_with_size(
             material,
             ImageScalingMode::RelativeStretch {
                 left: 0.0,

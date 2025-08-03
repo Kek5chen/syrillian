@@ -1,5 +1,6 @@
 use crate::core::GameObjectId;
 use nalgebra::{Affine3, Scale3, Translation3, UnitQuaternion, Vector3};
+use num_traits::AsPrimitive;
 
 /// Stores the translation, rotation and scale of a [`GameObject`](crate::core::GameObject).
 ///
@@ -56,8 +57,13 @@ impl Transform {
 
     /// Sets the global position of the transform.
     #[inline(always)]
-    pub fn set_position(&mut self, x: f32, y: f32, z: f32) {
-        self.set_position_vec(Vector3::new(x, y, z))
+    pub fn set_position(
+        &mut self,
+        x: impl AsPrimitive<f32>,
+        y: impl AsPrimitive<f32>,
+        z: impl AsPrimitive<f32>,
+    ) {
+        self.set_position_vec(Vector3::new(x.as_(), y.as_(), z.as_()))
     }
 
     /// Sets the global position using a vector.
@@ -178,6 +184,22 @@ impl Transform {
     /// Returns a reference to the local rotation quaternion.
     pub fn local_rotation(&self) -> &UnitQuaternion<f32> {
         &self.rot
+    }
+
+    /// Sets the global rotation of the transform in euler angles.
+    /// This will do the transformation to quaternions for you, but it's recommended to use quaternions.
+    pub fn set_euler_rotation(
+        &mut self,
+        pitch: impl AsPrimitive<f32>,
+        yaw: impl AsPrimitive<f32>,
+        roll: impl AsPrimitive<f32>,
+    ) {
+        let parent_global_rotation = self.get_global_rotation_ext(false);
+        let local_rotation_change = parent_global_rotation.rotation_to(
+            &UnitQuaternion::from_euler_angles(pitch.as_(), yaw.as_(), roll.as_()),
+        );
+
+        self.set_local_rotation(local_rotation_change);
     }
 
     /// Sets the global rotation of the transform.

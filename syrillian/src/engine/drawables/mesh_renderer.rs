@@ -19,6 +19,8 @@ pub enum MeshUniformIndex {
     BoneData = 1,
 }
 
+// FIXME: The shader currently only accepts one bone for some reason.
+//        Having more than 1 bone will crash-...
 #[derive(Debug, Default, Clone)]
 pub struct BoneData {
     pub(crate) bones: Vec<Bone>,
