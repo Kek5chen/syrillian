@@ -115,7 +115,7 @@ impl Drawable for MeshRenderer {
 
         #[cfg(debug_assertions)]
         {
-            if ctx.frame.debug.draw_edges {
+            if ctx.frame.debug.mesh_edges {
                 draw_mesh(
                     ctx,
                     &mesh,
@@ -126,7 +126,7 @@ impl Drawable for MeshRenderer {
                 );
             }
 
-            if ctx.frame.debug.draw_vertex_normals {
+            if ctx.frame.debug.vertex_normals {
                 let debug_data = self
                     .debug_data
                     .as_ref()

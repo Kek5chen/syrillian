@@ -66,8 +66,9 @@ pub struct RenderUniformData {
 
 #[derive(Debug, Clone)]
 pub struct DebugRenderer {
-    pub draw_edges: bool,
-    pub draw_vertex_normals: bool,
+    pub mesh_edges: bool,
+    pub vertex_normals: bool,
+    pub rays: bool,
 }
 
 impl Default for DebugRenderer {
@@ -75,8 +76,9 @@ impl Default for DebugRenderer {
         const DEBUG_BUILD: bool = cfg!(debug_assertions);
 
         DebugRenderer {
-            draw_edges: DEBUG_BUILD,
-            draw_vertex_normals: DEBUG_BUILD,
+            mesh_edges: DEBUG_BUILD,
+            vertex_normals: DEBUG_BUILD,
+            rays: DEBUG_BUILD,
         }
     }
 }
