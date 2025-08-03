@@ -64,7 +64,7 @@ pub struct RenderUniformData {
     uniform: ShaderUniform<RenderUniformIndex>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DebugRenderer {
     pub draw_edges: bool,
     pub draw_vertex_normals: bool,
@@ -214,7 +214,7 @@ impl Renderer {
             cache: self.cache.clone(),
 
             #[cfg(debug_assertions)]
-            debug: DebugRenderer::default(),
+            debug: self.debug.clone(),
         })
     }
 

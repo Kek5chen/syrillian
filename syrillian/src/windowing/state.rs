@@ -1,3 +1,4 @@
+use crate::rendering::Renderer;
 use crate::world::World;
 use crate::{AppRuntime, AppSettings};
 use std::error::Error;
@@ -10,6 +11,9 @@ pub trait AppState: Sized {
         Ok(())
     }
     fn update(&mut self, world: &mut World, window: &Window) -> Result<(), Box<dyn Error>> {
+        Ok(())
+    }
+    fn draw(&mut self, world: &mut World, renderer: &mut Renderer) -> Result<(), Box<dyn Error>> {
         Ok(())
     }
     fn late_update(&mut self, world: &mut World, window: &Window) -> Result<(), Box<dyn Error>> {

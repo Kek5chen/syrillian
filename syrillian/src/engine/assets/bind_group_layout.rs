@@ -91,7 +91,7 @@ const MATERIAL_ENTRIES: [BindGroupLayoutEntry; 5] = [
     BindGroupLayoutEntry {
         binding: 2,
         visibility: ShaderStages::FRAGMENT,
-        ty: BindingType::Sampler(SamplerBindingType::NonFiltering),
+        ty: BindingType::Sampler(SamplerBindingType::Filtering),
         count: None,
     },
     BindGroupLayoutEntry {
@@ -107,7 +107,7 @@ const MATERIAL_ENTRIES: [BindGroupLayoutEntry; 5] = [
     BindGroupLayoutEntry {
         binding: 4,
         visibility: ShaderStages::FRAGMENT,
-        ty: BindingType::Sampler(SamplerBindingType::NonFiltering),
+        ty: BindingType::Sampler(SamplerBindingType::Filtering),
         count: None,
     },
 ];

@@ -39,6 +39,7 @@ fn fs_main(in: VOutput) -> @location(0) vec4<f32> {
   if tri((in.uv.x - 0.5) * 3, (in.uv.y - 0.5) * 3) {
     color = vec4(1.0, in.uv, 0.0) - color;
   }
+  color.a = 1.0;
 
   return color;
 }

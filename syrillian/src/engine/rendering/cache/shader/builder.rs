@@ -1,17 +1,12 @@
 use crate::assets::Shader;
 use crate::core::Vertex3D;
-use wgpu::{
-    ColorTargetState, ColorWrites, CompareFunction, DepthBiasState, DepthStencilState, Device,
-    Face, FragmentState, MultisampleState, PipelineCompilationOptions, PipelineLayout, PolygonMode,
-    PrimitiveState, PrimitiveTopology, RenderPipeline, RenderPipelineDescriptor, ShaderModule,
-    StencilFaceState, StencilState, TextureFormat, VertexBufferLayout, VertexState,
-};
+use wgpu::{BlendState, ColorTargetState, ColorWrites, CompareFunction, DepthBiasState, DepthStencilState, Device, Face, FragmentState, MultisampleState, PipelineCompilationOptions, PipelineLayout, PolygonMode, PrimitiveState, PrimitiveTopology, RenderPipeline, RenderPipelineDescriptor, ShaderModule, StencilFaceState, StencilState, TextureFormat, VertexBufferLayout, VertexState};
 
 const DEFAULT_BUFFERS: [VertexBufferLayout; 1] = [Vertex3D::continuous_descriptor()];
 
 const DEFAULT_COLOR_TARGET_STATE: [Option<ColorTargetState>; 1] = [Some(ColorTargetState {
     format: TextureFormat::Bgra8UnormSrgb,
-    blend: None,
+    blend: Some(BlendState::ALPHA_BLENDING),
     write_mask: ColorWrites::all(),
 })];
 

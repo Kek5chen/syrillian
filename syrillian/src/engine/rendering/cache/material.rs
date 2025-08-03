@@ -6,7 +6,7 @@ use crate::ensure_aligned;
 use nalgebra::Vector3;
 use syrillian_macros::UniformIndex;
 use wgpu::wgt::SamplerDescriptor;
-use wgpu::{AddressMode, Device, Queue};
+use wgpu::{AddressMode, Device, FilterMode, Queue};
 
 #[repr(u8)]
 #[derive(Debug, Copy, Clone, UniformIndex)]
@@ -71,6 +71,9 @@ impl CacheType for Material {
             address_mode_u: AddressMode::Repeat,
             address_mode_v: AddressMode::Repeat,
             address_mode_w: AddressMode::Repeat,
+            mag_filter: FilterMode::Linear,
+            min_filter: FilterMode::Linear,
+            mipmap_filter: FilterMode::Linear,
             ..Default::default()
         });
 

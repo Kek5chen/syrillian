@@ -57,7 +57,7 @@ fn fs_main(in: VOutput) -> @location(0) vec4<f32> {
     }
 
     // Discard Alpha 
-    if base_color.a < 0.1 { // Example threshold
+    if base_color.a < 0.1 {
         discard;
     }
 
