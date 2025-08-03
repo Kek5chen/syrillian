@@ -131,7 +131,7 @@ impl Drawable for CameraDebug {
     }
 
     fn draw(&self, _world: &mut World, ctx: &DrawCtx) {
-        if self.rays.is_empty() {
+        if self.rays.is_empty() || !ctx.frame.debug.rays {
             return;
         }
 

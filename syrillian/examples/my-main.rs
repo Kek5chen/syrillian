@@ -154,9 +154,10 @@ impl AppState for MyMain {
     #[cfg(debug_assertions)]
     fn draw(&mut self, world: &mut World, renderer: &mut syrillian::rendering::renderer::Renderer) -> Result<(), Box<dyn Error>> {
         if world.input.is_key_down(KeyCode::KeyL) {
-            let debug_on = renderer.debug.draw_edges;
-            renderer.debug.draw_edges = !debug_on;
-            renderer.debug.draw_vertex_normals = !debug_on;
+            let debug_on = renderer.debug.mesh_edges;
+            renderer.debug.mesh_edges = !debug_on;
+            renderer.debug.vertex_normals = !debug_on;
+            renderer.debug.rays = !debug_on;
         }
 
         Ok(())
