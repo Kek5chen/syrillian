@@ -75,7 +75,35 @@ If successful, a window should appear displaying a rendered scene.
 
 ### Minimal Setup
 
-We provide the [SyrillianApp Proc]()
+We, optionally, provide
+the [SyrillianApp Proc Macro](https://docs.rs/syrillian_macros/latest/syrillian_macros/derive.SyrillianApp.html).
+Usage example:
+
+```rust
+// The macro will provide you with a simple main runtime and (optional) logging
+#[derive(Debug, Default, SyrillianApp)]
+struct YourGame;
+
+impl AppState for YourGame {
+    // will be called once
+    fn init(&mut self, world: &mut World, window: &Window) -> Result<(), Box<dyn Error>> {
+        window.set_title("Example App");
+
+        world.new_camera();
+        world.spawn(&CubePrefab).at(0, 0, -10); // Spawn Cube at (0, 0, -10).
+        world.print_objects(); // Print Scene Hierarchy to Console
+
+        Ok(())
+    }
+
+    // will be called once per frame
+    fn update(&mut self, world: &mut World, window: &Window) -> Result<(), Box<dyn Error>> { ... }
+
+    // there's also "late_update", "draw", and more...
+}
+```
+
+It's simple... Really!
 
 ### Roadmap & Contributing
 

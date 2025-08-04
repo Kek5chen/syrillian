@@ -3857,7 +3857,7 @@ dependencies = [
 
 [[package]]
 name = "syrillian"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "bon",
  "bytemuck",
@@ -3889,7 +3889,7 @@ dependencies = [
 
 [[package]]
 name = "syrillian_macros"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "env_logger",
  "quote",
@@ -3900,7 +3900,7 @@ dependencies = [
 
 [[package]]
 name = "syrillian_utils"
-version = "0.3.0"
+version = "0.3.1"
 
 [[package]]
 name = "system-configuration"
