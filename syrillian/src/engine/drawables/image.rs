@@ -1,11 +1,11 @@
 use super::{BoneData, Drawable};
-use crate::World;
 use crate::core::{GameObjectId, ModelUniform};
 use crate::drawables::MeshUniformIndex;
 use crate::engine::assets::{HMaterial, HShader};
 use crate::engine::rendering::cache::AssetCache;
 use crate::engine::rendering::uniform::ShaderUniform;
 use crate::engine::rendering::{DrawCtx, Renderer};
+use crate::World;
 use log::error;
 use nalgebra::{Matrix4, Scale3, Translation3};
 use wgpu::Device;

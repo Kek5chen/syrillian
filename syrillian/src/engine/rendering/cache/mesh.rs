@@ -1,6 +1,6 @@
 use crate::engine::assets::Mesh;
-use crate::engine::rendering::cache::AssetCache;
 use crate::engine::rendering::cache::generic_cache::CacheType;
+use crate::engine::rendering::cache::AssetCache;
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::{BufferUsages, Device, Queue};
 

@@ -4,7 +4,7 @@ use crate::assets::mesh::builder::MeshBuilder;
 use crate::assets::scene_loader::SceneLoader;
 use crate::core::{Bones, Vertex3D};
 use crate::engine::assets::generic_store::{HandleName, Store, StoreDefaults, StoreType};
-use crate::engine::assets::{H, HMaterial, HMesh};
+use crate::engine::assets::{HMaterial, HMesh, H};
 use crate::store_add_checked;
 use crate::utils::UNIT_SQUARE_VERT;
 use nalgebra::Point;

@@ -1,4 +1,4 @@
-use crate::engine::assets::{H, StoreType};
+use crate::engine::assets::{StoreType, H};
 
 #[derive(Debug, Copy, Clone, Hash, Eq, PartialEq)]
 pub struct AssetKey(u32);

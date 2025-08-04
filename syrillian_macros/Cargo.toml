@@ -1,13 +1,17 @@
 [package]
 name = "syrillian_macros"
-version = "0.1.0"
-edition = "2024"
+description = "Macros used by the Syrillian game engine"
+version.workspace = true
+license.workspace = true
+edition.workspace = true
+repository.workspace = true
+authors.workspace = true
 
 [dependencies]
-syn = { version = "2.0.104", features = ["full", "printing", "derive"] }
-quote = "1.0.40"
-syrillian_utils = { path = "../syrillian_utils" }
-tokio = { version = "1.46" }
+syn = { version = "2.0", features = ["full", "printing", "derive"] }
+quote = "1.0"
+syrillian_utils.workspace = true
+tokio.workspace = true
 env_logger = { version = "0.11", optional = true }
 
 [lib]

@@ -63,24 +63,12 @@
             dontDisableStatic = true;
           });
 
-          assimpCross = winPkgs.assimp.overrideAttrs (_: {
-            outputs    = [ "out" ];
-            cmakeFlags = [
-              "-DCMAKE_INSTALL_PREFIX=${placeholder "out"}"
-              "-DASSIMP_BUILD_TESTS=OFF"
-              "-DASSIMP_BUILD_ASSIMP_TOOLS=OFF"
-              "-DASSIMP_WARNINGS_AS_ERRORS=OFF"
-              "-DBUILD_SHARED_LIBS=OFF"
-            ];
-            buildInputs = [ winPkgs.zlib ];
-          });
-
           exampleName = "my-main";
         in 
         winPkgs.rustPlatform.buildRustPackage rec {
           pname = "syrillian";
-          version = "0.1.2";
-          src = ./.;
+          version = (builtins.fromTOML (builtins.readFile ./syrillian/Cargo.toml)).package.version;
+          src = ./syrillian;
 
           useCargoFetchVendor = true;
           cargoHash = "sha256-a512W3HWCp1wZhH/MvKcvfFbaYX7RaYov0H/PgAnhSQ=";
@@ -91,7 +79,6 @@
           buildInputs = with winPkgs; [
             pkgs.openssl.dev
             zlib
-            assimpCross
             mcfgStatic
             cmake
           ];
@@ -103,7 +90,7 @@
             runHook postInstall
           '';
 
-          cargoBuildFlags = [ "--example ${exampleName}" ];
+          cargoBuildFlags = [ "--example ${exampleName} --features static-link" ];
 
           CARGO_BUILD_TARGET = "x86_64-pc-windows-gnu";
           CARGO_TARGET_X86_64_PC_WINDOWS_GNU_RUSTFLAGS = [

@@ -1,11 +1,11 @@
 [package]
 name = "syrillian"
 description = "Real-time 3D game engine built on top of wgpu, focusing on flexibility, modularity, and a straightforward, entity-component-driven workflow"
-license = "MIT"
-repository = "https://github.com/Kek5chen/syrillian"
-authors = [ "Kek5chen" ]
-version = "0.2.0"
-edition = "2024"
+version.workspace = true
+license.workspace = true
+edition.workspace = true
+repository.workspace = true
+authors.workspace = true
 
 
 
@@ -29,13 +29,14 @@ static_assertions = "1.1"
 snafu = "0.8"
 smallvec = "1.15.1"
 russimp-ng = "3.2"
-syrillian_macros = { path = "syrillian_macros" }
-syrillian_utils = { path = "syrillian_utils" }
+syrillian_macros.workspace = true
+syrillian_utils.workspace = true
 dashmap = "6.1"
 bon = "3.6"
 const_format = "0.2"
 gilrs = "0.11"
 uuid = { version = "1.17.0", features = ["v4"] }
+tokio.workspace = true
 
 [build-dependencies]
 chrono = "0.4"
@@ -58,37 +59,15 @@ notify = "8.1.0"
 version = "25.0"
 default-features = false
 features = [
-  "vulkan-portability",
-
-  # Backends
-  "vulkan",
-  "metal",
-  "dx12",
-  "gles",
-
-  # Shader compatibility
-  "wgsl"
+    "vulkan-portability",
+    # Backends
+    "vulkan",
+    "metal",
+    "dx12",
+    "gles",
+    # Shader compatibility
+    "wgsl"
 ]
-
-[dependencies.tokio]
-version = "1.40"
-features = ["rt", "rt-multi-thread", "macros", "sync"]
-
-
-#################################################
-#                Build Profiles                 #
-#################################################
-
-
-
-# TODO: Probably only enforce this for the example builds
-[profile.dev]
-opt-level = 2
-
-[profile.release]
-opt-level = 3
-codegen-units = 1
-lto = "fat"
 
 
 
@@ -101,3 +80,4 @@ lto = "fat"
 [features]
 default = ["derive"]
 derive = ["syrillian_macros/derive_env_logger"]
+static-link = ["russimp-ng/static-link"]
