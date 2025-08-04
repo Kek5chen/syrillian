@@ -1,0 +1,32 @@
+name: Tests
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: "sudo apt-get install libudev-dev"
+      - name: Install Cargo LLVM Coverage
+        run: "cargo install cargo-llvm-cov"
+      - name: Build
+        run: "cargo build --verbose"
+      - name: Test
+        run: 'cargo llvm-cov'
+      - name: Gather Test Coverage
+        run: 'cargo llvm-cov report --codecov --output-path cov.json'
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./cov.json
+          disable_search: true
