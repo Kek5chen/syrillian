@@ -18,6 +18,7 @@ use syrillian::components::{
     RopeComponent, RotateComponent,
 };
 use syrillian::core::{GameObjectExt, GameObjectId};
+use syrillian::drawables::text2d::Text2D;
 use syrillian::prefabs::first_person_player::FirstPersonPlayerPrefab;
 use syrillian::prefabs::prefab::Prefab;
 use syrillian::prefabs::CubePrefab;
@@ -119,6 +120,12 @@ impl AppState for MyMain {
             .scale(5.)
             .build_component::<RotateComponent>()
             .speed(-30.);
+
+        let mut text = world.new_object("Text");
+        let mut text2d = Text2D::new("Meow".to_string(), "Helvetica".to_string(), 100);
+        text2d.set_position(100., 100.);
+        text.set_drawable(Box::new(text2d));
+        world.add_child(text);
 
         world.print_objects();
 

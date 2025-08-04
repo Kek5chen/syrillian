@@ -1,7 +1,7 @@
 use super::{BoneData, Drawable};
 use crate::core::{GameObjectId, ModelUniform};
 use crate::drawables::MeshUniformIndex;
-use crate::engine::assets::{HMaterial, HShader};
+use crate::engine::assets::HMaterial;
 use crate::engine::rendering::cache::AssetCache;
 use crate::engine::rendering::uniform::ShaderUniform;
 use crate::engine::rendering::{DrawCtx, Renderer};
@@ -97,7 +97,7 @@ impl Drawable for Image {
     fn draw(&self, _world: &mut World, ctx: &DrawCtx) {
         let unit_square_runtime = ctx.frame.cache.mesh_unit_square();
         let material = ctx.frame.cache.material(self.material);
-        let shader = ctx.frame.cache.shader(HShader::DIM2);
+        let shader = ctx.frame.cache.shader_2d();
 
         let Some(gpu_data) = &self.gpu_data else {
             error!("Image GPU Data wasn't set up.");

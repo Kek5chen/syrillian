@@ -47,6 +47,10 @@ impl AssetCache {
         self.shaders.get(HShader::DIM3, self)
     }
 
+    pub fn shader_2d(&self) -> Arc<RuntimeShader> {
+        self.shaders.get(HShader::DIM2, self)
+    }
+
     pub fn shader_post_process(&self) -> Arc<RuntimeShader> {
         self.shaders.get(HShader::POST_PROCESS, self)
     }

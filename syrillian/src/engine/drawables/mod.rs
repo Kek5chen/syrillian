@@ -13,6 +13,7 @@ pub mod camera_debug;
 pub use drawable::*;
 pub use image::*;
 pub use mesh_renderer::*;
+pub mod text2d;
 
 #[cfg(debug_assertions)]
 pub use camera_debug::*;

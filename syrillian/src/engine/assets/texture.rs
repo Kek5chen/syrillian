@@ -11,6 +11,7 @@ pub struct Texture {
     pub height: u32,
     pub format: TextureFormat,
     pub data: Option<Vec<u8>>,
+    pub view_formats: [TextureFormat; 1],
 }
 
 impl H<Texture> {
@@ -51,7 +52,7 @@ impl Texture {
             dimension: TextureDimension::D2,
             format: self.format,
             usage: TextureUsages::TEXTURE_BINDING,
-            view_formats: &[TextureFormat::Bgra8UnormSrgb],
+            view_formats: &self.view_formats,
         }
     }
 
@@ -77,9 +78,20 @@ impl Texture {
             height: rgba.height(),
             format: TextureFormat::Bgra8UnormSrgb,
             data: Some(data),
+            view_formats: [TextureFormat::Bgra8UnormSrgb],
         };
 
         Ok(tex)
+    }
+
+    pub fn load_pixels(pixels: Vec<u8>, width: u32, height: u32, format: TextureFormat) -> Texture {
+        Texture {
+            width,
+            height,
+            format,
+            data: Some(pixels),
+            view_formats: [format],
+        }
     }
 }
 
@@ -90,34 +102,24 @@ impl StoreDefaults for Texture {
         store_add_checked!(
             store,
             HTexture::FALLBACK_DIFFUSE_ID,
-            Texture {
-                width: FALLBACK_SIZE,
-                height: FALLBACK_SIZE,
-                format: TextureFormat::Bgra8UnormSrgb,
-                data: Some(Self::gen_fallback_diffuse(FALLBACK_SIZE, FALLBACK_SIZE)),
-            }
+            Texture::load_pixels(
+                Self::gen_fallback_diffuse(FALLBACK_SIZE, FALLBACK_SIZE),
+                FALLBACK_SIZE,
+                FALLBACK_SIZE,
+                TextureFormat::Bgra8UnormSrgb
+            )
         );
 
         store_add_checked!(
             store,
             HTexture::FALLBACK_NORMAL_ID,
-            Texture {
-                width: 1,
-                height: 1,
-                format: TextureFormat::Bgra8UnormSrgb,
-                data: Some(vec![0, 0, 0, 0]),
-            }
+            Texture::load_pixels(vec![0; 4], 1, 1, TextureFormat::Bgra8UnormSrgb)
         );
 
         store_add_checked!(
             store,
             HTexture::FALLBACK_SHININESS_ID,
-            Texture {
-                width: 1,
-                height: 1,
-                format: TextureFormat::Bgra8UnormSrgb,
-                data: Some(vec![0, 0, 0, 0]),
-            }
+            Texture::load_pixels(vec![0; 4], 1, 1, TextureFormat::Bgra8UnormSrgb)
         );
     }
 }

@@ -2,7 +2,7 @@ use crate::engine::assets::Texture;
 use crate::engine::rendering::cache::{AssetCache, CacheType};
 use wgpu::util::{DeviceExt, TextureDataOrder};
 use wgpu::{
-    Device, Queue, TextureAspect, TextureFormat, TextureViewDescriptor, TextureViewDimension,
+    Device, Queue, TextureAspect, TextureViewDescriptor, TextureViewDimension,
 };
 
 impl CacheType for Texture {
@@ -21,7 +21,7 @@ impl CacheType for Texture {
 
         texture.create_view(&TextureViewDescriptor {
             label: Some("Texture View"),
-            format: Some(TextureFormat::Bgra8UnormSrgb),
+            format: Some(self.format),
             dimension: Some(TextureViewDimension::D2),
             aspect: TextureAspect::All,
             base_mip_level: 0,

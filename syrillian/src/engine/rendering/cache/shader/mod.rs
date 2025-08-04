@@ -59,7 +59,7 @@ fn make_layout(shader: &Shader, device: &Device, cache: &AssetCache) -> Pipeline
             device.create_pipeline_layout(&PipelineLayoutDescriptor {
                 label: Some(&layout_name),
                 bind_group_layouts: &bind_group_layouts,
-                push_constant_ranges: &[],
+                push_constant_ranges: &shader.push_constant_ranges(),
             })
         }
         Shader::PostProcess { .. } => {
