@@ -1,22 +1,53 @@
 [![Codacy Badge](https://app.codacy.com/project/badge/Grade/337033d4547044cf96a1584bf82b1ce8)](https://app.codacy.com/gh/Kek5chen/syrillian/dashboard?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_grade)
+[![codecov](https://codecov.io/github/kek5chen/syrillian/graph/badge.svg?token=QORLO7MO2I)](https://codecov.io/github/kek5chen/syrillian)
+![GitHub commit activity](https://img.shields.io/github/commit-activity/m/Kek5chen/syrillian)
+![Discord](https://img.shields.io/discord/1401869988796698696?style=flat&label=Discord)
 
 # Syrillian Engine
 
-Syrillian Engine is a Rust-based, real-time 3D game engine built on top of [wgpu](https://github.com/gfx-rs/wgpu), focusing on flexibility, modularity, and a straightforward, entity-component-driven workflow. Designed to be easily extensible, Syrillian Engine aims to provide a robust foundation for building modern 3D applications, rendering pipelines, and post-processing effects.
+Syrillian Engine is a Rust-based, real-time 3D game engine, focusing on flexibility, modularity, and a straightforward,
+entity-component-driven workflow.
+
+It's designed to be easily simple and extensible. We aim to provide a robust foundation for building modern 3D
+applications, rendering pipelines, and visually pleasing gameplay.
+
+## We're doing it different!
+
+**We're unique**, in the sense that we aim to show how *flexible* Rust can be as a language. With the milestone to
+provide
+a **simple, iteration-strong game engine**, which people **have fun** making games with. The goal is to look beyond the
+boundaries so that users can simply focus on iteration speed. **Not fighting a language.**
+
+The goal is that even new developers, and people familiar with other languages, have a comfortable dip into the Rust
+game-dev atmosphere!
+
+### Showroom
+
+**Feel free to add your own expositions here :)**
+
+![](https://i.ibb.co/F9gywNk/Screenshot-2025-08-04-at-12-37-22.png)
+
+*Me picking up a shader-animated, physics-enabled cube which is emitting a
+lightsource* [From this Example](./examples/my-main.rs)
 
 ## Features
 
-- **Object Oriented Components**: Syrillian Engine provides a flexible OOP structure, allowing you to attach components (such as transforms, camera controllers, and custom logic) to game objects with minimal boilerplate.
-- **Renderer Powered by wgpu**: Leverages the cross-platform [wgpu](https://github.com/gfx-rs/wgpu) API for graphics, giving you Vulkan/DX/Metal-level performance and portability.
-- **Different Code Design Approach**: While other game engines focus on a very rust-based approach to their design, Syrillian focuses on ease of use and code simplicity.
+- Simple "Just get it started" approach. High focus on user-side simplicity, and even fresh rust users should feel
+  welcome.
+- Lots of preset (components - prefabs - compatibility)! All boxed up, ready to be dropped in.
+- Mesh and Physics, Visual debugging features.
+- Game Objects that are *builder extensible*. Providing a fluid object creation and behavior specification workflow.
+- Built in giants:
+    - Strong battle-tested Physics Integration provided by [rapier](https://github.com/dimforge/rapier)
+    - Ultra dynamic Graphics Abstraction provided by [wgpu](https://github.com/gfx-rs/wgpu) (DirectX, Vulkan, Metal,
+      WebGL)
 
 ## Getting Started
 
 ### Prerequisites
 
-- **Rust & Cargo**: Ensure you have the latest stable Rust toolchain installed. A nightly compiler toolchain might be necessary for some builds.
-  [Install Rust](https://www.rust-lang.org/tools/install)
-- **wgpu-compatible GPU**: Syrillian Engine uses wgpu, which requires a modern graphics API (Vulkan, Metal, DX12, or WebGPU).
+- Have a Rust Toolchain Installed.
+- Have a GPU
 
 ### Building & Running
 
@@ -26,52 +57,54 @@ Syrillian Engine is a Rust-based, real-time 3D game engine built on top of [wgpu
    cd syrillian
    ```
 
-2. Build the engine:
+2. Build the engine library:
    ```bash
    cargo build
    ```
 
-3. Run a demo or test application included in the repository:
+3. Try out a demo example, included in the repository:
    ```bash
    cargo run --example my-main
    ```
+
+4. Dance in circles (optional)
 
 **NixOS** *Development Flakes are provided with the project.*
 
 If successful, a window should appear displaying a rendered scene.
 
-### Project Structure
+### Minimal Setup
 
-- **`src/`**: The core engine code.
-- **`shaders/`**: WGSL shader files for main 3D rendering and post-processing passes.
-- **`examples/`**: Example applications or scenes demonstrating usage of the engine.
+We provide the [SyrillianApp Proc]()
 
-### Customizing the Engine
+### Roadmap & Contributing
 
-- **Add New Shaders**: Place new WGSL shaders in the `shaders/` directory and register them in the `ShaderManager`.
-- **Add Components & Systems**: Extend `components/` with new component types, and integrate custom logic in ECS update steps.
-- **Add Post-Processing Effects**: Create off-screen passes and write new fragment shaders for effects. Then hook them into the `Renderer`’s second pass.
-
-If you are planning the use the engine as a library and not to extend the engine itself, consider adopting a similar structure in your project.
-
-### Roadmap
-
-- **Additional Render Features**: Shadows, PBR materials, Skyboxes, HDR and bloom are planned enhancements.
-- **Editor Tools**: Add an editor UI for placing objects, tweaking materials, and viewing engine stats.
-
-### Contributing
+The whole feature map has moved into
+the [Issues](https://github.com/Kek5chen/syrillian/issues?q=state%3Aopen%20label%3Aepic)
 
 Contributions are welcome! If you find a bug or have a feature request:
 
 1. Open an issue describing the problem or feature.
 2. Discuss solutions or improvements.
-3. Submit a pull request with your changes.
+3. Optionally, submit a pull request with your changes. Very welcome!
 
 Ensure your code follows Rust’s formatting and clippy checks:
+
 ```bash
 cargo fmt
 cargo clippy
 ```
+
+### History
+
+This project has been a big personal gem of mine, and I've poured probably a good 100+ hours of my freetime into it.
+I am not monetized to work on this, and I do it out of pure personal interest.
+
+**Any help**, getting this project [better, stable, improved, ..] is very welcome, and I'll make sure to show or explain
+anything that's not clear. Even feedback or rants on the user-facing API are more than welcome, as I wish to provide
+patterns that make is as simple as possible to use.
+
+If you need *anything*: Don't hesitate to join the discord to discuss :)
 
 ### License
 
@@ -79,4 +112,4 @@ Syrillian Engine is distributed under the MIT License. See [LICENSE](LICENSE) fo
 
 ---
 
-**Syrillian Engine**: Building the backbone of your next great 3D experience.
+Syrillian Engine ❤️ Building the backbone of your next great 3D experience.
