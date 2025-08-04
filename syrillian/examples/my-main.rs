@@ -18,7 +18,7 @@ use syrillian::components::{
     RopeComponent, RotateComponent,
 };
 use syrillian::core::{GameObjectExt, GameObjectId};
-use syrillian::drawables::text2d::Text2D;
+use syrillian::drawables::{Text2D, Text3D};
 use syrillian::prefabs::first_person_player::FirstPersonPlayerPrefab;
 use syrillian::prefabs::prefab::Prefab;
 use syrillian::prefabs::CubePrefab;
@@ -38,6 +38,7 @@ struct MyMain {
     frame_counter: FrameCounter,
     player: GameObjectId,
     picked_up: Option<GameObjectId>,
+    text3d: GameObjectId,
 }
 
 impl Default for MyMain {
@@ -46,6 +47,7 @@ impl Default for MyMain {
             frame_counter: FrameCounter::default(),
             player: GameObjectId::invalid(),
             picked_up: None,
+            text3d: GameObjectId::invalid(),
         }
     }
 }
@@ -121,11 +123,28 @@ impl AppState for MyMain {
             .build_component::<RotateComponent>()
             .speed(-30.);
 
-        let mut text = world.new_object("Text");
-        let mut text2d = Text2D::new("Meow".to_string(), "Helvetica".to_string(), 100);
-        text2d.set_position(100., 100.);
-        text.set_drawable(Box::new(text2d));
-        world.add_child(text);
+        {
+            let mut text = world.new_object("Text");
+            let mut text2d = Text2D::new("Meow".to_string(), "Helvetica".to_string(), 50., None);
+            text2d.set_position(0., 50.);
+            //text.transform.set_euler_rotation()
+            text2d.text_mut().rainbow_mode(true);
+
+            text.set_drawable(text2d);
+            world.add_child(text);
+        }
+
+        {
+            let mut text = world.new_object("Text 3D");
+            let mut text3d = Text3D::new("Meow 3D".to_string(), "Helvetica".to_string(), 100., None);
+
+            text.transform.set_position(0., 10., -20.);
+            text3d.text_mut().rainbow_mode(true);
+
+            text.set_drawable(text3d);
+            world.add_child(text);
+            self.text3d = text;
+        }
 
         world.print_objects();
 
@@ -147,6 +166,9 @@ impl AppState for MyMain {
                 camera.set_zoom(zoom_down);
             }
         }
+
+        let text3d = self.text3d.drawable_mut::<Text3D>().unwrap();
+        text3d.set_text(format!("Meow 3D\nYou have: {} FPS", self.frame_counter.fps()));
 
         self.do_raycast_test(world);
 

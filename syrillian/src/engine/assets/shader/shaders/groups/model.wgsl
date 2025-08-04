@@ -22,7 +22,7 @@ struct Material {
 @group(1) @binding(0)
 var<uniform> model: ModelData;
 
-@group(4) @binding(0)
+@group(1) @binding(1)
 var<uniform> bones: BoneData;
 
 @group(2) @binding(0)
