@@ -13,10 +13,7 @@ use std::error::Error;
 use syrillian::assets::scene_loader::SceneLoader;
 use syrillian::assets::{HMaterial, StoreType};
 use syrillian::assets::{Material, Shader};
-use syrillian::components::{
-    Collider3D, FirstPersonCameraController, PointLightComponent, RigidBodyComponent,
-    RopeComponent, RotateComponent,
-};
+use syrillian::components::{Collider3D, FirstPersonCameraController, PointLightComponent, RigidBodyComponent, RopeComponent, RotateComponent, SpringComponent};
 use syrillian::core::{GameObjectExt, GameObjectId};
 use syrillian::drawables::{Text2D, Text3D};
 use syrillian::prefabs::first_person_player::FirstPersonPlayerPrefab;
@@ -144,6 +141,27 @@ impl AppState for MyMain {
             text.set_drawable(text3d);
             world.add_child(text);
             self.text3d = text;
+        }
+
+        {
+            let mut spring_bottom = world.spawn(&CubePrefab::new(HMaterial::DEFAULT))
+                .at(-5., 10., -20.)
+                .build_component::<Collider3D>()
+                .mass(1.0)
+                .build_component::<RigidBodyComponent>()
+                .enable_ccd()
+                .id; // FIXME: Workaround. Should have a .finish()
+            let spring_top = world.spawn(&CubePrefab::new(HMaterial::DEFAULT))
+                .at(-5., 20., -20.)
+                .build_component::<Collider3D>()
+                .mass(1.0)
+                .build_component::<RigidBodyComponent>()
+                .enable_ccd()
+                .id; // FIXME: Workaround. Should have a .finish()
+
+            let spring = spring_bottom.add_component::<SpringComponent>();
+            spring.connect_to(spring_top);
+            spring.set_rest_length(10.);
         }
 
         world.print_objects();
