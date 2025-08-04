@@ -5,6 +5,7 @@ mod shaders;
 
 use crate::assets::shader::shader_gen::ShaderGen;
 use crate::assets::HBGL;
+use crate::drawables::text::text_layouter::TextPushConstants;
 use crate::engine::assets::generic_store::{HandleName, Store, StoreDefaults, StoreType};
 use crate::engine::assets::{HShader, StoreTypeFallback, StoreTypeName, H};
 use crate::utils::sizes::VEC2_SIZE;
@@ -133,7 +134,7 @@ impl StoreDefaults for Shader {
             HShader::POST_PROCESS_ID => Shader::new_post_process("Post Process", SHADER_FS_COPY),
         );
 
-        const TEXT2D_VBL: &[VertexBufferLayout] = &[VertexBufferLayout {
+        const TEXT_VBL: &[VertexBufferLayout] = &[VertexBufferLayout {
             array_stride: 0,
             step_mode: VertexStepMode::Vertex,
             attributes: &[
@@ -150,6 +151,11 @@ impl StoreDefaults for Shader {
             ],
         }];
 
+        const TEXT_PC: &[PushConstantRange] = &[PushConstantRange {
+            stages: ShaderStages::VERTEX_FRAGMENT,
+            range: 0..size_of::<TextPushConstants>() as u32,
+        }];
+
         store_add_checked!(
             store,
             HShader::TEXT_2D_ID,
@@ -158,11 +164,8 @@ impl StoreDefaults for Shader {
                 code: ShaderCode::Full(SHADER_TEXT2D.to_string()),
                 polygon_mode: PolygonMode::Fill,
                 topology: PrimitiveTopology::TriangleList,
-                vertex_buffers: TEXT2D_VBL,
-                push_constant_ranges: &[PushConstantRange {
-                    stages: ShaderStages::VERTEX,
-                    range: 0..16,
-                }]
+                vertex_buffers: TEXT_VBL,
+                push_constant_ranges: TEXT_PC
             }
         );
 
@@ -172,10 +175,10 @@ impl StoreDefaults for Shader {
             Shader::Custom {
                 name: "Text 3D Shader".to_string(),
                 code: ShaderCode::Full(SHADER_TEXT3D.to_string()),
-                polygon_mode: Default::default(),
-                topology: Default::default(),
-                vertex_buffers: &[],
-                push_constant_ranges: &[],
+                polygon_mode: PolygonMode::Fill,
+                topology: PrimitiveTopology::TriangleList,
+                vertex_buffers: TEXT_VBL,
+                push_constant_ranges: TEXT_PC
             }
         );
 

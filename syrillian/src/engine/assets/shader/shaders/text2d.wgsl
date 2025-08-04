@@ -12,8 +12,9 @@ struct GlyphOut {
 }
 
 struct PushConstants {
-    glyph_size: u32,
-    pos: vec2<f32>,
+    text_pos: vec2<f32>,
+    color: vec3<f32>,
+    text_size: f32,
 }
 
 var<push_constant> pc: PushConstants;
@@ -25,11 +26,12 @@ fn vs_main(in: GlyphIn) -> GlyphOut {
     var out: GlyphOut;
     let screen_size = vec2<f32>(system.screen);
 
-    var base_pos = (pc.pos / screen_size - 0.5) * 2;
-    base_pos.y = -base_pos.y;
-    let sized_offset = (in.offset * f32(pc.glyph_size)) / screen_size;
+    let vertex_offset = in.offset * f32(pc.text_size); // dumb world-space glyph offset
+    let text_offset = vec2(vertex_offset.x, -vertex_offset.y) + pc.text_pos;
+    var vpos = model.transform * vec4(text_offset, 0.0, 1.0); // vertex pos in world space
+    var screen_pos = vec4((vpos.xy / screen_size - vec2(0.5, 0.5)) * vec2(2, -2), 0.0, 1.0);
 
-    out.position = vec4(base_pos + sized_offset, 0.0, 1.0);
+    out.position = screen_pos;
     out.atlas_uv = in.atlas_uv;
 
     return out;
@@ -43,5 +45,5 @@ fn fs_main(data: GlyphOut) -> @location(0) vec4<f32> {
         discard;
     }
 
-    return color;
+    return vec4(pc.color, color.a);
 }
