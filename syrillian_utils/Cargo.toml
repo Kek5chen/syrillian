@@ -1,7 +1,10 @@
 [package]
 name = "syrillian_utils"
-version = "0.1.0"
-edition = "2024"
-publish = false
+description = "Utilities used by the Syrillian game engine"
+version.workspace = true
+license.workspace = true
+edition.workspace = true
+repository.workspace = true
+authors.workspace = true
 
 [dependencies]

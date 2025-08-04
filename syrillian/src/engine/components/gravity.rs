@@ -1,8 +1,8 @@
 use nalgebra::Vector3;
 
-use crate::World;
 use crate::components::Component;
 use crate::core::GameObjectId;
+use crate::World;
 
 pub struct GravityComp {
     pub acceleration_per_sec: f32,

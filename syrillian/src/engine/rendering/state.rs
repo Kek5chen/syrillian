@@ -4,7 +4,7 @@
 //! depth textures. It also exposes methods to resize and recreate these
 //! resources when the window changes.
 
-use snafu::{ResultExt, Snafu, ensure};
+use snafu::{ensure, ResultExt, Snafu};
 use std::sync::Arc;
 use wgpu::{
     Adapter, CompositeAlphaMode, CreateSurfaceError, Device, DeviceDescriptor, Extent3d, Features,

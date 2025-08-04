@@ -1,0 +1,83 @@
+[package]
+name = "syrillian"
+description = "Real-time 3D game engine built on top of wgpu, focusing on flexibility, modularity, and a straightforward, entity-component-driven workflow"
+version.workspace = true
+license.workspace = true
+edition.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+
+
+#################################################
+#               Simple dependencies             #
+#################################################
+
+
+
+[dependencies]
+winit = { version = "0.30", features = ["x11"] }
+bytemuck = "1.23"
+log = "0.4"
+nalgebra = { version = "0.33", features = ["bytemuck"] }
+num-traits = "0.2"
+itertools = "0.14"
+image = "0.25"
+rapier3d = "0.27.0"
+futures = "0.3"
+static_assertions = "1.1"
+snafu = "0.8"
+smallvec = "1.15.1"
+russimp-ng = "3.2"
+syrillian_macros.workspace = true
+syrillian_utils.workspace = true
+dashmap = "6.1"
+bon = "3.6"
+const_format = "0.2"
+gilrs = "0.11"
+uuid = { version = "1.17.0", features = ["v4"] }
+tokio.workspace = true
+
+[build-dependencies]
+chrono = "0.4"
+
+[dev-dependencies]
+chrono = "0.4"
+env_logger = { version = "0.11", features = ["auto-color"] }
+serial_test = "3.2.0"
+notify = "8.1.0"
+
+
+
+#################################################
+#              Complex dependencies             #
+#################################################
+
+
+
+[dependencies.wgpu]
+version = "25.0"
+default-features = false
+features = [
+    "vulkan-portability",
+    # Backends
+    "vulkan",
+    "metal",
+    "dx12",
+    "gles",
+    # Shader compatibility
+    "wgsl"
+]
+
+
+
+#################################################
+#                   Features                    #
+#################################################
+
+
+
+[features]
+default = ["derive"]
+derive = ["syrillian_macros/derive_env_logger"]
+static-link = ["russimp-ng/static-link"]

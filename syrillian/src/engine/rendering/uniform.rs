@@ -1,4 +1,4 @@
-use smallvec::{SmallVec, smallvec};
+use smallvec::{smallvec, SmallVec};
 use std::marker::PhantomData;
 use syrillian_utils::{ShaderUniformIndex, ShaderUniformMultiIndex, ShaderUniformSingleIndex};
 use wgpu::util::{BufferInitDescriptor, DeviceExt};

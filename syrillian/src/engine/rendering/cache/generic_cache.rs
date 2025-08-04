@@ -1,5 +1,5 @@
 use crate::engine::assets::generic_store::{Store, StoreDefaults, StoreType};
-use crate::engine::assets::{AssetKey, H, StoreTypeFallback};
+use crate::engine::assets::{AssetKey, StoreTypeFallback, H};
 use crate::engine::rendering::cache::AssetCache;
 use dashmap::DashMap;
 use log::warn;

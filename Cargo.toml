@@ -1,78 +1,23 @@
-[package]
-name = "syrillian"
-description = "Real-time 3D game engine built on top of wgpu, focusing on flexibility, modularity, and a straightforward, entity-component-driven workflow"
-license = "MIT"
-repository = "https://github.com/Kek5chen/syrillian"
-authors = [ "Kek5chen" ]
-version = "0.2.0"
-edition = "2024"
-
-
-
 #################################################
-#               Simple dependencies             #
+#                Workspace Meta                 #
 #################################################
 
 
 
-[dependencies]
-winit = { version = "0.30", features = ["x11"] }
-bytemuck = "1.23"
-log = "0.4"
-nalgebra = { version = "0.33", features = ["bytemuck"] }
-num-traits = "0.2"
-itertools = "0.14"
-image = "0.25"
-rapier3d = "0.27.0"
-futures = "0.3"
-static_assertions = "1.1"
-snafu = "0.8"
-smallvec = "1.15.1"
-russimp-ng = "3.2"
-syrillian_macros = { path = "syrillian_macros" }
-syrillian_utils = { path = "syrillian_utils" }
-dashmap = "6.1"
-bon = "3.6"
-const_format = "0.2"
-gilrs = "0.11"
-uuid = { version = "1.17.0", features = ["v4"] }
-
-[build-dependencies]
-chrono = "0.4"
-
-[dev-dependencies]
-chrono = "0.4"
-env_logger = { version = "0.11", features = ["auto-color"] }
-serial_test = "3.2.0"
-notify = "8.1.0"
-
-
-
-#################################################
-#              Complex dependencies             #
-#################################################
-
-
-
-[dependencies.wgpu]
-version = "25.0"
-default-features = false
-features = [
-  "vulkan-portability",
-
-  # Backends
-  "vulkan",
-  "metal",
-  "dx12",
-  "gles",
-
-  # Shader compatibility
-  "wgsl"
+[workspace]
+resolver = "2"
+members = [
+    "syrillian",
+    "syrillian_macros",
+    "syrillian_utils"
 ]
 
-[dependencies.tokio]
-version = "1.40"
-features = ["rt", "rt-multi-thread", "macros", "sync"]
+[workspace.package]
+version = "0.3.0"
+license = "MIT"
+edition = "2024"
+repository = "https://github.com/Kek5chen/syrillian"
+authors = ["Kek5chen"]
 
 
 #################################################
@@ -81,23 +26,19 @@ features = ["rt", "rt-multi-thread", "macros", "sync"]
 
 
 
-# TODO: Probably only enforce this for the example builds
 [profile.dev]
 opt-level = 2
 
 [profile.release]
-opt-level = 3
+opt-level = 2
 codegen-units = 1
 lto = "fat"
+panic = "abort"
 
+[workspace.dependencies]
+syrillian_utils = { version = "0.3.0", path = "syrillian_utils", default-features = false }
+syrillian_macros = { version = "0.3.0", path = "syrillian_macros", default-features = false }
 
-
-#################################################
-#                   Features                    #
-#################################################
-
-
-
-[features]
-default = ["derive"]
-derive = ["syrillian_macros/derive_env_logger"]
+[workspace.dependencies.tokio]
+version = "1.47"
+features = ["rt", "rt-multi-thread", "macros", "sync"]
