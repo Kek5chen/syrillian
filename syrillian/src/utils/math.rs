@@ -6,7 +6,7 @@ pub trait ExtraMatrixMath {
 }
 
 pub fn matrix_to_quaternion(matrix: Matrix3<f32>) -> UnitQuaternion<f32> {
-    UnitQuaternion::from_rotation_matrix(&Rotation3::from_matrix(&matrix))
+    UnitQuaternion::from_rotation_matrix(&Rotation3::from_matrix_eps(&matrix, f32::EPSILON, 5, Rotation3::identity()))
 }
 
 fn decompose_mat3(matrix: Matrix4<f32>) -> (Vector3<f32>, UnitQuaternion<f32>, Vector3<f32>) {

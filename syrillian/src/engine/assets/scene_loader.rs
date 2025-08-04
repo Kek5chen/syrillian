@@ -1,3 +1,4 @@
+use log::trace;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::error::Error;
@@ -43,29 +44,45 @@ impl SceneLoader {
         };
 
         let materials = load_materials(&scene, world);
+        trace!("Loaded materials for {path:?}");
+
         update_material_indices(&mut scene, materials);
+        trace!("Mapped Material Indices for {path:?}");
 
         let root_object = Self::spawn_object(world, &scene, &root);
         Ok(root_object)
     }
 
     pub fn load_scene(path: &str) -> Result<Scene, Box<dyn Error>> {
+        trace!("Started loading {path:?}");
         let scene = Scene::from_file(path, POST_STEPS.to_vec())?;
+        trace!("Finished parsing {path:?}");
 
         Ok(scene)
     }
 
     pub fn load_scene_from_buffer(model: &[u8], hint: &str) -> Result<Scene, Box<dyn Error>> {
+        trace!("Start loading scene from memory");
         let scene = Scene::from_buffer(model, POST_STEPS.to_vec(), hint)?;
 
         Ok(scene)
     }
 
     pub fn spawn_object(world: &mut World, scene: &Scene, node: &Node) -> GameObjectId {
+        Self::_spawn_object(world, scene, node, 1)
+    }
+
+    fn _spawn_object(world: &mut World, scene: &Scene, node: &Node, depth: u32) -> GameObjectId {
         let mut node_obj = build_object(world, scene, node);
 
+        if depth >= 1000 {
+            warn!("Node Object Iteration Depth reached 1000");
+            return node_obj;
+        }
+
         for child in node.children.borrow().iter() {
-            let child_obj = Self::spawn_object(world, scene, child);
+            let child_obj = Self::_spawn_object(world, scene, child, depth + 1);
+            trace!("Loaded new scene object {}", child_obj.0);
             node_obj.add_child(child_obj);
         }
 
@@ -346,6 +363,7 @@ fn load_material(world: &mut World, material: &russimp_ng::material::Material) -
 }
 
 pub fn build_object(world: &mut World, scene: &Scene, node: &Node) -> GameObjectId {
+    trace!("Starting to build scene object {:?}", node.name);
     let mut node_obj = world.new_object(&node.name);
 
     if let Some(mesh) = SceneLoader::load_mesh(scene, node) {
@@ -361,7 +379,7 @@ pub fn build_object(world: &mut World, scene: &Scene, node: &Node) -> GameObject
         [t.a3, t.b3, t.c3, t.d3],
         [t.a4, t.b4, t.c4, t.d4],
     ])
-    .decompose(); // convert row to column major (assimp to cgmath)
+        .decompose(); // convert row to column major (assimp to nalgebra)
 
     node_obj.transform.set_local_position_vec(position);
     node_obj.transform.set_local_rotation(rotation);
