@@ -7,11 +7,15 @@ use crate::assets::shader::shader_gen::ShaderGen;
 use crate::assets::HBGL;
 use crate::engine::assets::generic_store::{HandleName, Store, StoreDefaults, StoreType};
 use crate::engine::assets::{HShader, StoreTypeFallback, StoreTypeName, H};
+use crate::utils::sizes::VEC2_SIZE;
 use crate::{store_add_checked, store_add_checked_many};
 use std::error::Error;
 use std::fs;
 use std::path::Path;
-use wgpu::{PolygonMode, PrimitiveTopology, VertexBufferLayout};
+use wgpu::{
+    PolygonMode, PrimitiveTopology, PushConstantRange, ShaderStages, VertexAttribute,
+    VertexBufferLayout, VertexFormat, VertexStepMode,
+};
 
 #[derive(Debug, Clone)]
 pub enum ShaderCode {
@@ -57,32 +61,41 @@ pub enum Shader {
         polygon_mode: PolygonMode,
         topology: PrimitiveTopology,
         vertex_buffers: &'static [VertexBufferLayout<'static>],
+        push_constant_ranges: &'static [PushConstantRange],
     },
 }
 
 impl H<Shader> {
     pub const FALLBACK_ID: u32 = 0;
-    pub const DIM3_ID: u32 = 1;
-    pub const DIM2_ID: u32 = 2;
+    pub const DIM2_ID: u32 = 1;
+    pub const DIM3_ID: u32 = 2;
     pub const POST_PROCESS_ID: u32 = 3;
+    pub const TEXT_2D_ID: u32 = 4;
+    pub const TEXT_3D_ID: u32 = 5;
     #[cfg(debug_assertions)]
-    pub const DEBUG_EDGES_ID: u32 = 4;
+    pub const DEBUG_EDGES_ID: u32 = 6;
     #[cfg(debug_assertions)]
-    pub const DEBUG_VERTEX_NORMALS_ID: u32 = 5;
+    pub const DEBUG_VERTEX_NORMALS_ID: u32 = 7;
     #[cfg(debug_assertions)]
-    pub const DEBUG_RAYS_ID: u32 = 6;
+    pub const DEBUG_RAYS_ID: u32 = 8;
 
     // The fallback shader if a pipeline fails
     pub const FALLBACK: H<Shader> = H::new(Self::FALLBACK_ID);
 
-    // The default 3D shader.
-    pub const DIM3: H<Shader> = H::new(Self::DIM3_ID);
-
     // The default 2D shader.
     pub const DIM2: H<Shader> = H::new(Self::DIM2_ID);
 
+    // The default 3D shader.
+    pub const DIM3: H<Shader> = H::new(Self::DIM3_ID);
+
     // Default post-processing shader
     pub const POST_PROCESS: H<Shader> = H::new(Self::POST_PROCESS_ID);
+
+    // Default 2D Text shader.
+    pub const TEXT_2D: H<Shader> = H::new(Self::TEXT_2D_ID);
+
+    // Default 3D Text shader.
+    pub const TEXT_3D: H<Shader> = H::new(Self::TEXT_3D_ID);
 
     // An addon shader ID that is used for drawing debug edges on meshes
     #[cfg(debug_assertions)]
@@ -98,8 +111,10 @@ impl H<Shader> {
 }
 
 const SHADER_FALLBACK3D: &str = include_str!("shaders/fallback_shader3d.wgsl");
-const SHADER_DIM3: &str = include_str!("shaders/shader3d.wgsl");
 const SHADER_DIM2: &str = include_str!("shaders/shader2d.wgsl");
+const SHADER_DIM3: &str = include_str!("shaders/shader3d.wgsl");
+const SHADER_TEXT2D: &str = include_str!("shaders/text2d.wgsl");
+const SHADER_TEXT3D: &str = include_str!("shaders/text3d.wgsl");
 const SHADER_FS_COPY: &str = include_str!("shaders/fullscreen_passhthrough.wgsl");
 
 #[cfg(debug_assertions)]
@@ -113,9 +128,55 @@ impl StoreDefaults for Shader {
     fn populate(store: &mut Store<Self>) {
         store_add_checked_many!(store,
             HShader::FALLBACK_ID => Shader::new_default("Fallback", SHADER_FALLBACK3D),
-            HShader::DIM3_ID => Shader::new_fragment("3D Default Pipeline", SHADER_DIM3),
             HShader::DIM2_ID => Shader::new_default("2D Default Pipeline", SHADER_DIM2),
+            HShader::DIM3_ID => Shader::new_fragment("3D Default Pipeline", SHADER_DIM3),
             HShader::POST_PROCESS_ID => Shader::new_post_process("Post Process", SHADER_FS_COPY),
+        );
+
+        const TEXT2D_VBL: &[VertexBufferLayout] = &[VertexBufferLayout {
+            array_stride: 0,
+            step_mode: VertexStepMode::Vertex,
+            attributes: &[
+                VertexAttribute {
+                    format: VertexFormat::Float32x2,
+                    offset: 0,
+                    shader_location: 0,
+                },
+                VertexAttribute {
+                    format: VertexFormat::Float32x2,
+                    offset: VEC2_SIZE,
+                    shader_location: 1,
+                },
+            ],
+        }];
+
+        store_add_checked!(
+            store,
+            HShader::TEXT_2D_ID,
+            Shader::Custom {
+                name: "Text 2D Shader".to_string(),
+                code: ShaderCode::Full(SHADER_TEXT2D.to_string()),
+                polygon_mode: PolygonMode::Fill,
+                topology: PrimitiveTopology::TriangleList,
+                vertex_buffers: TEXT2D_VBL,
+                push_constant_ranges: &[PushConstantRange {
+                    stages: ShaderStages::VERTEX,
+                    range: 0..16,
+                }]
+            }
+        );
+
+        store_add_checked!(
+            store,
+            HShader::TEXT_3D_ID,
+            Shader::Custom {
+                name: "Text 3D Shader".to_string(),
+                code: ShaderCode::Full(SHADER_TEXT3D.to_string()),
+                polygon_mode: Default::default(),
+                topology: Default::default(),
+                vertex_buffers: &[],
+                push_constant_ranges: &[],
+            }
         );
 
         #[cfg(debug_assertions)]
@@ -161,6 +222,7 @@ impl StoreDefaults for Shader {
                     topology: PrimitiveTopology::LineList,
                     polygon_mode: PolygonMode::Line,
                     vertex_buffers: DEBUG_VERTEX_NORMALS_VBL,
+                    push_constant_ranges: &[],
                 }
             );
 
@@ -197,6 +259,7 @@ impl StoreDefaults for Shader {
                     topology: PrimitiveTopology::LineList,
                     polygon_mode: PolygonMode::Line,
                     vertex_buffers: DEBUG_RAYS_VBL,
+                    push_constant_ranges: &[],
                 }
             );
         }
@@ -226,12 +289,18 @@ impl StoreType for Shader {
     fn ident_fmt(handle: H<Self>) -> HandleName<Self> {
         match handle.id() {
             HShader::FALLBACK_ID => HandleName::Static("Diffuse Fallback"),
-            HShader::DIM3_ID => HandleName::Static("3 Dimensional Shader"),
             HShader::DIM2_ID => HandleName::Static("2 Dimensional Shader"),
+            HShader::DIM3_ID => HandleName::Static("3 Dimensional Shader"),
+            HShader::TEXT_2D_ID => HandleName::Static("2D Text Shader"),
+            HShader::TEXT_3D_ID => HandleName::Static("3D Text Shader"),
             HShader::POST_PROCESS_ID => HandleName::Static("Post Process Shader"),
 
             #[cfg(debug_assertions)]
             HShader::DEBUG_EDGES_ID => HandleName::Static("Debug Edges Shader"),
+            #[cfg(debug_assertions)]
+            HShader::DEBUG_VERTEX_NORMALS_ID => HandleName::Static("Debug Vertex Normals Shader"),
+            #[cfg(debug_assertions)]
+            HShader::DEBUG_RAYS_ID => HandleName::Static("Debug Rays Shader"),
 
             _ => HandleName::Id(handle),
         }
@@ -344,6 +413,14 @@ impl Shader {
             Shader::Default { .. } => PipelineStage::Default,
             Shader::PostProcess { .. } => PipelineStage::PostProcess,
             Shader::Custom { .. } => PipelineStage::Default,
+        }
+    }
+
+    pub fn push_constant_ranges(&self) -> &'static [PushConstantRange] {
+        match self {
+            Shader::Default { .. } => &[],
+            Shader::PostProcess { .. } => &[],
+            Shader::Custom { push_constant_ranges, .. } => push_constant_ranges,
         }
     }
 
