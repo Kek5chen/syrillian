@@ -47,6 +47,7 @@ pub mod gravity;
 pub mod light;
 pub mod rigid_body;
 pub mod rope;
+pub mod spring;
 pub mod rotate;
 
 pub use camera::*;
@@ -59,6 +60,7 @@ pub use light::*;
 pub use rigid_body::*;
 pub use rope::*;
 pub use rotate::*;
+pub use spring::*;
 
 use crate::core::GameObjectId;
 use std::any::Any;
