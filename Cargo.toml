@@ -28,6 +28,7 @@ futures = "0.3"
 static_assertions = "1.1"
 snafu = "0.8"
 smallvec = "1.15.1"
+russimp-ng = "3.2"
 syrillian_macros = { path = "syrillian_macros" }
 syrillian_utils = { path = "syrillian_utils" }
 dashmap = "6.1"
@@ -72,11 +73,6 @@ features = [
 [dependencies.tokio]
 version = "1.40"
 features = ["rt", "rt-multi-thread", "macros", "sync"]
-
-[dependencies.russimp-ng]
-git = "https://github.com/Kek5chen/russimp-ng"
-features = ["static-link"]
-
 
 
 #################################################
