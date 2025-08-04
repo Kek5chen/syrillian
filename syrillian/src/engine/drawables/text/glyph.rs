@@ -44,10 +44,8 @@ impl GlyphRenderData {
 
         Self {
             triangles: [
-                // [top_left, top_right.clone(), bottom_left.clone()],
-                // [top_right, bottom_right, bottom_left.clone()],
-                [top_left, bottom_left.clone(), top_right.clone()],
-                [top_right, bottom_left.clone(), bottom_right],
+                [top_left, bottom_left, top_right],
+                [top_right, bottom_left, bottom_right],
             ],
         }
     }
