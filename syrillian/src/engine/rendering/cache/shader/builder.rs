@@ -2,7 +2,7 @@ use crate::assets::Shader;
 use crate::core::Vertex3D;
 use wgpu::{BlendState, ColorTargetState, ColorWrites, CompareFunction, DepthBiasState, DepthStencilState, Device, Face, FragmentState, MultisampleState, PipelineCompilationOptions, PipelineLayout, PolygonMode, PrimitiveState, PrimitiveTopology, RenderPipeline, RenderPipelineDescriptor, ShaderModule, StencilFaceState, StencilState, TextureFormat, VertexBufferLayout, VertexState};
 
-const DEFAULT_BUFFERS: [VertexBufferLayout; 1] = [Vertex3D::continuous_descriptor()];
+pub const DEFAULT_VBL: [VertexBufferLayout; 1] = [Vertex3D::continuous_descriptor()];
 
 const DEFAULT_COLOR_TARGET_STATE: [Option<ColorTargetState>; 1] = [Some(ColorTargetState {
     format: TextureFormat::Bgra8UnormSrgb,
@@ -35,6 +35,7 @@ pub struct RenderPipelineBuilder<'a> {
     polygon_mode: PolygonMode,
     topology: PrimitiveTopology,
     vertex_buffers: &'a [VertexBufferLayout<'a>],
+    pub is_custom: bool,
 }
 
 impl<'a> RenderPipelineBuilder<'a> {
@@ -44,7 +45,7 @@ impl<'a> RenderPipelineBuilder<'a> {
 
     pub fn desc(&'a self) -> RenderPipelineDescriptor<'a> {
         let depth_stencil = (!self.is_post_process).then_some(DEFAULT_DEPTH_STENCIL);
-        let cull_mode = (!self.is_post_process).then_some(Face::Back);
+        let cull_mode = (!self.is_custom && !self.is_post_process).then_some(Face::Back);
 
         RenderPipelineDescriptor {
             label: Some(&self.label),
@@ -84,6 +85,7 @@ impl<'a> RenderPipelineBuilder<'a> {
         let polygon_mode = shader.polygon_mode();
         let topology = shader.topology();
         let is_post_process = matches!(shader, Shader::PostProcess { .. });
+        let is_custom = matches!(shader, Shader::Custom { .. });
 
         let label = match shader {
             Shader::Default { .. } => format!("{name} Pipeline"),
@@ -93,7 +95,7 @@ impl<'a> RenderPipelineBuilder<'a> {
 
         let vertex_buffers = match shader {
             Shader::Custom { vertex_buffers, .. } => *vertex_buffers,
-            Shader::Default { .. } => &DEFAULT_BUFFERS,
+            Shader::Default { .. } => &DEFAULT_VBL,
             Shader::PostProcess { .. } => &[],
         };
 
@@ -102,6 +104,7 @@ impl<'a> RenderPipelineBuilder<'a> {
             layout,
             module,
             is_post_process,
+            is_custom,
             polygon_mode,
             topology,
             vertex_buffers,

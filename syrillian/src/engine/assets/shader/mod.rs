@@ -8,7 +8,8 @@ use crate::assets::HBGL;
 use crate::drawables::text::text_layouter::TextPushConstants;
 use crate::engine::assets::generic_store::{HandleName, Store, StoreDefaults, StoreType};
 use crate::engine::assets::{HShader, StoreTypeFallback, StoreTypeName, H};
-use crate::utils::sizes::VEC2_SIZE;
+use crate::rendering::DEFAULT_VBL;
+use crate::utils::sizes::{VEC2_SIZE, WGPU_VEC3_ALIGN};
 use crate::{store_add_checked, store_add_checked_many};
 use std::error::Error;
 use std::fs;
@@ -194,10 +195,16 @@ impl StoreDefaults for Shader {
             store_add_checked!(
                 store,
                 HShader::DEBUG_EDGES_ID,
-                Shader::Default {
+                Shader::Custom {
                     name: "Mesh Debug Edges Shader".to_owned(),
                     code: ShaderCode::Full(DEBUG_EDGES_SHADER.to_string()),
                     polygon_mode: PolygonMode::Line,
+                    topology: PrimitiveTopology::TriangleList,
+                    vertex_buffers: &DEFAULT_VBL,
+                    push_constant_ranges: &[PushConstantRange {
+                        stages: ShaderStages::FRAGMENT,
+                        range: 0..WGPU_VEC3_ALIGN as u32,
+                    }]
                 }
             );
 
@@ -382,9 +389,9 @@ impl Shader {
 
     pub fn polygon_mode(&self) -> PolygonMode {
         match self {
-            Shader::Default { polygon_mode, .. } => *polygon_mode,
+            Shader::Default { polygon_mode, .. }
+            | Shader::Custom { polygon_mode, .. } => *polygon_mode,
             Shader::PostProcess { .. } => PolygonMode::Fill,
-            Shader::Custom { .. } => PolygonMode::Fill,
         }
     }
 

@@ -7,7 +7,7 @@ use crate::drawables::MeshRenderer;
 use crate::engine::assets::Mesh;
 use crate::World;
 use log::{trace, warn};
-use nalgebra::Vector3;
+use nalgebra::{Point3, Vector3};
 use rapier3d::prelude::*;
 use snafu::Snafu;
 
@@ -159,6 +159,8 @@ impl Collider3D {
 pub trait MeshShapeExtra<T> {
     fn mesh(mesh: &Mesh) -> Option<T>;
     fn mesh_convex_hull(mesh: &Mesh) -> Option<SharedShape>;
+    fn local_aabb_mesh(&self) -> (Vec<Point3<f32>>, Vec<[u32; 3]>);
+    fn to_trimesh(&self) -> (Vec<Point3<f32>>, Vec<[u32; 3]>);
 }
 
 impl MeshShapeExtra<SharedShape> for SharedShape {
@@ -181,5 +183,37 @@ impl MeshShapeExtra<SharedShape> for SharedShape {
     fn mesh_convex_hull(mesh: &Mesh) -> Option<SharedShape> {
         let vertices = mesh.data.make_point_cloud();
         SharedShape::convex_hull(&vertices)
+    }
+
+
+    fn local_aabb_mesh(&self) -> (Vec<Point3<f32>>, Vec<[u32; 3]>) {
+        let aabb = self.compute_local_aabb();
+        aabb.to_trimesh()
+    }
+
+    fn to_trimesh(&self) -> (Vec<Point3<f32>>, Vec<[u32; 3]>) {
+        trace!("[Collider] Type: {:?}", self.as_typed_shape());
+        match self.as_typed_shape() {
+            TypedShape::Ball(s) => s.to_trimesh(10, 10),
+            TypedShape::Cuboid(s) => s.to_trimesh(),
+            TypedShape::Capsule(s) => s.to_trimesh(10, 10),
+            TypedShape::Segment(_) => self.local_aabb_mesh(),
+            TypedShape::Triangle(s) => (s.vertices().to_vec(), vec![[0, 1, 2]]),
+            TypedShape::Voxels(s) => s.to_trimesh(),
+            TypedShape::TriMesh(s) => (s.vertices().to_vec(), s.indices().to_vec()),
+            TypedShape::Polyline(_) => self.local_aabb_mesh(),
+            TypedShape::HalfSpace(_) => self.local_aabb_mesh(),
+            TypedShape::HeightField(s) => s.to_trimesh(),
+            TypedShape::Compound(_) => self.local_aabb_mesh(),
+            TypedShape::ConvexPolyhedron(s) => s.to_trimesh(),
+            TypedShape::Cylinder(s) => s.to_trimesh(10),
+            TypedShape::Cone(s) => s.to_trimesh(10),
+            TypedShape::RoundCuboid(_) => self.local_aabb_mesh(),
+            TypedShape::RoundTriangle(_) => self.local_aabb_mesh(),
+            TypedShape::RoundCylinder(_) => self.local_aabb_mesh(),
+            TypedShape::RoundCone(_) => self.local_aabb_mesh(),
+            TypedShape::RoundConvexPolyhedron(_) => self.local_aabb_mesh(),
+            TypedShape::Custom(_) => self.local_aabb_mesh(),
+        }
     }
 }

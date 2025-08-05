@@ -68,7 +68,7 @@ impl<DIM: TextDim> Text<DIM> {
 }
 
 impl<DIM: TextDim + 'static> Drawable for Text<DIM> {
-    fn setup(&mut self, renderer: &Renderer, world: &mut World) {
+    fn setup(&mut self, renderer: &Renderer, world: &mut World, _parent: GameObjectId) {
         self.text.setup(renderer, world);
     }
 

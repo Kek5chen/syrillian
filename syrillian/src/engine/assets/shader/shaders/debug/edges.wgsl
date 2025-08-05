@@ -1,27 +1,19 @@
+#use default_vertex
+#use model
+
+var<push_constant> color: vec4<f32>;
+
 @vertex
-fn vs_main(in: VInput) -> VOutput {
-    var out: VOutput;
-
+fn vs_main(in: VInput) -> @builtin(position) vec4<f32> {
     let model_view_mat = camera.view_proj_mat * model.transform;
-    let normal = normalize(in.normal);
 
-    out.position_clip = model_view_mat * vec4<f32>(in.position + normal * 0.001, 1.0);
-    out.uv = vec2<f32>(in.uv.x, 1.0 - in.uv.y);
-    out.position = (model.transform * vec4<f32>(in.position, 1.0)).xyz;
-    out.normal = normalize((model.transform * vec4<f32>(normal, 0.0)).xyz);
-    out.tangent = normalize((model.transform * vec4<f32>(in.tangent, 0.0)).xyz);
-    out.bitangent = normalize((model.transform * vec4<f32>(in.bitangent, 0.0)).xyz);
+    var vpos = model_view_mat * vec4<f32>(in.position, 1.0);
+    vpos.w += 0.0001; // lil w bump so it's not z fighting :>
 
-    return out;
+    return vpos;
 }
 
 @fragment
-fn fs_main(in: VOutput) -> @location(0) vec4<f32> {
-    var diffuse: vec4<f32>;
-
-    // diffuse = vec4<f32>(in.vnorm, 1.0);
-
-    diffuse = vec4<f32>(1.0, 0.0, 1.0, 1.0);
-
-    return diffuse;
+fn fs_main() -> @location(0) vec4<f32> {
+    return color;
 }

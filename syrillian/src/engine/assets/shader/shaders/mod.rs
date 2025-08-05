@@ -60,7 +60,7 @@ test_shader!(shader_3d, "Shader 3D" => "shader3d.wgsl");
 test_shader!(fallback_shader3d, "Fallback Shader 3D" => "fallback_shader3d.wgsl");
 
 // Debug shaders
-test_shader!(debug_edges, "Debug Edges Shader" => "debug/edges.wgsl");
+test_custom_shader!(debug_edges, "Debug Edges Shader" => "debug/edges.wgsl");
 test_custom_shader!(debug_rays, "Debug Rays Shader" => "debug/rays.wgsl");
 test_custom_shader!(debug_vertex_normals, "Debug Vertex Normals" => "debug/vertex_normals.wgsl");
 
