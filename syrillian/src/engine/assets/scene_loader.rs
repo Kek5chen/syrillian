@@ -20,12 +20,11 @@ use russimp_ng::Vector3D;
 
 const POST_STEPS: &[PostProcess] = &[
     PostProcess::CalculateTangentSpace,
+    PostProcess::FindInstances,
     PostProcess::Triangulate,
     PostProcess::SortByPrimitiveType,
-    PostProcess::JoinIdenticalVertices,
-    PostProcess::GenerateUVCoords,
     PostProcess::GenerateNormals,
-    PostProcess::ForceGenerateNormals,
+    PostProcess::GenerateUVCoords,
     PostProcess::EmbedTextures,
     PostProcess::LimitBoneWeights,
 ];
