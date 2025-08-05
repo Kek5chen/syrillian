@@ -23,6 +23,13 @@ impl ShaderValidError {
             ShaderValidError::ValidationError(e) => e.emit_to_stderr_with_path(source, path),
         }
     }
+
+    pub fn emit_to_string(&self, source: &str) -> String {
+        match self {
+            ShaderValidError::Parse(e) => e.emit_to_string(source),
+            ShaderValidError::ValidationError(e) => e.emit_to_string(source),
+        }
+    }
 }
 
 pub fn validate_wgsl_source(shader: &str) -> Result<ModuleInfo, ShaderValidError> {

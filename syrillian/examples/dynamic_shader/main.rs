@@ -11,9 +11,9 @@ use syrillian::assets::{HMaterial, HShader, Material, Shader, StoreType};
 use syrillian::components::RotateComponent;
 use syrillian::core::GameObjectId;
 use syrillian::prefabs::CubePrefab;
+use syrillian::utils::validate_wgsl_source;
 use syrillian::{AppState, World};
 use syrillian_macros::SyrillianApp;
-use wgpu::naga::valid::{Capabilities, ValidationFlags};
 use winit::window::Window;
 
 const SHADER_PATH: &str = "examples/dynamic_shader/shader.wgsl";
@@ -58,14 +58,7 @@ impl DynamicShaderExample {
     fn check_valid(source: &str) -> Result<(), String> {
         let code = Shader::new_default("Dynamic Shader", source).gen_code();
 
-        let module =
-            wgpu::naga::front::wgsl::parse_str(&code).map_err(|e| e.emit_to_string(&code))?;
-
-        let mut validator =
-            wgpu::naga::valid::Validator::new(ValidationFlags::all(), Capabilities::all());
-        validator
-            .validate(&module)
-            .map_err(|e| e.emit_to_string(&code))?;
+        validate_wgsl_source(&code).map_err(|e| e.emit_to_string(source))?;
 
         Ok(())
     }
