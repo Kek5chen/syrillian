@@ -73,7 +73,9 @@ fn align_glyph_geometry(
     for (items, width) in row_widths {
         for _ in 0..*items {
             let Some(glyph) = glyphs.next() else {
-                debug_assert!(false, "Glyphs ran out before row members did");
+                if cfg!(debug_assertions) {
+                    panic!("Glyphs ran out before row members did");
+                }
                 return;
             };
 
