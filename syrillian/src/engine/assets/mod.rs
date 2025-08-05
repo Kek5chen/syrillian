@@ -41,6 +41,7 @@ mod font;
 
 mod handle;
 mod key;
+mod sound;
 
 pub use self::asset_store::*;
 pub use self::handle::*;
@@ -52,6 +53,7 @@ pub use self::mesh::*;
 pub use self::shader::*;
 pub use self::texture::*;
 
+pub use self::sound::*;
 pub use generic_store::StoreType;
 
 pub(crate) use self::generic_store::*;
@@ -64,3 +66,4 @@ pub type HMesh = H<Mesh>;
 pub type HShader = H<Shader>;
 pub type HTexture = H<Texture>;
 pub type HFont = H<Font>;
+pub type HSound = H<Sound>;
