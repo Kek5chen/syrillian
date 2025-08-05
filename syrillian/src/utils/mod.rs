@@ -4,7 +4,10 @@ pub mod frame_counter;
 pub mod iter;
 pub mod math;
 pub mod sizes;
+pub mod checks;
+
+pub(crate) use fat_ptr::*;
 
 pub use buffer::*;
-pub(crate) use fat_ptr::*;
+pub use checks::*;
 pub use math::*;
