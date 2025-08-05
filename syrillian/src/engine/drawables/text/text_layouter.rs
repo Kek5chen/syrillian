@@ -5,7 +5,7 @@ use crate::drawables::text::glyph::{
 };
 use crate::drawables::{BoneData, MeshUniformIndex};
 use crate::rendering::uniform::ShaderUniform;
-use crate::rendering::{AssetCache, Renderer};
+use crate::rendering::{AssetCache, DrawCtx, Renderer};
 use crate::utils::hsv_to_rgb;
 use crate::{ensure_aligned, World};
 use log::error;
@@ -39,6 +39,8 @@ pub struct TwoD;
 
 pub trait TextDim {
     fn shader() -> HShader;
+    #[cfg(debug_assertions)]
+    fn debug_shader() -> HShader;
 }
 
 #[derive(Debug)]
@@ -167,7 +169,10 @@ impl<DIM: TextDim> TextLayouter<DIM> {
         }
     }
 
-    pub fn draw(&self, cache: &AssetCache, pass: &RwLock<RenderPass>) {
+    pub fn draw(&self, ctx: &DrawCtx) {
+        let cache: &AssetCache = &ctx.frame.cache;
+        let pass: &RwLock<RenderPass> = &ctx.pass;
+
         let Some(render_data) = &self.render_data else {
             error!("Render data wasn't set up.");
             return;
@@ -192,6 +197,25 @@ impl<DIM: TextDim> TextLayouter<DIM> {
         );
         pass.set_bind_group(1, render_data.uniform.bind_group(), &[]);
         pass.set_bind_group(2, material.uniform.bind_group(), &[]);
+
+        pass.draw(0..self.glyph_data.len() as u32 * 6, 0..1);
+
+        #[cfg(debug_assertions)]
+        if ctx.frame.debug.text_geometry {
+            self.draw_debug_edges(cache, &mut pass);
+        }
+    }
+
+    #[cfg(debug_assertions)]
+    fn draw_debug_edges(&self, cache: &AssetCache, pass: &mut RenderPass) {
+        let shader = cache.shader(DIM::debug_shader());
+        pass.set_pipeline(&shader.pipeline);
+
+        pass.set_push_constants(
+            ShaderStages::VERTEX_FRAGMENT,
+            0,
+            bytemuck::bytes_of(&self.pc),
+        );
 
         pass.draw(0..self.glyph_data.len() as u32 * 6, 0..1);
     }
@@ -254,10 +278,20 @@ impl TextDim for ThreeD {
     fn shader() -> HShader {
         HShader::TEXT_3D
     }
+
+    #[cfg(debug_assertions)]
+    fn debug_shader() -> HShader {
+        HShader::DEBUG_TEXT3D_GEOMETRY
+    }
 }
 
 impl TextDim for TwoD {
     fn shader() -> HShader {
         HShader::TEXT_2D
+    }
+
+    #[cfg(debug_assertions)]
+    fn debug_shader() -> HShader {
+        HShader::DEBUG_TEXT2D_GEOMETRY
     }
 }

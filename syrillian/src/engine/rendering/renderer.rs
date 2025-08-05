@@ -70,6 +70,7 @@ pub struct DebugRenderer {
     pub vertex_normals: bool,
     pub rays: bool,
     pub colliders_edges: bool,
+    pub text_geometry: bool,
 }
 
 impl Default for DebugRenderer {
@@ -81,6 +82,7 @@ impl Default for DebugRenderer {
             colliders_edges: DEBUG_BUILD,
             vertex_normals: DEBUG_BUILD,
             rays: DEBUG_BUILD,
+            text_geometry: false,
         }
     }
 }
@@ -93,6 +95,7 @@ impl DebugRenderer {
                 colliders_edges: false,
                 vertex_normals: true,
                 rays: true,
+                text_geometry: true,
             }
         } else if self.mesh_edges {
             *self = DebugRenderer {
@@ -100,14 +103,10 @@ impl DebugRenderer {
                 colliders_edges: false,
                 vertex_normals: false,
                 rays: false,
+                text_geometry: false,
             }
         } else {
-            *self = DebugRenderer {
-                mesh_edges: false,
-                colliders_edges: true,
-                vertex_normals: true,
-                rays: true,
-            }
+            *self = DebugRenderer::default();
         }
     }
 }

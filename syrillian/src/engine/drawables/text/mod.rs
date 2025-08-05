@@ -89,6 +89,6 @@ impl<DIM: TextDim + 'static> Drawable for Text<DIM> {
     }
 
     fn draw(&self, _world: &mut World, ctx: &DrawCtx) {
-        self.text.draw(&ctx.frame.cache, &ctx.pass);
+        self.text.draw(&ctx);
     }
 }

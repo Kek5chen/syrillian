@@ -8,8 +8,7 @@ use crate::assets::HBGL;
 use crate::drawables::text::text_layouter::TextPushConstants;
 use crate::engine::assets::generic_store::{HandleName, Store, StoreDefaults, StoreType};
 use crate::engine::assets::{HShader, StoreTypeFallback, StoreTypeName, H};
-use crate::rendering::DEFAULT_VBL;
-use crate::utils::sizes::{VEC2_SIZE, WGPU_VEC3_ALIGN};
+use crate::utils::sizes::VEC2_SIZE;
 use crate::{store_add_checked, store_add_checked_many};
 use std::error::Error;
 use std::fs;
@@ -76,6 +75,7 @@ impl H<Shader> {
     pub const TEXT_3D_ID: u32 = 5;
     #[cfg(not(debug_assertions))]
     pub const MAX_BUILTIN_ID: u32 = 5;
+
     #[cfg(debug_assertions)]
     pub const DEBUG_EDGES_ID: u32 = 6;
     #[cfg(debug_assertions)]
@@ -83,7 +83,11 @@ impl H<Shader> {
     #[cfg(debug_assertions)]
     pub const DEBUG_RAYS_ID: u32 = 8;
     #[cfg(debug_assertions)]
-    pub const MAX_BUILTIN_ID: u32 = 8;
+    pub const DEBUG_TEXT2D_GEOMETRY_ID: u32 = 9;
+    #[cfg(debug_assertions)]
+    pub const DEBUG_TEXT3D_GEOMETRY_ID: u32 = 10;
+    #[cfg(debug_assertions)]
+    pub const MAX_BUILTIN_ID: u32 = 10;
 
     // The fallback shader if a pipeline fails
     pub const FALLBACK: H<Shader> = H::new(Self::FALLBACK_ID);
@@ -114,6 +118,10 @@ impl H<Shader> {
     // An addon shader ID that is used for drawing debug rays
     #[cfg(debug_assertions)]
     pub const DEBUG_RAYS: H<Shader> = H::new(Self::DEBUG_RAYS_ID);
+    #[cfg(debug_assertions)]
+    pub const DEBUG_TEXT2D_GEOMETRY: H<Shader> = H::new(Self::DEBUG_TEXT2D_GEOMETRY_ID);
+    #[cfg(debug_assertions)]
+    pub const DEBUG_TEXT3D_GEOMETRY: H<Shader> = H::new(Self::DEBUG_TEXT3D_GEOMETRY_ID);
 }
 
 const SHADER_FALLBACK3D: &str = include_str!("shaders/fallback_shader3d.wgsl");
@@ -129,6 +137,10 @@ const DEBUG_EDGES_SHADER: &str = include_str!("shaders/debug/edges.wgsl");
 const DEBUG_VERTEX_NORMAL_SHADER: &str = include_str!("shaders/debug/vertex_normals.wgsl");
 #[cfg(debug_assertions)]
 const DEBUG_RAY_SHADER: &str = include_str!("shaders/debug/rays.wgsl");
+#[cfg(debug_assertions)]
+const DEBUG_TEXT2D_GEOMETRY: &str = include_str!("shaders/debug/text2d_geometry.wgsl");
+#[cfg(debug_assertions)]
+const DEBUG_TEXT3D_GEOMETRY: &str = include_str!("shaders/debug/text3d_geometry.wgsl");
 
 impl StoreDefaults for Shader {
     fn populate(store: &mut Store<Self>) {
@@ -189,8 +201,9 @@ impl StoreDefaults for Shader {
 
         #[cfg(debug_assertions)]
         {
-            use crate::utils::sizes::VEC3_SIZE;
+            use crate::utils::sizes::{VEC3_SIZE, WGPU_VEC3_ALIGN};
             use wgpu::{VertexAttribute, VertexFormat, VertexStepMode};
+            use crate::rendering::DEFAULT_VBL;
 
             store_add_checked!(
                 store,
@@ -208,24 +221,22 @@ impl StoreDefaults for Shader {
                 }
             );
 
-            const DEBUG_VERTEX_NORMALS_VBL: &[VertexBufferLayout] = &[
-                VertexBufferLayout {
-                    array_stride: 0,
-                    step_mode: VertexStepMode::Instance,
-                    attributes: &[
-                        VertexAttribute {
-                            format: VertexFormat::Float32x3,
-                            offset: 0,
-                            shader_location: 0,
-                        },
-                        VertexAttribute {
-                            format: VertexFormat::Float32x3,
-                            offset: VEC3_SIZE,
-                            shader_location: 1,
-                        },
-                    ],
-                },
-            ];
+            const DEBUG_VERTEX_NORMALS_VBL: &[VertexBufferLayout] = &[VertexBufferLayout {
+                array_stride: 0,
+                step_mode: VertexStepMode::Instance,
+                attributes: &[
+                    VertexAttribute {
+                        format: VertexFormat::Float32x3,
+                        offset: 0,
+                        shader_location: 0,
+                    },
+                    VertexAttribute {
+                        format: VertexFormat::Float32x3,
+                        offset: VEC3_SIZE,
+                        shader_location: 1,
+                    },
+                ],
+            }];
 
             store_add_checked!(
                 store,
@@ -240,29 +251,27 @@ impl StoreDefaults for Shader {
                 }
             );
 
-            const DEBUG_RAYS_VBL: &[VertexBufferLayout] = &[
-                VertexBufferLayout {
-                    array_stride: 0,
-                    step_mode: VertexStepMode::Instance,
-                    attributes: &[
-                        VertexAttribute {
-                            format: VertexFormat::Float32x3,
-                            offset: 0,
-                            shader_location: 0,
-                        },
-                        VertexAttribute {
-                            format: VertexFormat::Float32x3,
-                            offset: VEC3_SIZE,
-                            shader_location: 1,
-                        },
-                        VertexAttribute {
-                            format: VertexFormat::Float32,
-                            offset: VEC3_SIZE * 2,
-                            shader_location: 2,
-                        },
-                    ],
-                },
-            ];
+            const DEBUG_RAYS_VBL: &[VertexBufferLayout] = &[VertexBufferLayout {
+                array_stride: 0,
+                step_mode: VertexStepMode::Instance,
+                attributes: &[
+                    VertexAttribute {
+                        format: VertexFormat::Float32x3,
+                        offset: 0,
+                        shader_location: 0,
+                    },
+                    VertexAttribute {
+                        format: VertexFormat::Float32x3,
+                        offset: VEC3_SIZE,
+                        shader_location: 1,
+                    },
+                    VertexAttribute {
+                        format: VertexFormat::Float32,
+                        offset: VEC3_SIZE * 2,
+                        shader_location: 2,
+                    },
+                ],
+            }];
 
             store_add_checked!(
                 store,
@@ -274,6 +283,42 @@ impl StoreDefaults for Shader {
                     polygon_mode: PolygonMode::Line,
                     vertex_buffers: DEBUG_RAYS_VBL,
                     push_constant_ranges: &[],
+                }
+            );
+
+            const DEBUG_TEXT: &[VertexBufferLayout] = &[VertexBufferLayout {
+                array_stride: VEC2_SIZE * 2,
+                step_mode: VertexStepMode::Vertex,
+                attributes: &[VertexAttribute {
+                    format: VertexFormat::Float32x2,
+                    offset: 0,
+                    shader_location: 0,
+                }], // dont need atlas uv
+            }];
+
+            store_add_checked!(
+                store,
+                HShader::DEBUG_TEXT2D_GEOMETRY_ID,
+                Shader::Custom {
+                    name: "Debug 2D Text Geometry Shader".to_owned(),
+                    code: ShaderCode::Full(DEBUG_TEXT2D_GEOMETRY.to_string()),
+                    polygon_mode: PolygonMode::Line,
+                    topology: PrimitiveTopology::TriangleList,
+                    vertex_buffers: DEBUG_TEXT,
+                    push_constant_ranges: TEXT_PC,
+                }
+            );
+
+            store_add_checked!(
+                store,
+                HShader::DEBUG_TEXT3D_GEOMETRY_ID,
+                Shader::Custom {
+                    name: "Debug 3D Text Geometry Shader".to_owned(),
+                    code: ShaderCode::Full(DEBUG_TEXT3D_GEOMETRY.to_string()),
+                    polygon_mode: PolygonMode::Line,
+                    topology: PrimitiveTopology::TriangleList,
+                    vertex_buffers: DEBUG_TEXT,
+                    push_constant_ranges: TEXT_PC,
                 }
             );
         }
@@ -315,6 +360,14 @@ impl StoreType for Shader {
             HShader::DEBUG_VERTEX_NORMALS_ID => HandleName::Static("Debug Vertex Normals Shader"),
             #[cfg(debug_assertions)]
             HShader::DEBUG_RAYS_ID => HandleName::Static("Debug Rays Shader"),
+            #[cfg(debug_assertions)]
+            HShader::DEBUG_TEXT2D_GEOMETRY_ID => {
+                HandleName::Static("Debug Text 2D Geometry Shader")
+            }
+            #[cfg(debug_assertions)]
+            HShader::DEBUG_TEXT3D_GEOMETRY_ID => {
+                HandleName::Static("Debug Text 3D Geometry Shader")
+            }
 
             _ => HandleName::Id(handle),
         }
@@ -389,8 +442,9 @@ impl Shader {
 
     pub fn polygon_mode(&self) -> PolygonMode {
         match self {
-            Shader::Default { polygon_mode, .. }
-            | Shader::Custom { polygon_mode, .. } => *polygon_mode,
+            Shader::Default { polygon_mode, .. } | Shader::Custom { polygon_mode, .. } => {
+                *polygon_mode
+            }
             Shader::PostProcess { .. } => PolygonMode::Fill,
         }
     }
@@ -438,7 +492,10 @@ impl Shader {
         match self {
             Shader::Default { .. } => &[],
             Shader::PostProcess { .. } => &[],
-            Shader::Custom { push_constant_ranges, .. } => push_constant_ranges,
+            Shader::Custom {
+                push_constant_ranges,
+                ..
+            } => push_constant_ranges,
         }
     }
 
