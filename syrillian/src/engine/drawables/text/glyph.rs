@@ -1,4 +1,4 @@
-use crate::drawables::text::{id_from_atlas, FONT_ATLAS_GRID_N};
+use crate::assets::id_from_atlas;
 use font_kit::font::Font;
 use nalgebra::Vector2;
 
@@ -29,9 +29,9 @@ impl GlyphVertex {
 }
 
 impl GlyphRenderData {
-    pub fn new(offset: &Vector2<f32>, glyph: char) -> Self {
+    pub fn new(offset: &Vector2<f32>, atlas_len: u32, glyph: char) -> Self {
         let atlas_id = id_from_atlas(glyph);
-        let atlas_len = FONT_ATLAS_GRID_N as f32;
+        let atlas_len = atlas_len as f32;
         let atlas_base = Vector2::new(atlas_id.x as f32, atlas_id.y as f32 + 1.);
 
         let atlas_top_left = (atlas_base + Vector2::new(0.0, -1.0)) / atlas_len;
@@ -58,7 +58,11 @@ impl GlyphRenderData {
     }
 }
 
-fn align_glyph_geometry(glyph_bounds: &mut [GlyphRenderData], alignment: TextAlignment, row_widths: &[(usize, f32)]) {
+fn align_glyph_geometry(
+    glyph_bounds: &mut [GlyphRenderData],
+    alignment: TextAlignment,
+    row_widths: &[(usize, f32)],
+) {
     let offset = match alignment {
         TextAlignment::Left => return,
         TextAlignment::Right => -1.,
@@ -73,7 +77,6 @@ fn align_glyph_geometry(glyph_bounds: &mut [GlyphRenderData], alignment: TextAli
                 return;
             };
 
-
             for triangle in glyph.triangles.iter_mut().flatten() {
                 triangle.pos.x += offset * width;
             }
@@ -81,7 +84,12 @@ fn align_glyph_geometry(glyph_bounds: &mut [GlyphRenderData], alignment: TextAli
     }
 }
 
-pub fn generate_glyph_geometry_stream(text: &str, font: &Font, alignment: TextAlignment) -> Vec<GlyphRenderData> {
+pub fn generate_glyph_geometry_stream(
+    text: &str,
+    font: &Font,
+    alignment: TextAlignment,
+    atlas_len: u32,
+) -> Vec<GlyphRenderData> {
     if text.is_empty() {
         return vec![];
     }
@@ -103,7 +111,7 @@ pub fn generate_glyph_geometry_stream(text: &str, font: &Font, alignment: TextAl
 
         let glyph_id = font.glyph_for_char(character).unwrap();
         let glyph_size = font.advance(glyph_id).unwrap() / 2048.;
-        glyph_bounds.push(GlyphRenderData::new(&offset, character));
+        glyph_bounds.push(GlyphRenderData::new(&offset, atlas_len, character));
 
         offset.x += glyph_size.x();
         width = width.max(offset.x);

@@ -1,25 +1,19 @@
-use crate::assets::{HMaterial, HShader, HTexture, Material, Texture};
+use crate::assets::{HFont, HShader, FONT_ATLAS_GRID_N};
 use crate::core::{GameObjectId, ModelUniform};
-use crate::drawables::text::glyph::{generate_glyph_geometry_stream, GlyphRenderData, TextAlignment};
-use crate::drawables::text::render_font_atlas;
+use crate::drawables::text::glyph::{
+    generate_glyph_geometry_stream, GlyphRenderData, TextAlignment,
+};
 use crate::drawables::{BoneData, MeshUniformIndex};
 use crate::rendering::uniform::ShaderUniform;
 use crate::rendering::{AssetCache, Renderer};
 use crate::utils::hsv_to_rgb;
 use crate::{ensure_aligned, World};
-use font_kit::canvas::Canvas;
-use font_kit::family_name::FamilyName;
-use font_kit::font::Font;
-use font_kit::properties::Properties;
-use font_kit::source::SystemSource;
-use log::{error, warn};
+use log::error;
 use nalgebra::{Matrix4, Vector2, Vector3};
 use std::marker::PhantomData;
 use std::sync::RwLock;
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::{Buffer, BufferUsages, RenderPass, ShaderStages};
-
-const DEFAULT_GLYPH_SIZE: i32 = 100;
 
 #[derive(Debug)]
 pub struct TextRenderData {
@@ -55,12 +49,7 @@ pub struct TextLayouter<DIM> {
     glyph_data: Vec<GlyphRenderData>,
     text_dirty: bool,
 
-    font: Font,
-    pregenerated_canvas: Option<Canvas>,
-    atlas_glyph_size: i32,
-    font_atlas: HTexture,
-    font_atlas_mat: HMaterial,
-    font_dirty: bool,
+    font: HFont,
 
     pc: TextPushConstants,
     rainbow_mode: bool,
@@ -71,25 +60,15 @@ pub struct TextLayouter<DIM> {
 }
 
 impl<DIM: TextDim> TextLayouter<DIM> {
-    pub fn new(text: String, font_family: String, text_size: f32, glyph_size: Option<i32>) -> Self {
-        let glyph_size = glyph_size.unwrap_or(DEFAULT_GLYPH_SIZE);
-        let font = find_font(font_family);
-        let glyph_data = generate_glyph_geometry_stream(&text, &font, TextAlignment::Left);
-        let canvas = render_font_atlas(&font, glyph_size);
-
+    pub fn new(text: String, font: HFont, text_size: f32) -> Self {
         Self {
             text,
             alignment: TextAlignment::Left,
             last_text_len: 0,
-            glyph_data,
+            glyph_data: Vec::new(),
             text_dirty: false,
 
             font,
-            pregenerated_canvas: Some(canvas),
-            atlas_glyph_size: glyph_size,
-            font_atlas: HTexture::FALLBACK_DIFFUSE,
-            font_atlas_mat: HMaterial::FALLBACK,
-            font_dirty: false,
 
             pc: TextPushConstants {
                 text_size,
@@ -106,7 +85,16 @@ impl<DIM: TextDim> TextLayouter<DIM> {
     }
 
     pub fn setup(&mut self, renderer: &Renderer, world: &mut World) {
-        self.remake_atlas(world);
+        let Some(font) = world.assets.fonts.try_get(self.font) else {
+            return;
+        };
+
+        self.glyph_data = generate_glyph_geometry_stream(
+            &self.text,
+            &font.inner,
+            TextAlignment::Left,
+            FONT_ATLAS_GRID_N,
+        );
 
         let device = &renderer.state.device;
 
@@ -137,9 +125,8 @@ impl<DIM: TextDim> TextLayouter<DIM> {
             self.pc.color = hsv_to_rgb(time % 360., 1.0, 1.0);
         }
 
-        if self.font_dirty {
-            self.remake_atlas(world);
-            self.text_dirty = false;
+        if self.text_dirty {
+            self.regenerate_geometry(world);
         }
 
         let render_data = self
@@ -158,14 +145,15 @@ impl<DIM: TextDim> TextLayouter<DIM> {
 
         if self.text_dirty {
             if self.text.len() > self.last_text_len {
-                render_data.glyph_vbo = renderer
-                    .state
-                    .device
-                    .create_buffer_init(&BufferInitDescriptor {
-                        label: Some("Text 2D Glyph Data"),
-                        contents: bytemuck::cast_slice(&self.glyph_data[..]),
-                        usage: BufferUsages::VERTEX | BufferUsages::COPY_DST,
-                    });
+                render_data.glyph_vbo =
+                    renderer
+                        .state
+                        .device
+                        .create_buffer_init(&BufferInitDescriptor {
+                            label: Some("Text 2D Glyph Data"),
+                            contents: bytemuck::cast_slice(&self.glyph_data[..]),
+                            usage: BufferUsages::VERTEX | BufferUsages::COPY_DST,
+                        });
             } else {
                 renderer.state.queue.write_buffer(
                     &render_data.glyph_vbo,
@@ -179,39 +167,19 @@ impl<DIM: TextDim> TextLayouter<DIM> {
         }
     }
 
-    fn remake_atlas(&mut self, world: &mut World) {
-        let canvas = self
-            .pregenerated_canvas
-            .take()
-            .unwrap_or_else(|| render_font_atlas(&self.font, self.atlas_glyph_size));
-
-        let texture = Texture::load_pixels(
-            canvas.pixels,
-            canvas.size.x() as u32,
-            canvas.size.y() as u32,
-            wgpu::TextureFormat::Bgra8UnormSrgb,
-        );
-
-        world.assets.textures.remove(self.font_atlas);
-        self.font_atlas = world.assets.textures.add(texture);
-
-        let material = Material::builder()
-            .name("Font Atlas".to_string())
-            .diffuse_texture(self.font_atlas)
-            .build();
-
-        world.assets.materials.remove(self.font_atlas_mat);
-        self.font_atlas_mat = world.assets.materials.add(material);
-    }
-
     pub fn draw(&self, cache: &AssetCache, pass: &RwLock<RenderPass>) {
         let Some(render_data) = &self.render_data else {
             error!("Render data wasn't set up.");
             return;
         };
 
+        let Some(font) = cache.font(self.font) else {
+            error!("Font doesn't exist or was deleted");
+            return;
+        };
+
         let shader = cache.shader(DIM::shader());
-        let material = cache.material(self.font_atlas_mat);
+        let material = cache.material(font.atlas());
 
         let mut pass = pass.write().unwrap();
 
@@ -228,32 +196,28 @@ impl<DIM: TextDim> TextLayouter<DIM> {
         pass.draw(0..self.glyph_data.len() as u32 * 6, 0..1);
     }
 
-    pub fn regenerate_geometry(&mut self) {
-        let glyph_data = generate_glyph_geometry_stream(&self.text, &self.font, self.alignment);
+    pub fn regenerate_geometry(&mut self, world: &World) {
+        let Some(font) = world.assets.fonts.try_get(self.font) else {
+            error!("Couldn't regenerate glyph geometry stream because font was missing");
+            return;
+        };
+
+        let glyph_data = generate_glyph_geometry_stream(
+            &self.text,
+            &font.inner,
+            self.alignment,
+            FONT_ATLAS_GRID_N,
+        );
         self.glyph_data = glyph_data;
-        self.text_dirty = true;
-    }
-
-    pub fn regenerate_atlas(&mut self) {
-        self.font_dirty = true;
-        self.pregenerated_canvas = Some(render_font_atlas(&self.font, self.atlas_glyph_size));
-    }
-
-    pub fn set_atlas_glyph_size(&mut self, glyph_size: i32) {
-        self.atlas_glyph_size = glyph_size;
-        self.regenerate_atlas();
     }
 
     pub fn set_text(&mut self, text: String) {
         self.text = text;
-        self.regenerate_geometry();
+        self.text_dirty = true;
     }
 
-    pub fn set_font(&mut self, family_name: String) {
-        self.font = find_font(family_name);
-
-        self.regenerate_atlas();
-        self.regenerate_geometry();
+    pub fn set_font(&mut self, font: HFont) {
+        self.font = font;
     }
 
     pub const fn set_position(&mut self, x: f32, y: f32) {
@@ -262,7 +226,7 @@ impl<DIM: TextDim> TextLayouter<DIM> {
 
     pub fn set_alignment(&mut self, alignment: TextAlignment) {
         self.alignment = alignment;
-        self.regenerate_geometry();
+        self.text_dirty = true;
     }
 
     pub const fn set_position_vec(&mut self, pos: Vector2<f32>) {
@@ -296,27 +260,4 @@ impl TextDim for TwoD {
     fn shader() -> HShader {
         HShader::TEXT_2D
     }
-}
-
-pub fn find_font(family_name: String) -> Font {
-    let target_family = FamilyName::Title(family_name);
-    let families = &[target_family, FamilyName::SansSerif];
-
-    let font = SystemSource::new()
-        .select_best_match(families, &Properties::new())
-        .unwrap()
-        .load()
-        .unwrap();
-
-    let target_name = match &families[0] {
-        FamilyName::Title(name) => name,
-        _ => unreachable!(),
-    };
-
-    let chosen_font = font.family_name();
-    if &chosen_font != target_name {
-        warn!("Didn't find Font {target_name:?}, fell back to {chosen_font:?}");
-    }
-
-    font
 }

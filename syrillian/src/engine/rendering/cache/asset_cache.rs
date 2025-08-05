@@ -5,6 +5,7 @@
 use crate::engine::assets::*;
 use crate::engine::rendering::cache::generic_cache::Cache;
 use crate::engine::rendering::State;
+use crate::rendering::cache::font::FontAtlas;
 use crate::rendering::{RuntimeMaterial, RuntimeMesh, RuntimeShader};
 use std::sync::Arc;
 use wgpu::{BindGroupLayout, TextureView};
@@ -15,6 +16,7 @@ pub struct AssetCache {
     textures: Cache<Texture>,
     materials: Cache<Material>,
     bgls: Cache<BGL>,
+    fonts: Cache<Font>,
 }
 
 impl AssetCache {
@@ -27,6 +29,7 @@ impl AssetCache {
             textures: Cache::new(store.textures.clone(), device.clone(), queue.clone()),
             materials: Cache::new(store.materials.clone(), device.clone(), queue.clone()),
             bgls: Cache::new(store.bgls.clone(), device.clone(), queue.clone()),
+            fonts: Cache::new(store.fonts.clone(), device.clone(), queue.clone()),
         }
     }
     pub fn mesh(&self, handle: HMesh) -> Option<Arc<RuntimeMesh>> {
@@ -106,6 +109,10 @@ impl AssetCache {
         self.bgls
             .try_get(HBGL::POST_PROCESS, self)
             .expect("Post Process is a default layout")
+    }
+
+    pub fn font(&self, handle: HFont) -> Option<Arc<FontAtlas>> {
+        self.fonts.try_get(handle, self)
     }
 
     pub fn refresh_all(&self) -> usize {
