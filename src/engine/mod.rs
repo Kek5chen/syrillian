@@ -15,6 +15,9 @@ pub mod assets;
 pub mod prefabs;
 pub mod rendering;
 
+
+pub mod audio;
+
 pub use self::world::World;
 
 pub const ENGINE_VERSION: &str = env!("CARGO_PKG_VERSION");

@@ -48,6 +48,7 @@ pub mod light;
 pub mod rigid_body;
 pub mod rope;
 pub mod rotate;
+pub mod audio;
 
 pub use camera::*;
 pub use collider::*;
@@ -59,6 +60,7 @@ pub use light::*;
 pub use rigid_body::*;
 pub use rope::*;
 pub use rotate::*;
+pub use audio::*;
 
 use crate::core::GameObjectId;
 use std::any::Any;
