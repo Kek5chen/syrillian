@@ -43,6 +43,7 @@ macro_rules! test_custom_shader {
                 topology: PrimitiveTopology::TriangleList,
                 polygon_mode: PolygonMode::Line,
                 vertex_buffers: &[],
+                push_constant_ranges: &[],
             }
             .gen_code();
 
