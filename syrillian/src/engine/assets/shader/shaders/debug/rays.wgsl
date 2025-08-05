@@ -1,11 +1,10 @@
 #use camera
 
 struct VSIn {
-    // 0 = base, 1 = tip
-    @location(0) index: u32,
-    @location(1) origin: vec3<f32>,
-    @location(2) direction: vec3<f32>,
-    @location(3) toi: f32,
+    @builtin(vertex_index) index: u32,
+    @location(0) origin: vec3<f32>,
+    @location(1) direction: vec3<f32>,
+    @location(2) toi: f32,
 }
 
 struct VSOut {

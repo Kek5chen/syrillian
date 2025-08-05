@@ -246,13 +246,6 @@ impl MeshRenderer {
             .map(|v| v.into())
             .collect::<Vec<_>>();
 
-        // instance buffer, 0 for base, 1 for tip of vertex normal line
-        let pattern_buf = device.create_buffer_init(&BufferInitDescriptor {
-            label: Some("Vertex Normal Debug Indices"),
-            contents: bytemuck::cast_slice(&[0u32, 1u32]),
-            usage: BufferUsages::VERTEX,
-        });
-
         let vertices_buf = device.create_buffer_init(&BufferInitDescriptor {
             label: Some("Vertex Normal Debug Vertices"),
             contents: bytemuck::cast_slice(&vertex_normal_data[..]),
@@ -260,7 +253,6 @@ impl MeshRenderer {
         });
 
         let debug_data = super::DebugRuntimePatternData {
-            pattern_buf,
             vertices_buf,
         };
 
@@ -314,8 +306,7 @@ fn draw_vertex_normals(
     debug_data: &super::DebugRuntimePatternData,
     pass: &mut RwLockWriteGuard<RenderPass>,
 ) {
-    pass.set_vertex_buffer(0, debug_data.pattern_buf.slice(..));
-    pass.set_vertex_buffer(1, debug_data.vertices_buf.slice(..));
+    pass.set_vertex_buffer(0, debug_data.vertices_buf.slice(..));
     pass.set_bind_group(1, runtime_data.uniform.bind_group(), &[]);
 
     let shader = ctx.frame.cache.shader(HShader::DEBUG_VERTEX_NORMALS);
