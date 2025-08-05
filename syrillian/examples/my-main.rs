@@ -13,7 +13,10 @@ use std::error::Error;
 use syrillian::assets::scene_loader::SceneLoader;
 use syrillian::assets::{HMaterial, StoreType};
 use syrillian::assets::{Material, Shader};
-use syrillian::components::{Collider3D, FirstPersonCameraController, PointLightComponent, RigidBodyComponent, RopeComponent, RotateComponent, SpringComponent};
+use syrillian::components::{
+    Collider3D, FirstPersonCameraController, PointLightComponent, RigidBodyComponent,
+    RopeComponent, RotateComponent, SpringComponent,
+};
 use syrillian::core::{GameObjectExt, GameObjectId};
 use syrillian::drawables::text::glyph::TextAlignment;
 use syrillian::drawables::{Text2D, Text3D};
@@ -133,7 +136,8 @@ impl AppState for MyMain {
 
         {
             let mut text = world.new_object("Text 3D");
-            let mut text3d = Text3D::new("Meow 3D".to_string(), "Helvetica".to_string(), 100., None);
+            let mut text3d =
+                Text3D::new("Meow 3D".to_string(), "Helvetica".to_string(), 100., None);
 
             text3d.set_alignment(TextAlignment::Center);
             text.transform.set_position(0., 10., -20.);
@@ -145,14 +149,16 @@ impl AppState for MyMain {
         }
 
         {
-            let mut spring_bottom = world.spawn(&CubePrefab::new(HMaterial::DEFAULT))
+            let mut spring_bottom = world
+                .spawn(&CubePrefab::new(HMaterial::DEFAULT))
                 .at(-5., 10., -20.)
                 .build_component::<Collider3D>()
                 .mass(1.0)
                 .build_component::<RigidBodyComponent>()
                 .enable_ccd()
                 .id; // FIXME: Workaround. Should have a .finish()
-            let spring_top = world.spawn(&CubePrefab::new(HMaterial::DEFAULT))
+            let spring_top = world
+                .spawn(&CubePrefab::new(HMaterial::DEFAULT))
                 .at(-5., 20., -20.)
                 .build_component::<Collider3D>()
                 .mass(1.0)
@@ -171,7 +177,11 @@ impl AppState for MyMain {
     }
 
     #[cfg(debug_assertions)]
-    fn draw(&mut self, world: &mut World, renderer: &mut syrillian::rendering::renderer::Renderer) -> Result<(), Box<dyn Error>> {
+    fn draw(
+        &mut self,
+        world: &mut World,
+        renderer: &mut syrillian::rendering::renderer::Renderer,
+    ) -> Result<(), Box<dyn Error>> {
         if world.input.is_key_down(KeyCode::KeyL) {
             renderer.debug.next_mode();
         }
@@ -196,7 +206,10 @@ impl AppState for MyMain {
         }
 
         let text3d = self.text3d.drawable_mut::<Text3D>().unwrap();
-        text3d.set_text(format!("Meow 3D\nYou have: {} FPS", self.frame_counter.fps()));
+        text3d.set_text(format!(
+            "Meow 3D\nYou have: {} FPS",
+            self.frame_counter.fps()
+        ));
 
         self.do_raycast_test(world);
 
@@ -283,14 +296,24 @@ impl MyMain {
             rb.borrow_mut().set_kinematic(true);
         }
 
-        if world.input.is_key_down(KeyCode::KeyC) || world.input.gamepad.is_button_down(Button::West) {
+        if world.input.is_key_down(KeyCode::KeyC)
+            || world.input.gamepad.is_button_down(Button::West)
+        {
             let pos = camera.transform.position() + camera.transform.forward() * 3.;
-            world.spawn(&CubePrefab { material: HMaterial::DEFAULT })
+            world
+                .spawn(&CubePrefab {
+                    material: HMaterial::DEFAULT,
+                })
                 .at_vec(pos)
                 .build_component::<Collider3D>()
                 .build_component::<RigidBodyComponent>();
 
-            let sleeping_bodies = world.physics.rigid_body_set.iter().filter(|c| c.1.is_sleeping()).count();
+            let sleeping_bodies = world
+                .physics
+                .rigid_body_set
+                .iter()
+                .filter(|c| c.1.is_sleeping())
+                .count();
             println!("{sleeping_bodies} Bodies are currently sleeping");
         }
 

@@ -1,5 +1,4 @@
 use crate::assets::{HShader, Mesh};
-use crate::components::{Collider3D, MeshShapeExtra};
 use crate::core::{Bone, GameObjectId, ModelUniform, Vertex3D};
 use crate::drawables::Drawable;
 use crate::engine::assets::HMesh;
@@ -8,11 +7,10 @@ use crate::engine::rendering::{DrawCtx, Renderer};
 use crate::rendering::RuntimeMesh;
 use crate::World;
 use log::warn;
-use nalgebra::{Matrix4, Vector2, Vector3, Vector4};
+use nalgebra::{Matrix4, Vector3};
 use std::sync::RwLockWriteGuard;
 use syrillian_macros::UniformIndex;
-use wgpu::util::{BufferInitDescriptor, DeviceExt};
-use wgpu::{Buffer, BufferUsages, Device, IndexFormat, RenderPass, ShaderStages};
+use wgpu::{IndexFormat, RenderPass};
 
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, UniformIndex)]
@@ -69,15 +67,15 @@ pub struct DebugVertexNormal {
 #[derive(Debug)]
 #[cfg(debug_assertions)]
 struct ColliderDebugData {
-    vertex_buf: Buffer,
-    index_buf: Buffer,
+    vertex_buf: wgpu::Buffer,
+    index_buf: wgpu::Buffer,
     collider_indices_count: u32,
 }
 
 #[derive(Debug)]
 #[cfg(debug_assertions)]
 struct RuntimeDebugData {
-    mesh_vertices_buf: Buffer,
+    mesh_vertices_buf: wgpu::Buffer,
     collider_buffers: Vec<ColliderDebugData>,
 }
 
@@ -92,11 +90,11 @@ pub struct MeshRenderer {
 }
 
 impl Drawable for MeshRenderer {
-    fn setup(&mut self, renderer: &Renderer, world: &mut World, parent: GameObjectId) {
+    fn setup(&mut self, renderer: &Renderer, world: &mut World, _parent: GameObjectId) {
         self.setup_mesh_data(renderer, world);
 
         #[cfg(debug_assertions)]
-        self.setup_debug_data(renderer, world, parent);
+        self.setup_debug_data(renderer, world, _parent);
     }
 
     fn update(
@@ -283,7 +281,13 @@ impl MeshRenderer {
 
     /// Returns Vertices and Indices
     #[cfg(debug_assertions)]
-    fn generate_collider_data(parent: GameObjectId, device: &Device) -> Vec<ColliderDebugData> {
+    fn generate_collider_data(parent: GameObjectId, device: &wgpu::Device) -> Vec<ColliderDebugData> {
+        use crate::components::Collider3D;
+        use crate::components::MeshShapeExtra;
+        use nalgebra::Vector2;
+        use wgpu::util::{BufferInitDescriptor, DeviceExt};
+        use wgpu::BufferUsages;
+
         let colliders: Vec<_> = parent
             .get_components::<Collider3D>()
             .iter()
@@ -391,6 +395,9 @@ fn draw_edges(
     mesh_data: &Mesh,
     pass: &mut RwLockWriteGuard<RenderPass>,
 ) {
+    use nalgebra::Vector4;
+    use wgpu::ShaderStages;
+
     const COLOR: Vector4<f32> = Vector4::new(1.0, 0.0, 1.0, 1.0);
 
     let shader = ctx.frame.cache.shader(HShader::DEBUG_EDGES);
@@ -412,6 +419,9 @@ fn draw_collider_edges(
     debug_data: &RuntimeDebugData,
     pass: &mut RwLockWriteGuard<RenderPass>,
 ) {
+    use nalgebra::Vector4;
+    use wgpu::ShaderStages;
+
     const COLOR: Vector4<f32> = Vector4::new(0.0, 1.0, 0.2, 1.0);
 
     let shader = ctx.frame.cache.shader(HShader::DEBUG_EDGES);

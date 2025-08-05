@@ -12,7 +12,7 @@ struct GlyphOut {
 }
 
 struct PushConstants {
-    pos: vec2<f32>,
+    text_pos: vec2<f32>,
     color: vec3<f32>,
     text_size: f32,
 }
@@ -25,7 +25,7 @@ var<push_constant> pc: PushConstants;
 fn vs_main(in: GlyphIn) -> GlyphOut {
     var out: GlyphOut;
 
-    var text_pos = pc.pos;
+    let text_pos = pc.text_pos;
     let glyph_offset = (in.offset * pc.text_size) / 100; // TODO: Magic number. I think this can be properly scaled
     let vpos = vec4(text_pos.xy + glyph_offset, 0.0, 1.0);
 
