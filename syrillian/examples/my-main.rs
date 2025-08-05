@@ -62,6 +62,7 @@ impl AppState for MyMain {
         world.input.set_auto_cursor_lock(true);
         world.input.set_quit_on_escape(true);
 
+        //world.active_camera.unwrap().get_component::<FirstPersonCameraController>().unwrap();
         world.spawn(&City);
         self.player = world.spawn(&FirstPersonPlayerPrefab);
         self.player.at(0.0, 20.0, 0.0);
