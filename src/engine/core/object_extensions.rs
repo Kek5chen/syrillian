@@ -1,6 +1,4 @@
-use crate::components::{
-    Collider3D, Component, PointLightComponent, RigidBodyComponent, RopeComponent, RotateComponent,
-};
+use crate::components::{Collider3D, Component, PointLightComponent, RigidBodyComponent, RopeComponent, RotateComponent};
 use crate::core::{GameObject, GameObjectId};
 use nalgebra::Vector3;
 use rapier3d::dynamics::RigidBody;

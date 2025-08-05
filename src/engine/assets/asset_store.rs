@@ -18,6 +18,7 @@ pub struct AssetStore {
     pub textures: Arc<Store<Texture>>,
     pub materials: Arc<Store<Material>>,
     pub bgls: Arc<Store<BGL>>,
+    pub sounds: Arc<Store<Sound>>,
 }
 
 impl AssetStore {
@@ -28,6 +29,7 @@ impl AssetStore {
             textures: Arc::new(Store::populated()),
             materials: Arc::new(Store::populated()),
             bgls: Arc::new(Store::populated()),
+            sounds: Arc::new(Store::populated()),
         })
     }
 }

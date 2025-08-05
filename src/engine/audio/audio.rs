@@ -15,7 +15,7 @@ pub struct AudioSystem {
     assets: HashMap<String, AudioAsset>,
 }
 
-/// Stores an [AudioSystem], the position of the receier (for now there is only one per scene),
+/// Stores an [AudioSystem], the position of the receiver (for now there is only one per scene),
 /// and the max distance that audio can be heard from the receiver
 pub struct AudioScene {
     audio_system: AudioSystem,
@@ -73,8 +73,6 @@ impl AudioScene {
 
         self.audio_system.play_sound(sound_id, volume_db.min(0.0), pan);
     }
-
-
 }
 
 
