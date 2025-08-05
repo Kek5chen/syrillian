@@ -14,6 +14,7 @@ pub struct RuntimeShader {
     pub module: ShaderModule,
     pub pipeline_layout: PipelineLayout,
     pub pipeline: RenderPipeline,
+    pub push_constant_ranges: &'static [PushConstantRange],
 }
 
 impl CacheType for Shader {
@@ -33,6 +34,7 @@ impl CacheType for Shader {
         RuntimeShader {
             module,
             pipeline_layout,
+            push_constant_ranges: self.push_constant_ranges(),
             pipeline,
         }
     }
@@ -41,35 +43,42 @@ impl CacheType for Shader {
 fn make_layout(shader: &Shader, device: &Device, cache: &AssetCache) -> PipelineLayout {
     let layout_name = format!("{} Pipeline Layout", shader.name());
 
-    match shader {
-        Shader::Default { .. } | Shader::Custom { .. } => {
-            let mut bgls: Vec<Arc<BindGroupLayout>> = Vec::new();
+    // lifetime stuff-
+    let pp_bgl;
+    let mut bgl_arcs: Vec<Arc<BindGroupLayout>>;
+    let bind_group_layouts: Vec<&BindGroupLayout>;
 
-            bgls.push(cache.bgl_render());
+    let desc = match shader {
+        Shader::Default { .. } | Shader::Custom { .. } => {
+            bgl_arcs = Vec::new();
+
+            bgl_arcs.push(cache.bgl_render());
             if shader.needs_bgl(HBGL::MODEL) {
-                bgls.push(cache.bgl_model());
-                bgls.push(cache.bgl_material());
+                bgl_arcs.push(cache.bgl_model());
+                bgl_arcs.push(cache.bgl_material());
             }
             if shader.needs_bgl(HBGL::LIGHT) {
-                bgls.push(cache.bgl_light());
+                bgl_arcs.push(cache.bgl_light());
             }
 
-            let bind_group_layouts: Vec<&BindGroupLayout> = bgls.iter().map(Arc::as_ref).collect();
+            bind_group_layouts = bgl_arcs.iter().map(Arc::as_ref).collect();
 
-            device.create_pipeline_layout(&PipelineLayoutDescriptor {
+            PipelineLayoutDescriptor {
                 label: Some(&layout_name),
                 bind_group_layouts: &bind_group_layouts,
                 push_constant_ranges: &shader.push_constant_ranges(),
-            })
+            }
         }
         Shader::PostProcess { .. } => {
-            let pp_bgl = cache.bgl_post_process();
+            pp_bgl = cache.bgl_post_process();
 
-            device.create_pipeline_layout(&PipelineLayoutDescriptor {
+            PipelineLayoutDescriptor {
                 label: Some(&layout_name),
                 bind_group_layouts: &[&pp_bgl],
                 push_constant_ranges: &[],
-            })
+            }
         }
-    }
+    };
+
+    device.create_pipeline_layout(&desc)
 }

@@ -19,9 +19,3 @@ pub use text::{Text2D, Text3D};
 
 #[cfg(debug_assertions)]
 pub use camera_debug::*;
-
-#[derive(Debug)]
-#[cfg(debug_assertions)]
-pub struct DebugRuntimePatternData {
-    vertices_buf: wgpu::Buffer,
-}

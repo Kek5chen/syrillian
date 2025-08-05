@@ -69,6 +69,7 @@ pub struct DebugRenderer {
     pub mesh_edges: bool,
     pub vertex_normals: bool,
     pub rays: bool,
+    pub colliders_edges: bool,
 }
 
 impl Default for DebugRenderer {
@@ -76,9 +77,37 @@ impl Default for DebugRenderer {
         const DEBUG_BUILD: bool = cfg!(debug_assertions);
 
         DebugRenderer {
-            mesh_edges: DEBUG_BUILD,
+            mesh_edges: false,
+            colliders_edges: DEBUG_BUILD,
             vertex_normals: DEBUG_BUILD,
             rays: DEBUG_BUILD,
+        }
+    }
+}
+
+impl DebugRenderer {
+    pub fn next_mode(&mut self) {
+        if self.colliders_edges {
+            *self = DebugRenderer {
+                mesh_edges: true,
+                colliders_edges: false,
+                vertex_normals: true,
+                rays: true,
+            }
+        } else if self.mesh_edges {
+            *self = DebugRenderer {
+                mesh_edges: false,
+                colliders_edges: false,
+                vertex_normals: false,
+                rays: false,
+            }
+        } else {
+            *self = DebugRenderer {
+                mesh_edges: false,
+                colliders_edges: true,
+                vertex_normals: true,
+                rays: true,
+            }
         }
     }
 }
@@ -143,6 +172,24 @@ impl Renderer {
     }
 
     pub fn init(&mut self) {}
+
+    pub fn update_world(&mut self, world: &mut World) {
+        if let Err(e) = self._update_world(world) {
+            error!("Error when updating world drawables: {e}");
+        }
+    }
+
+    pub fn _update_world(&mut self, world: &mut World) -> Result<()> {
+        unsafe {
+            let world_ptr = world as *mut World;
+            self.traverse_and_update(
+                &mut *world_ptr,
+                &world.children,
+                Matrix4::identity(),
+            );
+        }
+        self.update_render_data(world)
+    }
 
     pub fn render_world(&mut self, world: &mut World) -> bool {
         let mut ctx = match self.begin_render() {
@@ -232,8 +279,6 @@ impl Renderer {
     }
 
     fn render_inner(&mut self, ctx: &mut FrameCtx, world: &mut World) -> Result<()> {
-        self.update_render_data(world)?;
-
         let light_uniform = self.setup_lights(world)?;
 
         let mut encoder = self
@@ -260,7 +305,6 @@ impl Renderer {
             self.traverse_and_render(
                 &mut *world_ptr,
                 &world.children,
-                Matrix4::identity(),
                 &draw_ctx,
             );
         }
@@ -272,11 +316,33 @@ impl Renderer {
         Ok(())
     }
 
-    fn traverse_and_render(
+    fn traverse_and_update(
         &self,
         world: &mut World,
         children: &[GameObjectId],
         combined_matrix: Matrix4<f32>,
+    ) {
+        for child in children {
+            if !child.children.is_empty() {
+                self.traverse_and_update(
+                    world,
+                    &child.children,
+                    combined_matrix * child.transform.full_matrix().to_homogeneous(),
+                );
+            }
+            let Some(drawable) = &mut child.clone().drawable else {
+                continue;
+            };
+
+            drawable.update(world, child.clone(), &self, &combined_matrix);
+        }
+    }
+
+
+    fn traverse_and_render(
+        &self,
+        world: &mut World,
+        children: &[GameObjectId],
         ctx: &DrawCtx,
     ) {
         for child in children {
@@ -284,15 +350,14 @@ impl Renderer {
                 self.traverse_and_render(
                     world,
                     &child.children,
-                    combined_matrix * child.transform.full_matrix().to_homogeneous(),
                     ctx,
                 );
             }
+
             let Some(drawable) = &mut child.clone().drawable else {
                 continue;
             };
 
-            drawable.update(world, *child, self, &combined_matrix);
             drawable.draw(world, ctx);
         }
     }
@@ -460,7 +525,7 @@ impl Renderer {
                 view: &ctx.depth_view,
                 depth_ops: Some(Operations {
                     load: LoadOp::Clear(1.0),
-                    store: StoreOp::Store,
+                    store: StoreOp::Discard,
                 }),
                 stencil_ops: None,
             }),

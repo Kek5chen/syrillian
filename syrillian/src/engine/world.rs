@@ -301,9 +301,9 @@ impl World {
     pub fn initialize_runtime(&mut self, renderer: &Renderer) {
         let world_ptr: *mut World = self;
         unsafe {
-            for obj in self.objects.values_mut() {
+            for (id, obj) in &mut self.objects {
                 if let Some(ref mut drawable) = obj.drawable {
-                    drawable.setup(renderer, &mut *world_ptr)
+                    drawable.setup(renderer, &mut *world_ptr, *id)
                 }
             }
         }

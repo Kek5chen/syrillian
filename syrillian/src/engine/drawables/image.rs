@@ -80,7 +80,7 @@ impl Image {
 }
 
 impl Drawable for Image {
-    fn setup(&mut self, renderer: &Renderer, _world: &mut World) {
+    fn setup(&mut self, renderer: &Renderer, _world: &mut World, _parent: GameObjectId) {
         self.setup_model_data(&renderer.cache, &renderer.state.device);
     }
 

@@ -1,6 +1,6 @@
 use crate::assets::HShader;
 use crate::core::GameObjectId;
-use crate::drawables::{DebugRuntimePatternData, Drawable};
+use crate::drawables::Drawable;
 use crate::rendering::{DrawCtx, Renderer};
 use crate::{ensure_aligned, World};
 use log::warn;
@@ -29,7 +29,7 @@ pub struct CameraDebug {
 
     pub lifetime: Duration,
 
-    data: Option<DebugRuntimePatternData>,
+    ray_runtime_data: Option<Buffer>,
 }
 
 impl CameraDebug {
@@ -83,34 +83,25 @@ impl Default for CameraDebug {
             lifetime: Duration::from_secs(5),
 
             dirty: true,
-            data: None,
+            ray_runtime_data: None,
         }
     }
 }
 
 impl Drawable for CameraDebug {
-    fn setup(&mut self, renderer: &Renderer, _world: &mut World) {
-        let device = renderer.state.device.as_ref();
-
-        let vertices_buf = self.new_ray_buffer(device);
-
-        let debug_data = DebugRuntimePatternData {
-            vertices_buf,
-        };
-
-        self.data = Some(debug_data);
-        self.dirty = false;
+    fn setup(&mut self, renderer: &Renderer, _world: &mut World, _parent: GameObjectId) {
+        self._setup(renderer)
     }
 
     fn update(
         &mut self,
-        world: &mut World,
+        _world: &mut World,
         _parent: GameObjectId,
         renderer: &Renderer,
         _outer_transform: &Matrix4<f32>,
     ) {
-        if self.data.is_none() {
-            self.setup(renderer, world);
+        if self.ray_runtime_data.is_none() {
+            self._setup(renderer);
             return; // everything should be fresh now, anyway
         };
 
@@ -123,10 +114,10 @@ impl Drawable for CameraDebug {
         let device = renderer.state.device.as_ref();
         let vertices_buf = self.new_ray_buffer(device);
 
-        self.data
+        *self
+            .ray_runtime_data
             .as_mut()
-            .expect("Data was checked for None")
-            .vertices_buf = vertices_buf;
+            .expect("Data was checked for None") = vertices_buf;
         self.dirty = false;
     }
 
@@ -135,7 +126,7 @@ impl Drawable for CameraDebug {
             return;
         }
 
-        let Some(data) = &self.data else {
+        let Some(ray_data) = &self.ray_runtime_data else {
             warn!("Tried to draw camera debug without setup");
             return;
         };
@@ -147,11 +138,22 @@ impl Drawable for CameraDebug {
 
         let mut pass = ctx.pass.write().unwrap();
 
-        pass.set_vertex_buffer(0, data.vertices_buf.slice(..));
+        pass.set_vertex_buffer(0, ray_data.slice(..));
 
         let shader = ctx.frame.cache.shader(HShader::DEBUG_RAYS);
         pass.set_pipeline(&shader.pipeline);
 
         pass.draw(0..2, 0..self.rays.len() as u32);
+    }
+}
+
+impl CameraDebug {
+    fn _setup(&mut self, renderer: &Renderer) {
+        let device = renderer.state.device.as_ref();
+
+        let vertices_buf = self.new_ray_buffer(device);
+
+        self.ray_runtime_data = Some(vertices_buf);
+        self.dirty = false;
     }
 }

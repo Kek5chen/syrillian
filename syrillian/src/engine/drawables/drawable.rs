@@ -9,7 +9,7 @@ use nalgebra::Matrix4;
 #[allow(unused_variables)]
 #[rustfmt::skip]
 pub trait Drawable: Any {
-    fn setup(&mut self, renderer: &Renderer, world: &mut World) {}
+    fn setup(&mut self, renderer: &Renderer, world: &mut World, parent: GameObjectId) {}
     fn update(
         &mut self,
         world: &mut World,
