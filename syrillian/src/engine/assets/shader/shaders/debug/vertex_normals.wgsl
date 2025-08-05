@@ -1,10 +1,9 @@
 #use model
 
 struct VSIn {
-    // 0 = base, 1 = tip
-    @location(0) index: u32,
-    @location(1) position: vec3<f32>,
-    @location(2) normal: vec3<f32>,
+    @builtin(vertex_index) index: u32,
+    @location(0) position: vec3<f32>,
+    @location(1) normal: vec3<f32>,
 }
 
 struct VSOut {

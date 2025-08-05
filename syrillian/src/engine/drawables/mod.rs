@@ -20,6 +20,5 @@ pub use camera_debug::*;
 #[derive(Debug)]
 #[cfg(debug_assertions)]
 pub struct DebugRuntimePatternData {
-    pattern_buf: wgpu::Buffer,
     vertices_buf: wgpu::Buffer,
 }

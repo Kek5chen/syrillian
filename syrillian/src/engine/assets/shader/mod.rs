@@ -136,26 +136,17 @@ impl StoreDefaults for Shader {
             const DEBUG_VERTEX_NORMALS_VBL: &[VertexBufferLayout] = &[
                 VertexBufferLayout {
                     array_stride: 0,
-                    step_mode: VertexStepMode::Vertex,
-                    attributes: &[VertexAttribute {
-                        format: VertexFormat::Uint32,
-                        offset: 0,
-                        shader_location: 0,
-                    }],
-                },
-                VertexBufferLayout {
-                    array_stride: 0,
                     step_mode: VertexStepMode::Instance,
                     attributes: &[
                         VertexAttribute {
                             format: VertexFormat::Float32x3,
                             offset: 0,
-                            shader_location: 1,
+                            shader_location: 0,
                         },
                         VertexAttribute {
                             format: VertexFormat::Float32x3,
                             offset: VEC3_SIZE,
-                            shader_location: 2,
+                            shader_location: 1,
                         },
                     ],
                 },
@@ -176,31 +167,22 @@ impl StoreDefaults for Shader {
             const DEBUG_RAYS_VBL: &[VertexBufferLayout] = &[
                 VertexBufferLayout {
                     array_stride: 0,
-                    step_mode: VertexStepMode::Vertex,
-                    attributes: &[VertexAttribute {
-                        format: VertexFormat::Uint32,
-                        offset: 0,
-                        shader_location: 0,
-                    }],
-                },
-                VertexBufferLayout {
-                    array_stride: 0,
                     step_mode: VertexStepMode::Instance,
                     attributes: &[
                         VertexAttribute {
                             format: VertexFormat::Float32x3,
                             offset: 0,
-                            shader_location: 1,
+                            shader_location: 0,
                         },
                         VertexAttribute {
                             format: VertexFormat::Float32x3,
                             offset: VEC3_SIZE,
-                            shader_location: 2,
+                            shader_location: 1,
                         },
                         VertexAttribute {
                             format: VertexFormat::Float32,
                             offset: VEC3_SIZE * 2,
-                            shader_location: 3,
+                            shader_location: 2,
                         },
                     ],
                 },

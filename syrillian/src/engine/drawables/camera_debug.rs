@@ -92,17 +92,9 @@ impl Drawable for CameraDebug {
     fn setup(&mut self, renderer: &Renderer, _world: &mut World) {
         let device = renderer.state.device.as_ref();
 
-        // instance buffer, 0 for base, 1 for tip of vertex normal line
-        let pattern_buf = device.create_buffer_init(&BufferInitDescriptor {
-            label: Some("Debug Ray Pattern Buffer"),
-            contents: bytemuck::cast_slice(&[0u32, 1u32]),
-            usage: BufferUsages::VERTEX,
-        });
-
         let vertices_buf = self.new_ray_buffer(device);
 
         let debug_data = DebugRuntimePatternData {
-            pattern_buf,
             vertices_buf,
         };
 
@@ -155,8 +147,7 @@ impl Drawable for CameraDebug {
 
         let mut pass = ctx.pass.write().unwrap();
 
-        pass.set_vertex_buffer(0, data.pattern_buf.slice(..));
-        pass.set_vertex_buffer(1, data.vertices_buf.slice(..));
+        pass.set_vertex_buffer(0, data.vertices_buf.slice(..));
 
         let shader = ctx.frame.cache.shader(HShader::DEBUG_RAYS);
         pass.set_pipeline(&shader.pipeline);
