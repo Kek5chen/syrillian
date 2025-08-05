@@ -1,5 +1,6 @@
 use crate::engine::assets::key::AssetKey;
 use crate::engine::assets::{HShader, H};
+use dashmap::iter::Iter;
 use dashmap::mapref::one::Ref as MapRef;
 use dashmap::mapref::one::RefMut as MapRefMut;
 use dashmap::DashMap;
@@ -154,6 +155,10 @@ impl<T: StoreType> Store<T> {
         let item = self.data.remove(&key);
         self.set_dirty(key);
         Some(item?.1)
+    }
+
+    pub fn items(&self) -> Iter<AssetKey, T> {
+        self.data.iter()
     }
 }
 

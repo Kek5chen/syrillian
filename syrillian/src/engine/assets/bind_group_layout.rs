@@ -1,3 +1,4 @@
+use super::HBGL;
 use crate::engine::assets::{HandleName, Store, StoreDefaults, StoreType, H};
 use crate::store_add_checked;
 use wgpu::{
@@ -10,8 +11,6 @@ pub struct BGL {
     pub label: String,
     pub entries: Vec<BindGroupLayoutEntry>,
 }
-
-pub type HBGL = H<BGL>;
 
 impl H<BGL> {
     pub(super) const RENDER_ID: u32 = 0;

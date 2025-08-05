@@ -1,4 +1,4 @@
-use crate::engine::assets::generic_store::{Store, StoreDefaults, StoreType};
+use crate::engine::assets::generic_store::{Store, StoreType};
 use crate::engine::assets::{AssetKey, StoreTypeFallback, H};
 use crate::engine::rendering::cache::AssetCache;
 use dashmap::DashMap;
@@ -18,7 +18,7 @@ pub struct Cache<T: CacheType> {
     queue: Arc<Queue>,
 }
 
-pub trait CacheType: Sized + StoreType + StoreDefaults {
+pub trait CacheType: Sized + StoreType {
     type Hot;
     fn upload(&self, device: &Device, queue: &Queue, cache: &AssetCache) -> Self::Hot;
 }
