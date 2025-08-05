@@ -1,4 +1,5 @@
 use crate::core::GameObjectId;
+use crate::drawables::text::glyph::TextAlignment;
 use crate::drawables::text::text_layouter::{TextDim, TextLayouter, ThreeD, TwoD};
 use crate::drawables::Drawable;
 use crate::rendering::{DrawCtx, Renderer};
@@ -56,6 +57,7 @@ impl<DIM: TextDim> Text<DIM> {
     delegate! {
         to self.text {
             pub fn set_text(&mut self, text: String);
+            pub fn set_alignment(&mut self, alignment: TextAlignment);
             pub fn set_font(&mut self, family_name: String);
             pub fn set_atlas_glyph_size(&mut self, glyph_size: i32);
             pub const fn set_position(&mut self, x: f32, y: f32);

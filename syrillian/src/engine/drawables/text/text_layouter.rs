@@ -1,6 +1,6 @@
 use crate::assets::{HMaterial, HShader, HTexture, Material, Texture};
 use crate::core::{GameObjectId, ModelUniform};
-use crate::drawables::text::glyph::{generate_glyph_geometry_stream, GlyphRenderData};
+use crate::drawables::text::glyph::{generate_glyph_geometry_stream, GlyphRenderData, TextAlignment};
 use crate::drawables::text::render_font_atlas;
 use crate::drawables::{BoneData, MeshUniformIndex};
 use crate::rendering::uniform::ShaderUniform;
@@ -50,6 +50,7 @@ pub trait TextDim {
 #[derive(Debug)]
 pub struct TextLayouter<DIM> {
     text: String,
+    alignment: TextAlignment,
     last_text_len: usize,
     glyph_data: Vec<GlyphRenderData>,
     text_dirty: bool,
@@ -73,11 +74,12 @@ impl<DIM: TextDim> TextLayouter<DIM> {
     pub fn new(text: String, font_family: String, text_size: f32, glyph_size: Option<i32>) -> Self {
         let glyph_size = glyph_size.unwrap_or(DEFAULT_GLYPH_SIZE);
         let font = find_font(font_family);
-        let glyph_data = generate_glyph_geometry_stream(&text, &font);
+        let glyph_data = generate_glyph_geometry_stream(&text, &font, TextAlignment::Left);
         let canvas = render_font_atlas(&font, glyph_size);
 
         Self {
             text,
+            alignment: TextAlignment::Left,
             last_text_len: 0,
             glyph_data,
             text_dirty: false,
@@ -227,7 +229,7 @@ impl<DIM: TextDim> TextLayouter<DIM> {
     }
 
     pub fn regenerate_geometry(&mut self) {
-        let glyph_data = generate_glyph_geometry_stream(&self.text, &self.font);
+        let glyph_data = generate_glyph_geometry_stream(&self.text, &self.font, self.alignment);
         self.glyph_data = glyph_data;
         self.text_dirty = true;
     }
@@ -256,6 +258,11 @@ impl<DIM: TextDim> TextLayouter<DIM> {
 
     pub const fn set_position(&mut self, x: f32, y: f32) {
         self.set_position_vec(Vector2::new(x, y));
+    }
+
+    pub fn set_alignment(&mut self, alignment: TextAlignment) {
+        self.alignment = alignment;
+        self.regenerate_geometry();
     }
 
     pub const fn set_position_vec(&mut self, pos: Vector2<f32>) {
