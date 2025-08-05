@@ -15,6 +15,7 @@ use syrillian::assets::{HMaterial, StoreType};
 use syrillian::assets::{Material, Shader};
 use syrillian::components::{Collider3D, FirstPersonCameraController, PointLightComponent, RigidBodyComponent, RopeComponent, RotateComponent, SpringComponent};
 use syrillian::core::{GameObjectExt, GameObjectId};
+use syrillian::drawables::text::glyph::TextAlignment;
 use syrillian::drawables::{Text2D, Text3D};
 use syrillian::prefabs::first_person_player::FirstPersonPlayerPrefab;
 use syrillian::prefabs::prefab::Prefab;
@@ -124,7 +125,6 @@ impl AppState for MyMain {
             let mut text = world.new_object("Text");
             let mut text2d = Text2D::new("Meow".to_string(), "Helvetica".to_string(), 50., None);
             text2d.set_position(0., 50.);
-            //text.transform.set_euler_rotation()
             text2d.text_mut().rainbow_mode(true);
 
             text.set_drawable(text2d);
@@ -135,6 +135,7 @@ impl AppState for MyMain {
             let mut text = world.new_object("Text 3D");
             let mut text3d = Text3D::new("Meow 3D".to_string(), "Helvetica".to_string(), 100., None);
 
+            text3d.set_alignment(TextAlignment::Center);
             text.transform.set_position(0., 10., -20.);
             text3d.text_mut().rainbow_mode(true);
 

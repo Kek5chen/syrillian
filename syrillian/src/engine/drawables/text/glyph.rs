@@ -15,6 +15,13 @@ pub struct GlyphRenderData {
     triangles: [[GlyphVertex; 3]; 2],
 }
 
+#[derive(Debug, Copy, Clone)]
+pub enum TextAlignment {
+    Left,
+    Right,
+    Center,
+}
+
 impl GlyphVertex {
     pub const fn new(pos: Vector2<f32>, atlas_uv: Vector2<f32>) -> Self {
         Self { pos, atlas_uv }
@@ -51,21 +58,60 @@ impl GlyphRenderData {
     }
 }
 
-pub fn generate_glyph_geometry_stream(text: &str, font: &Font) -> Vec<GlyphRenderData> {
+fn align_glyph_geometry(glyph_bounds: &mut [GlyphRenderData], alignment: TextAlignment, row_widths: &[(usize, f32)]) {
+    let offset = match alignment {
+        TextAlignment::Left => return,
+        TextAlignment::Right => -1.,
+        TextAlignment::Center => -0.5,
+    };
+
+    let mut glyphs = glyph_bounds.iter_mut();
+    for (items, width) in row_widths {
+        for _ in 0..*items {
+            let Some(glyph) = glyphs.next() else {
+                debug_assert!(false, "Glyphs ran out before row members did");
+                return;
+            };
+
+
+            for triangle in glyph.triangles.iter_mut().flatten() {
+                triangle.pos.x += offset * width;
+            }
+        }
+    }
+}
+
+pub fn generate_glyph_geometry_stream(text: &str, font: &Font, alignment: TextAlignment) -> Vec<GlyphRenderData> {
+    if text.is_empty() {
+        return vec![];
+    }
+
     let mut glyph_bounds: Vec<GlyphRenderData> = Vec::new();
     let mut offset = Vector2::zeros();
 
+    let mut row_widths: Vec<(usize, f32)> = Vec::new();
+    let mut width: f32 = 0.0;
+    let mut row_characters: usize = 0;
     for character in text.chars() {
         if character == '\n' {
-            offset = Vector2::new(0., offset.y - 1.);
+            offset = Vector2::new(0.0, offset.y - 1.0);
+            row_widths.push((row_characters, width));
+            row_characters = 0;
+            width = 0.0;
             continue;
         }
 
         let glyph_id = font.glyph_for_char(character).unwrap();
         let glyph_size = font.advance(glyph_id).unwrap() / 2048.;
         glyph_bounds.push(GlyphRenderData::new(&offset, character));
+
         offset.x += glyph_size.x();
+        width = width.max(offset.x);
+        row_characters += 1;
     }
+    row_widths.push((row_characters, width));
+
+    align_glyph_geometry(&mut glyph_bounds, alignment, &row_widths);
 
     glyph_bounds
 }
