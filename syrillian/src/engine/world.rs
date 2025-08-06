@@ -6,7 +6,8 @@
 //! offers utility such as methods to create, find and remove game objects.
 
 use crate::assets::{Material, Mesh, Shader, Store, Texture, BGL};
-use crate::components::Component;
+use crate::components::{CRef, Component};
+use crate::core::component_storage::ComponentStorage;
 use crate::core::{GameObject, GameObjectId, Transform};
 use crate::engine::assets::AssetStore;
 use crate::engine::prefabs::prefab::Prefab;
@@ -16,9 +17,7 @@ use crate::physics::PhysicsManager;
 use crate::prefabs::CameraPrefab;
 use itertools::Itertools;
 use log::info;
-use std::cell::RefCell;
-use std::collections::HashMap;
-use std::rc::Rc;
+use slotmap::{HopSlotMap, Key};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -32,7 +31,9 @@ static mut G_WORLD: *mut World = std::ptr::null_mut();
 /// [`World::instance`].
 pub struct World {
     /// Collection of all game objects indexed by their unique ID
-    pub objects: HashMap<GameObjectId, Box<GameObject>>,
+    pub objects: HopSlotMap<GameObjectId, GameObject>,
+    /// Collection of all components indexed by their unique ID
+    pub components: ComponentStorage,
     /// Root-level game objects that have no parent
     pub children: Vec<GameObjectId>,
     /// The currently active camera used for rendering
@@ -52,8 +53,6 @@ pub struct World {
     last_frame_time: Instant,
     /// Flag indicating whether a shutdown has been requested
     requested_shutdown: bool,
-    /// Counter for generating unique object IDs
-    next_object_id: GameObjectId,
 }
 
 impl World {
@@ -67,7 +66,8 @@ impl World {
     /// At the cost of safety and some other things.
     fn empty() -> Box<World> {
         Box::new(World {
-            objects: HashMap::new(),
+            objects: HopSlotMap::with_key(),
+            components: ComponentStorage::default(),
             children: vec![],
             active_camera: None,
             physics: PhysicsManager::default(),
@@ -77,7 +77,6 @@ impl World {
             delta_time: Duration::default(),
             last_frame_time: Instant::now(),
             requested_shutdown: false,
-            next_object_id: GameObjectId(0),
         })
     }
 
@@ -113,32 +112,32 @@ impl World {
     }
 
     /// Retrieves a reference to a game object by its ID
-    pub fn get_object(&self, obj: &GameObjectId) -> Option<&GameObject> {
-        self.objects.get(obj).map(|o| o.as_ref())
+    pub fn get_object(&self, obj: GameObjectId) -> Option<&GameObject> {
+        self.objects.get(obj)
     }
 
     /// Retrieves a mutable reference to a game object by its ID
-    pub fn get_object_mut(&mut self, obj: &GameObjectId) -> Option<&mut Box<GameObject>> {
+    pub fn get_object_mut(&mut self, obj: GameObjectId) -> Option<&mut GameObject> {
         self.objects.get_mut(obj)
     }
 
     /// Creates a new game object with the given name
     pub fn new_object<S: Into<String>>(&mut self, name: S) -> GameObjectId {
-        let id = self.next_object_id;
-        self.next_object_id.0 += 1;
-
-        let obj = Box::new(GameObject {
-            id,
+        let obj = GameObject {
+            id: GameObjectId::null(),
             name: name.into(),
             children: vec![],
             parent: None,
-            transform: Transform::new(id),
+            transform: Transform::new(GameObjectId::null()),
             drawable: None,
             components: vec![],
-        });
+        };
 
-        self.objects.insert(id, obj);
         // TODO: Consider adding the object to the world right away
+        let mut id = self.objects.insert(obj);
+
+        id.id = id;
+        id.transform.owner = id;
 
         id
     }
@@ -172,19 +171,9 @@ impl World {
     }
 
     /// Executes a component function on all components of all game objects
-    unsafe fn execute_component_func(&mut self, func: unsafe fn(&mut dyn Component)) {
-        for (id, object) in &self.objects {
-            // just a big hack
-            // TODO: find out why IDs go crazy.
-            if id >= &self.next_object_id {
-                return;
-            }
-            let object_ptr = object;
-            for comp in &object_ptr.components {
-                let comp_ptr = comp.as_ptr();
-                unsafe { func(&mut **comp_ptr) }
-            }
-        }
+    fn execute_component_func(&mut self, func: fn(&mut dyn Component, &mut World)) {
+        let world = unsafe { &mut *(self as *mut World) };
+        self.components.values_mut().for_each(|c| func(c, world))
     }
 
     /// Updates all game objects and their components
@@ -196,10 +185,8 @@ impl World {
     pub fn update(&mut self) {
         self.tick_delta_time();
 
-        unsafe {
-            self.execute_component_func(Component::update);
-            self.execute_component_func(Component::late_update);
-        }
+        self.execute_component_func(Component::update);
+        self.execute_component_func(Component::late_update);
     }
 
     /// Performs late update operations after the main update
@@ -207,14 +194,12 @@ impl World {
     /// If you're using the App runtime, this will be handled for you. Only call this function
     /// if you are trying to use a detached world context.
     pub fn post_update(&mut self) {
-        unsafe {
-            while self.physics.last_update.elapsed() > self.physics.timestep {
-                self.physics.last_update += self.physics.timestep;
-                self.physics.step();
-            }
-
-            self.execute_component_func(Component::post_update);
+        while self.physics.last_update.elapsed() > self.physics.timestep {
+            self.physics.last_update += self.physics.timestep;
+            self.physics.step();
         }
+
+        self.execute_component_func(Component::post_update);
     }
 
     /// Prepares for the next frame by resetting the input state
@@ -233,14 +218,13 @@ impl World {
             .iter()
             .find(|(_, o)| o.name == name)
             .map(|o| o.0)
-            .cloned()
     }
 
     /// Gets all components of a specific type from all game objects in the world
     ///
     /// This method recursively traverses the entire scene graph to find all components
     /// of the specified type.
-    pub fn get_all_components_of_type<C: Component + 'static>(&self) -> Vec<Rc<RefCell<Box<C>>>> {
+    pub fn get_all_components_of_type<C: Component + 'static>(&self) -> Vec<CRef<C>> {
         let mut collection = Vec::new();
 
         for child in &self.children {
@@ -252,7 +236,7 @@ impl World {
 
     /// Helper method to recursively collect components of a specific type from a game object and its children
     fn get_components_of_children<C: Component + 'static>(
-        collection: &mut Vec<Rc<RefCell<Box<C>>>>,
+        collection: &mut Vec<CRef<C>>,
         obj: GameObjectId,
     ) {
         for child in &obj.children {
@@ -303,7 +287,7 @@ impl World {
         unsafe {
             for (id, obj) in &mut self.objects {
                 if let Some(ref mut drawable) = obj.drawable {
-                    drawable.setup(renderer, &mut *world_ptr, *id)
+                    drawable.setup(renderer, &mut *world_ptr, id)
                 }
             }
         }
@@ -324,12 +308,12 @@ impl World {
     /// signaling that its internal destruction routine has been done, which includes its components and
     /// can now be safely unlinked.
     pub(crate) fn unlink_internal(&mut self, mut caller: GameObjectId) {
-        if let Some((id, _)) = self.children.iter().find_position(|c| c.0 == caller.0) {
+        if let Some((id, _)) = self.children.iter().find_position(|c| **c == caller) {
             self.children.remove(id);
         }
 
         caller.unlink();
-        self.objects.remove(&caller);
+        self.objects.remove(caller);
     }
 
     /// Requests a shutdown of the world

@@ -59,7 +59,7 @@ impl GameObject {
     #[inline]
     pub fn build_component<'a, C: GOComponentExt<'a>>(&'a mut self) -> C::Outer {
         let component = self.add_component::<C>();
-        C::build_component(component, self)
+        C::build_component(component.forget_lifetime(), self)
     }
 }
 

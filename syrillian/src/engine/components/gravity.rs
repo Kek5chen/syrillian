@@ -21,8 +21,8 @@ impl Component for GravityComp {
         }
     }
 
-    fn update(&mut self) {
-        let delta_time = World::instance().delta_time().as_secs_f32();
+    fn update(&mut self, world: &mut World) {
+        let delta_time = world.delta_time().as_secs_f32();
 
         self.velocity = (self.velocity - self.acceleration_per_sec * delta_time)
             .clamp(-self.max_acceleration, self.max_acceleration);

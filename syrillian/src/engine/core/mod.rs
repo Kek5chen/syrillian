@@ -8,6 +8,7 @@ pub mod object;
 pub mod object_extensions;
 pub mod transform;
 pub mod vertex;
+pub mod component_storage;
 
 pub use bone::*;
 pub use object::*;

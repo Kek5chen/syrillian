@@ -281,23 +281,19 @@ impl MeshRenderer {
 
     /// Returns Vertices and Indices
     #[cfg(debug_assertions)]
-    fn generate_collider_data(parent: GameObjectId, device: &wgpu::Device) -> Vec<ColliderDebugData> {
+    fn generate_collider_data(
+        parent: GameObjectId,
+        device: &wgpu::Device,
+    ) -> Vec<ColliderDebugData> {
         use crate::components::Collider3D;
         use crate::components::MeshShapeExtra;
         use nalgebra::Vector2;
-        use wgpu::util::{BufferInitDescriptor, DeviceExt};
         use wgpu::BufferUsages;
+        use wgpu::util::{BufferInitDescriptor, DeviceExt};
 
         let colliders: Vec<_> = parent
             .get_components::<Collider3D>()
-            .iter()
-            .map(|c| {
-                c.borrow()
-                    .get_collider()
-                    .unwrap()
-                    .shared_shape()
-                    .to_trimesh()
-            })
+            .map(|c| c.get_collider().unwrap().shared_shape().to_trimesh())
             .collect();
 
         let mut buffers = Vec::new();

@@ -433,7 +433,7 @@ impl Renderer {
             .get_component::<CameraComponent>()
             .ok_or(RenderError::NoCameraComponentSet)?;
 
-        let projection_matrix: &Perspective3<f32> = &camera_comp.borrow_mut().projection;
+        let projection_matrix: &Perspective3<f32> = &camera_comp.projection;
         let camera_transform = &camera.transform;
 
         let render_data = &mut self.render_uniform_data;
@@ -490,7 +490,7 @@ impl Renderer {
         } else {
             let light_data: Vec<PointLightUniform> = point_lights
                 .iter()
-                .map(|m| m.borrow_mut())
+                .copied()
                 .map(|mut light| {
                     light.update_inner_pos();
                     *light.inner()

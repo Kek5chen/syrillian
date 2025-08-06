@@ -23,8 +23,8 @@
 //!         }
 //!     }
 //!
-//!     fn update(&mut self) {
-//!         let delta_time = World::instance().delta_time().as_secs_f32();
+//!     fn update(&mut self, world: &mut World) {
+//!         let delta_time = world.delta_time().as_secs_f32();
 //!
 //!         let movement = Vector3::new(0.0, self.force * delta_time, 0.0);
 //!
@@ -47,8 +47,8 @@ pub mod gravity;
 pub mod light;
 pub mod rigid_body;
 pub mod rope;
-pub mod spring;
 pub mod rotate;
+pub mod spring;
 
 pub use camera::*;
 pub use collider::*;
@@ -63,38 +63,176 @@ pub use rotate::*;
 pub use spring::*;
 
 use crate::core::GameObjectId;
-use std::any::Any;
+use crate::World;
+use slotmap::new_key_type;
+use std::any::{Any, TypeId};
+use std::fmt::Debug;
+use std::hash::Hash;
+use std::marker::PhantomData;
+use std::mem;
+use std::ops::{Deref, DerefMut};
 
+new_key_type! { pub struct ComponentId; }
+
+#[macro_export]
+macro_rules! c {
+    ($id:expr) => {
+        $crate::World::instance().components.get($id)
+    };
+}
+
+#[macro_export]
+macro_rules! c_mut {
+    ($id:expr) => {
+        $crate::World::instance().components.get_mut($id)
+    };
+}
+
+#[macro_export]
+macro_rules! c_any {
+    ($id:expr) => {
+        $crate::World::instance().components.get_dyn($id)
+    };
+}
+
+#[macro_export]
+macro_rules! c_any_mut {
+    ($id:expr) => {
+        $crate::World::instance().components.get_dyn_mut($id)
+    };
+}
+
+pub struct CRef<C: Component>(pub(crate) ComponentId, pub(crate) PhantomData<C>);
+
+impl<C: Component> Clone for CRef<C> {
+    fn clone(&self) -> Self {
+        CRef(self.0, self.1)
+    }
+}
+
+impl<C: Component> Copy for CRef<C> {}
+
+impl<C: Component> Deref for CRef<C> {
+    type Target = C;
+
+    fn deref(&self) -> &Self::Target {
+        World::instance()
+            .components
+            .get(CRef(self.0, PhantomData))
+            .unwrap()
+    }
+}
+
+impl<C: Component> DerefMut for CRef<C> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        World::instance()
+            .components
+            .get_mut(CRef(self.0, PhantomData))
+            .unwrap()
+    }
+}
+
+impl<C: Component> From<CRef<C>> for CWeak<C> {
+    fn from(value: CRef<C>) -> Self {
+        CWeak(value.0, value.1)
+    }
+}
+
+impl<C: Component> CRef<C> {
+    pub(crate) fn forget_lifetime(mut self) -> &'static mut C {
+        unsafe { mem::transmute(self.deref_mut()) }
+    }
+
+    pub fn downgrade(self) -> CWeak<C> {
+        self.into()
+    }
+}
+
+pub struct CWeak<C: Component>(pub(crate) ComponentId, pub(crate) PhantomData<C>);
+
+impl<C: Component> Clone for CWeak<C> {
+    fn clone(&self) -> Self {
+        CWeak(self.0, self.1)
+    }
+}
+
+impl<C: Component> Copy for CWeak<C> {}
+
+impl<C: Component> CWeak<C> {
+    pub fn exists(&self, world: &World) -> bool {
+        world
+            .components
+            ._get::<C>()
+            .map(|c| c.contains_key(self.0))
+            .unwrap_or(false)
+    }
+    pub fn upgrade(&self, world: &World) -> Option<CRef<C>> {
+        self.exists(world).then(|| CRef(self.0, self.1))
+    }
+}
+//
+// impl<C: Component> From<Option<CRef<C>>> for Option<CWeak<C>> {
+//     fn from(value: Option<CRef<C>>) -> Self {
+//
+//     }
+// }
+
+#[derive(Copy, Clone)]
+pub struct TypedComponentId(pub(crate) TypeId, pub(crate) ComponentId);
+
+impl From<TypedComponentId> for ComponentId {
+    fn from(value: TypedComponentId) -> Self {
+        value.1
+    }
+}
+
+impl<COMP: Component> From<CRef<COMP>> for TypedComponentId {
+    fn from(value: CRef<COMP>) -> Self {
+        TypedComponentId(TypeId::of::<COMP>(), value.0)
+    }
+}
+
+impl TypedComponentId {
+    pub fn is_a<C: Component>(&self) -> bool {
+        self.0 == TypeId::of::<C>()
+    }
+
+    pub fn as_a<C: Component>(&self) -> Option<CRef<C>> {
+        self.is_a::<C>().then(|| CRef(self.1, PhantomData))
+    }
+}
+
+#[allow(unused)]
 pub trait Component: Any {
     fn new(parent: GameObjectId) -> Self
     where
         Self: Sized;
 
     // Gets called when the game object is created directly after new
-    fn init(&mut self) {}
+    fn init(&mut self, world: &mut World) {}
 
     // Gets called when the component should update anything state related
-    fn update(&mut self) {}
+    fn update(&mut self, world: &mut World) {}
 
     // Gets called when the component should update any state that's necessary for physics
-    fn late_update(&mut self) {}
+    fn late_update(&mut self, world: &mut World) {}
 
     // Gets called after physics have evolved
-    fn post_update(&mut self) {}
+    fn post_update(&mut self, world: &mut World) {}
 
     // Gets called when the component is about to be deleted
-    fn delete(&mut self) {}
+    fn delete(&mut self, world: &mut World) {}
 
     #[allow(clippy::mut_from_ref)]
     fn parent(&self) -> GameObjectId;
 }
 
 pub(crate) trait InternalComponentDeletion {
-    fn delete_internal(&mut self);
+    fn delete_internal(&mut self, world: &mut World);
 }
 
 impl InternalComponentDeletion for dyn Component {
-    fn delete_internal(&mut self) {
-        self.delete();
+    fn delete_internal(&mut self, world: &mut World) {
+        self.delete(world);
     }
 }

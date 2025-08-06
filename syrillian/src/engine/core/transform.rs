@@ -1,6 +1,7 @@
 use crate::core::GameObjectId;
 use nalgebra::{Affine3, Scale3, Translation3, UnitQuaternion, Vector3};
 use num_traits::AsPrimitive;
+use slotmap::Key;
 
 /// Stores the translation, rotation and scale of a [`GameObject`](crate::core::GameObject).
 ///
@@ -8,6 +9,8 @@ use num_traits::AsPrimitive;
 /// operations such as retrieving the final model matrix are fast.
 #[repr(C)]
 pub struct Transform {
+    pub(crate) owner: GameObjectId,
+    
     pos: Vector3<f32>,
     rot: UnitQuaternion<f32>,
     scale: Vector3<f32>,
@@ -15,7 +18,6 @@ pub struct Transform {
     scale_mat: Scale3<f32>,
     compound_mat: Affine3<f32>,
     invert_position: bool,
-    owner: GameObjectId,
     compound_pos_first: bool,
 }
 
@@ -29,7 +31,7 @@ impl Clone for Transform {
             scale_mat: self.scale_mat,
             compound_mat: self.compound_mat,
             invert_position: self.invert_position,
-            owner: GameObjectId::invalid(),
+            owner: GameObjectId::null(),
             compound_pos_first: self.compound_pos_first,
         }
     }
@@ -43,6 +45,8 @@ impl Transform {
     /// of `1.0`.
     pub fn new(owner: GameObjectId) -> Self {
         Transform {
+            owner,
+            
             pos: Vector3::zeros(),
             rot: UnitQuaternion::identity(),
             scale: Vector3::new(1.0, 1.0, 1.0),
@@ -50,7 +54,6 @@ impl Transform {
             scale_mat: Scale3::identity(),
             compound_mat: Affine3::identity(),
             invert_position: false,
-            owner,
             compound_pos_first: true,
         }
     }

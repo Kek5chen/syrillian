@@ -16,7 +16,7 @@ impl Component for RigidBodyComponent {
         let initial_translation = parent.transform.position();
         let initial_rotation = parent.transform.rotation().euler_vector();
         let rigid_body = RigidBodyBuilder::dynamic()
-            .user_data(parent.0 as u128)
+            .user_data(parent.as_ffi() as u128)
             .translation(initial_translation)
             .rotation(initial_rotation)
             .build();
@@ -30,7 +30,7 @@ impl Component for RigidBodyComponent {
         }
     }
 
-    fn late_update(&mut self) {
+    fn late_update(&mut self, _world: &mut World) {
         let rb = World::instance()
             .physics
             .rigid_body_set
@@ -48,8 +48,8 @@ impl Component for RigidBodyComponent {
         }
     }
 
-    fn post_update(&mut self) {
-        let rb = World::instance()
+    fn post_update(&mut self, world: &mut World) {
+        let rb = world
             .physics
             .rigid_body_set
             .get_mut(self.body_handle);
@@ -63,9 +63,7 @@ impl Component for RigidBodyComponent {
         }
     }
 
-    fn delete(&mut self) {
-        let world = World::instance();
-
+    fn delete(&mut self, world: &mut World) {
         world.physics.rigid_body_set.remove(
             self.body_handle,
             &mut world.physics.island_manager,

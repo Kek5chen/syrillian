@@ -1,6 +1,6 @@
 use crate::components::Component;
 use crate::core::GameObjectId;
-use crate::ensure_aligned;
+use crate::{ensure_aligned, World};
 use nalgebra::Vector3;
 
 #[repr(C)]
@@ -52,7 +52,7 @@ impl Component for PointLightComponent {
         }
     }
 
-    fn update(&mut self) {
+    fn update(&mut self, _world: &mut World) {
         self.inner.pos = self.parent.transform.position();
     }
 

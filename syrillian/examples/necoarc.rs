@@ -90,7 +90,7 @@ impl AppState for NecoArc {
 impl NecoArc {
     fn handle_click(&mut self, world: &mut World) {
         if world.input.is_button_down(MouseButton::Left) {
-            let Some(ray) = world.physics.cursor_ray() else {
+            let Some(ray) = world.physics.cursor_ray(world) else {
                 warn!("No cursor ray available");
                 return;
             };
@@ -117,7 +117,7 @@ impl NecoArc {
         }
 
         if let Some(mut dragging) = self.dragging {
-            let Some(ray) = world.physics.cursor_ray() else {
+            let Some(ray) = world.physics.cursor_ray(world) else {
                 warn!("No cursor ray available");
                 return;
             };

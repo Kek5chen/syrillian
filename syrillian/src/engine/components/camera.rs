@@ -148,12 +148,12 @@ impl Component for CameraComponent {
         }
     }
 
-    fn init(&mut self) {
+    fn init(&mut self, _world: &mut World) {
         self.parent().transform.set_compound_pos_first(true);
     }
 
-    fn update(&mut self) {
-        let delta_time = World::instance().delta_time().as_secs_f32();
+    fn update(&mut self, world: &mut World) {
+        let delta_time = world.delta_time().as_secs_f32();
 
         if self.fov_target != 0.0 && (self.fov_active - self.fov_target).abs() > f32::EPSILON {
             self.fov_active = self
