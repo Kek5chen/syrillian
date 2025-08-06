@@ -15,7 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install dependencies
-        run: "sudo apt-get install libudev-dev libassimp-dev"
+        run: "sudo apt-get install libudev-dev libassimp-dev libfontconfig-dev"
       - name: Install Cargo LLVM Coverage
         run: "cargo install cargo-llvm-cov"
       - name: Test
