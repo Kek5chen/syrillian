@@ -103,14 +103,14 @@ impl Component for FirstPersonCameraController {
         }
     }
 
-    fn init(&mut self) {
+    fn init(&mut self, _world: &mut World) {
         self.base_position = self.parent().transform.local_position().clone();
     }
 
-    fn update(&mut self) {
-        let input = &World::instance().input;
+    fn update(&mut self, world: &mut World) {
+        let input = &world.input;
         let transform = &mut self.parent().transform;
-        let delta_time = World::instance().delta_time().as_secs_f32();
+        let delta_time = world.delta_time().as_secs_f32();
 
         self.calculate_jump_bob(delta_time);
         self.update_jump_bob(transform);
@@ -258,12 +258,10 @@ impl FirstPersonCameraController {
     }
 
     fn update_zoom(&mut self) {
-        let Some(camera) = self.parent().get_component::<CameraComponent>() else {
+        let Some(mut camera) = self.parent().get_component::<CameraComponent>() else {
             warn!("Camera component not found");
             return;
         };
-
-        let mut camera = camera.borrow_mut();
 
         camera.set_fov_target(self.calculate_zoom());
     }

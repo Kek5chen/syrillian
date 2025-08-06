@@ -1,47 +1,25 @@
-use std::any::{Any, TypeId};
-use std::cell::RefCell;
-use std::fmt::{Debug, Formatter};
-use std::mem;
+use std::any::Any;
+use std::fmt::Debug;
 use std::ops::{Deref, DerefMut};
-use std::rc::Rc;
 
-use itertools::Itertools;
-use nalgebra::{Matrix4, Translation3, Vector3};
-
-use crate::components::Component;
+use crate::components::{CRef, Component, TypedComponentId};
 use crate::drawables::drawable::Drawable;
 use crate::world::World;
-use crate::{ensure_aligned, utils};
+use crate::{c_any_mut, ensure_aligned};
+use itertools::Itertools;
+use nalgebra::{Matrix4, Translation3, Vector3};
+use slotmap::{new_key_type, Key, KeyData};
 
 use crate::components::InternalComponentDeletion;
 use crate::core::Transform;
 
-#[derive(Copy, Clone, Eq, Ord, PartialOrd, PartialEq, Hash)]
-#[repr(transparent)]
-pub struct GameObjectId(pub(crate) usize);
-
-impl Debug for GameObjectId {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        if self.exists() {
-            write!(f, "GameObject: {}", self.name)
-        } else {
-            f.write_str("Invalid GameObjectId")
-        }
-    }
-}
+new_key_type! { pub struct GameObjectId; }
 
 #[allow(dead_code)]
 impl GameObjectId {
+    const INVALID_VALUE: u64 = 0x0000_0001_ffff_ffff;
     pub fn exists(&self) -> bool {
-        !self.is_invalid() && World::instance().objects.contains_key(self)
-    }
-
-    pub fn invalid() -> GameObjectId {
-        GameObjectId(usize::MAX)
-    }
-
-    pub fn is_invalid(&self) -> bool {
-        self.0 == usize::MAX
+        !self.is_null() && World::instance().objects.contains_key(*self)
     }
 
     pub fn tap<F: Fn(&mut GameObject)>(mut self, f: F) -> Self {
@@ -50,21 +28,29 @@ impl GameObjectId {
         }
         self
     }
+
+    pub(crate) fn as_ffi(&self) -> u64 {
+        self.0.as_ffi()
+    }
+
+    pub(crate) fn from_ffi(id: u64) -> GameObjectId {
+        GameObjectId(KeyData::from_ffi(id))
+    }
 }
 
 // USING and STORING a GameObjectId is like a contract. It defines that you will recheck the
-// existance of this game object every time you re-use it. Otherwise you will crash.
+//  existence of this game object every time you re-use it. Otherwise, you will crash.
 impl Deref for GameObjectId {
     type Target = GameObject;
 
     fn deref(&self) -> &GameObject {
-        World::instance().get_object(self).unwrap()
+        World::instance().objects.get(*self).unwrap()
     }
 }
 
 impl DerefMut for GameObjectId {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        World::instance().get_object_mut(self).unwrap()
+        World::instance().objects.get_mut(*self).unwrap()
     }
 }
 
@@ -75,7 +61,7 @@ pub struct GameObject {
     pub(crate) parent: Option<GameObjectId>,
     pub transform: Transform,
     pub(crate) drawable: Option<Box<dyn Drawable>>,
-    pub(crate) components: Vec<Rc<RefCell<Box<dyn Component>>>>,
+    pub(crate) components: Vec<TypedComponentId>,
 }
 
 impl GameObject {
@@ -123,25 +109,17 @@ impl GameObject {
         Some((drawable as &mut dyn Any).downcast_mut::<D>()?)
     }
 
-    pub fn add_component<'b, C>(&mut self) -> &'b mut C
+    pub fn add_component<'b, C>(&mut self) -> CRef<C>
     where
         C: Component + 'static,
     {
-        unsafe {
-            let mut comp: Box<dyn Component> = Box::new(C::new(self.id));
-            let comp_inner_ptr: utils::FatPtr<C> =
-                mem::transmute(comp.as_mut() as *mut dyn Component);
-            let comp_inner_ref: &mut C = &mut *comp_inner_ptr.data;
+        let world = World::instance();
+        let mut comp: C = C::new(self.id);
+        comp.init(world);
 
-            comp.init();
-
-            let comp: Rc<RefCell<Box<dyn Component>>> = Rc::new(RefCell::new(comp));
-            let comp_dyn: Rc<RefCell<Box<dyn Component>>> = comp;
-
-            self.components.push(comp_dyn);
-
-            comp_inner_ref
-        }
+        let id = world.components.add(comp);
+        self.components.push(id.into());
+        id
     }
 
     pub fn add_child_components<C>(&mut self)
@@ -158,50 +136,25 @@ impl GameObject {
         C: Component + 'static,
     {
         for child in &mut self.children {
-            let comp = child.add_component::<C>();
-            f(comp);
+            let mut comp = child.add_component::<C>();
+            f(&mut comp);
         }
     }
 
-    // FIXME: this works for now but is stupidly fucked up.
-    //   only change this if entity ids are used for Components in the future :>>
-    pub fn get_component<C: Component + 'static>(&self) -> Option<Rc<RefCell<Box<C>>>> {
-        for component in &self.components {
-            let raw_ptr: *const Box<dyn Component> = component.as_ptr();
-            let type_id = unsafe { (**raw_ptr).type_id() };
-
-            if type_id == TypeId::of::<C>() {
-                return Some(unsafe {
-                    let rc_clone = Rc::clone(component);
-                    mem::transmute::<Rc<RefCell<Box<dyn Component>>>, Rc<RefCell<Box<C>>>>(rc_clone)
-                });
-            }
-        }
-        None
+    pub fn get_component<C: Component + 'static>(&self) -> Option<CRef<C>> {
+        self.components
+            .iter()
+            .filter_map(|c| c.as_a::<C>())
+            .next()
     }
 
-    // FIXME: The thing above also counts here
-    pub fn get_components<C: Component + 'static>(&self) -> Vec<Rc<RefCell<Box<C>>>> {
-        let mut components = Vec::new();
-        for component in &self.components {
-            let raw_ptr: *const Box<dyn Component> = component.as_ptr();
-            let type_id = unsafe { (**raw_ptr).type_id() };
-
-            if type_id == TypeId::of::<C>() {
-                unsafe {
-                    let rc_clone = Rc::clone(component);
-                    let component = mem::transmute::<
-                        Rc<RefCell<Box<dyn Component>>>,
-                        Rc<RefCell<Box<C>>>,
-                    >(rc_clone);
-                    components.push(component);
-                }
-            }
-        }
-        components
+    pub fn get_components<C: Component + 'static>(&self) -> impl Iterator<Item=CRef<C>> {
+        self.components
+            .iter()
+            .filter_map(|c| c.as_a())
     }
 
-    pub fn get_child_component<C>(&mut self) -> Option<Rc<RefCell<Box<C>>>>
+    pub fn get_child_component<C>(&mut self) -> Option<CRef<C>>
     where
         C: Component + 'static,
     {
@@ -227,14 +180,17 @@ impl GameObject {
             child.delete();
         }
 
+        let world = World::instance();
         for comp in self.components.drain(..) {
-            let mut comp = comp.borrow_mut();
-            comp.delete_internal();
+            let Some(comp) = c_any_mut!(comp) else {
+                continue;
+            };
+            comp.delete_internal(world);
         }
 
         self.children.clear();
 
-        World::instance().unlink_internal(self.id);
+        world.unlink_internal(self.id);
     }
 }
 

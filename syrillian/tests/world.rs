@@ -10,9 +10,9 @@ fn new_object_add_find_delete() {
     world.add_child(id);
     assert!(world.find_object_by_name("TestObject").is_some());
     assert_eq!(world.children.len(), 1);
-    assert!(world.get_object(&id).is_some());
+    assert!(world.get_object(id).is_some());
     world.delete_object(id);
-    assert!(world.get_object(&id).is_none());
+    assert!(world.get_object(id).is_none());
     assert_eq!(world.children.len(), 0);
 }
 

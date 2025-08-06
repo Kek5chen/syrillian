@@ -154,14 +154,11 @@ impl<S: AppState> ApplicationHandler for App<S> {
             WindowEvent::Resized(size) => {
                 renderer.resize(size);
 
-                // For I have sinned, this now becomes my recovery.
-                // I was forgiven, shall it come haunt me later.
-                if let Some(cam) = world.active_camera {
-                    if let Some(cam_comp) = cam.get_component::<CameraComponent>() {
-                        if let Ok(mut comp) = cam_comp.try_borrow_mut() {
-                            comp.resize(size.width as f32, size.height as f32);
-                        }
-                    }
+                if let Some(mut cam) = world
+                    .active_camera
+                    .and_then(|cam| cam.get_component::<CameraComponent>())
+                {
+                    cam.resize(size.width as f32, size.height as f32);
                 }
             }
             _ => {}

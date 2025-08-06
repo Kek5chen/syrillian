@@ -81,31 +81,28 @@ impl PhysicsManager {
         );
         let (collider, distance) = qp.cast_ray(ray, max_toi, solid)?;
 
-        let object_id = self.collider_set.get(collider)?.user_data as usize;
-        let object = GameObjectId(object_id);
+        let object_id = self.collider_set.get(collider)?.user_data as u64;
+        let object = GameObjectId::from_ffi(object_id);
 
         object.exists().then_some((distance, object))
     }
 
-    // TODO: hmmmmmmmmmm..
-    pub fn cursor_ray(&self) -> Option<Ray> {
-        let world = World::instance();
-        let camera = world.active_camera?;
-        let camera_component = camera.get_component::<CameraComponent>()?;
-        let camera_comp = camera_component.borrow();
+    pub fn cursor_ray(&self, world: &World) -> Option<Ray> {
         let cursor_pos = world.input.mouse_position();
-        let ray = camera_comp.click_ray(cursor_pos.x, cursor_pos.y);
-
-        Some(ray)
+        world
+            .active_camera
+            .and_then(|cam| cam.get_component::<CameraComponent>())
+            .map(|cam| cam.click_ray(cursor_pos.x, cursor_pos.y))
     }
 
     pub fn cast_cursor_ray(
         &self,
+        world: &World,
         max_toi: f32,
         solid: bool,
         filter: QueryFilter,
     ) -> Option<(f32, GameObjectId)> {
-        let ray = self.cursor_ray()?;
+        let ray = self.cursor_ray(world)?;
         self.cast_ray(&ray, max_toi, solid, filter)
     }
 }

@@ -41,14 +41,11 @@ impl Component for SpringComponent {
         }
     }
 
-    fn update(&mut self) {}
+    fn update(&mut self, _world: &mut World) {}
 
-    fn delete(&mut self) {
+    fn delete(&mut self, world: &mut World) {
         if let Some(joint) = self.handle {
-            World::instance()
-                .physics
-                .impulse_joint_set
-                .remove(joint, false);
+            world.physics.impulse_joint_set.remove(joint, false);
             self.handle = None;
             self.connected = None;
         }
@@ -73,12 +70,10 @@ impl SpringComponent {
             .parent
             .get_component::<RigidBodyComponent>()
             .ok_or(NoParentRigidBody)?
-            .borrow()
             .body_handle;
         let other_rb = body
             .get_component::<RigidBodyComponent>()
             .ok_or(NoConnectorRigidBody)?
-            .borrow()
             .body_handle;
 
         let joint = SpringJoint::new(self.rest_length, self.stiffness, self.damping);
@@ -93,8 +88,8 @@ impl SpringComponent {
         Ok(())
     }
 
-    pub fn disconnect(&mut self) {
-        self.delete();
+    pub fn disconnect(&mut self, world: &mut World) {
+        self.delete(world);
     }
 
     pub fn spring(&self) -> Option<&SpringJoint> {
@@ -135,7 +130,12 @@ impl SpringComponent {
 
     fn refresh_spring(&mut self) {
         if let Some(spring) = self.spring_mut() {
-            spring.data.set_motor_position(JointAxis::LinX, self.rest_length, self.stiffness, self.damping);
+            spring.data.set_motor_position(
+                JointAxis::LinX,
+                self.rest_length,
+                self.stiffness,
+                self.damping,
+            );
         } else {
             warn!("Failed to refresh spring data")
         }

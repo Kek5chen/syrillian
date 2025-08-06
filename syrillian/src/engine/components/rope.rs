@@ -37,12 +37,9 @@ impl Component for RopeComponent {
         }
     }
 
-    fn delete(&mut self) {
+    fn delete(&mut self, world: &mut World) {
         if let Some(joint) = self.handle {
-            World::instance()
-                .physics
-                .impulse_joint_set
-                .remove(joint, false);
+            world.physics.impulse_joint_set.remove(joint, false);
             self.handle = None;
             self.connected = None;
         }
@@ -67,12 +64,10 @@ impl RopeComponent {
             .parent
             .get_component::<RigidBodyComponent>()
             .ok_or(NoParentRigidBody)?
-            .borrow()
             .body_handle;
         let other_rb = body
             .get_component::<RigidBodyComponent>()
             .ok_or(NoConnectorRigidBody)?
-            .borrow()
             .body_handle;
 
         let joint = RopeJoint::new(self.length);
@@ -87,8 +82,8 @@ impl RopeComponent {
         Ok(())
     }
 
-    pub fn disconnect(&mut self) {
-        self.delete();
+    pub fn disconnect(&mut self, world: &mut World) {
+        self.delete(world);
     }
 
     pub fn rope(&self) -> Option<&RopeJoint> {

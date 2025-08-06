@@ -1,4 +1,4 @@
-use crate::components::{Component, FirstPersonCameraController, RigidBodyComponent};
+use crate::components::{CRef, CWeak, Component, FirstPersonCameraController, RigidBodyComponent};
 use crate::core::GameObjectId;
 use crate::World;
 use gilrs::Axis;
@@ -6,16 +6,14 @@ use log::warn;
 use nalgebra::Vector3;
 use num_traits::Zero;
 use rapier3d::prelude::{vector, LockedAxes};
-use std::cell::RefCell;
-use std::rc::Rc;
 use winit::keyboard::KeyCode;
 
 pub struct FirstPersonMovementController {
     parent: GameObjectId,
     pub move_speed: f32,
     pub jump_factor: f32,
-    rigid_body: Option<Rc<RefCell<Box<RigidBodyComponent>>>>,
-    camera_controller: Option<Rc<RefCell<Box<FirstPersonCameraController>>>>,
+    rigid_body: Option<CWeak<RigidBodyComponent>>,
+    camera_controller: Option<CWeak<FirstPersonCameraController>>,
     pub velocity: Vector3<f32>,
     pub sprint_multiplier: f32,
     velocity_interp_t: f32,
@@ -38,28 +36,29 @@ impl Component for FirstPersonMovementController {
         }
     }
 
-    fn init(&mut self) {
+    fn init(&mut self, _world: &mut World) {
         let rigid = self.parent().get_component::<RigidBodyComponent>();
-        if let Some(rigid) = rigid.clone() {
-            if let Some(rigid) = rigid.borrow_mut().get_body_mut() {
+        if let Some(mut rigid) = rigid {
+            if let Some(rigid) = rigid.get_body_mut() {
                 rigid.set_locked_axes(LockedAxes::ROTATION_LOCKED, false);
                 rigid.enable_ccd(true);
             }
         }
-        self.rigid_body = rigid;
+        self.rigid_body = rigid.map(CRef::downgrade);
 
         self.camera_controller = self
             .parent
-            .get_child_component::<FirstPersonCameraController>();
+            .get_child_component::<FirstPersonCameraController>()
+            .map(CRef::downgrade);
     }
 
-    fn update(&mut self) {
-        let mut rigid = match &self.rigid_body {
+    fn update(&mut self, world: &mut World) {
+        let mut rigid = match self.rigid_body.and_then(|r| r.upgrade(world)) {
             None => {
                 warn!("Rigid body not set!");
                 return;
             }
-            Some(rigid) => rigid.borrow_mut(),
+            Some(rigid) => rigid,
         };
 
         let body = match rigid.get_body_mut() {
@@ -69,8 +68,6 @@ impl Component for FirstPersonMovementController {
             }
             Some(rigid) => rigid,
         };
-
-        let world = World::instance();
 
         if !world.input.is_cursor_locked() {
             return;
@@ -128,9 +125,7 @@ impl Component for FirstPersonMovementController {
         target_velocity *= speed_factor;
         self.velocity = self.velocity.lerp(&target_velocity, self.velocity_interp_t);
 
-        if let Some(camera) = self.camera_controller.as_ref() {
-            let mut camera = camera.borrow_mut();
-            let world = World::instance();
+        if let Some(mut camera) = self.camera_controller.and_then(|c| c.upgrade(world)) {
             let delta_time = world.delta_time().as_secs_f32();
             camera.update_roll(
                 -lr_movement * speed_factor * delta_time * 100.,

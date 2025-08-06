@@ -4034,6 +4034,7 @@ dependencies = [
  "rapier3d",
  "russimp-ng",
  "serial_test",
+ "slotmap",
  "smallvec",
  "snafu",
  "static_assertions",

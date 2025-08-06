@@ -9,6 +9,7 @@ use log::info;
 use nalgebra::UnitQuaternion;
 use rapier3d::parry::query::Ray;
 use rapier3d::prelude::QueryFilter;
+use slotmap::Key;
 use std::error::Error;
 use syrillian::assets::scene_loader::SceneLoader;
 use syrillian::assets::{HMaterial, StoreType};
@@ -46,9 +47,9 @@ impl Default for MyMain {
     fn default() -> Self {
         Self {
             frame_counter: FrameCounter::default(),
-            player: GameObjectId::invalid(),
+            player: GameObjectId::null(),
             picked_up: None,
-            text3d: GameObjectId::invalid(),
+            text3d: GameObjectId::null(),
         }
     }
 }
@@ -166,7 +167,7 @@ impl AppState for MyMain {
                 .enable_ccd()
                 .id; // FIXME: Workaround. Should have a .finish()
 
-            let spring = spring_bottom.add_component::<SpringComponent>();
+            let mut spring = spring_bottom.add_component::<SpringComponent>();
             spring.connect_to(spring_top);
             spring.set_rest_length(10.);
         }
@@ -198,11 +199,11 @@ impl AppState for MyMain {
             zoom_down = 1.0;
         }
 
-        if let Some(camera) = world.active_camera {
-            if let Some(camera) = camera.get_component::<FirstPersonCameraController>() {
-                let mut camera = camera.borrow_mut();
-                camera.set_zoom(zoom_down);
-            }
+        if let Some(mut camera) = world
+            .active_camera
+            .and_then(|cam| cam.get_component::<FirstPersonCameraController>())
+        {
+            camera.set_zoom(zoom_down);
         }
 
         let text3d = self.text3d.drawable_mut::<Text3D>().unwrap();
@@ -249,7 +250,6 @@ impl MyMain {
             let player_collider = self
                 .player
                 .get_component::<Collider3D>()?
-                .borrow()
                 .phys_handle;
             let intersect = world.physics.cast_ray(
                 &ray,
@@ -261,8 +261,8 @@ impl MyMain {
             #[cfg(debug_assertions)]
             {
                 use syrillian::components::CameraComponent;
-                if let Some(camera) = camera.get_component::<CameraComponent>() {
-                    camera.borrow_mut().push_debug_ray(ray, 5.);
+                if let Some(mut camera) = camera.get_component::<CameraComponent>() {
+                    camera.push_debug_ray(ray, 5.);
                 }
             }
 
@@ -275,8 +275,8 @@ impl MyMain {
             }
         } else if drop {
             if let Some(obj) = self.picked_up {
-                let rb = obj.get_component::<RigidBodyComponent>()?;
-                rb.borrow_mut().set_kinematic(false);
+                let mut rb = obj.get_component::<RigidBodyComponent>()?;
+                rb.set_kinematic(false);
             }
             self.picked_up = None;
         }
@@ -292,8 +292,8 @@ impl MyMain {
             obj.transform
                 .set_position_vec(position.lerp(&target_position, 1.03));
             obj.transform.set_rotation(unit_quat);
-            let rb = obj.get_component::<RigidBodyComponent>()?;
-            rb.borrow_mut().set_kinematic(true);
+            let mut rb = obj.get_component::<RigidBodyComponent>()?;
+            rb.set_kinematic(true);
         }
 
         if world.input.is_key_down(KeyCode::KeyC)

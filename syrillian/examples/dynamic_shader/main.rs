@@ -2,6 +2,7 @@
 
 use log::{debug, error, info};
 use notify::{Config, Event, RecommendedWatcher, RecursiveMode, Watcher};
+use slotmap::Key;
 use std::error::Error;
 use std::fs;
 use std::sync::mpsc;
@@ -49,7 +50,7 @@ impl Default for DynamicShaderExample {
             material_id: HMaterial::FALLBACK,
             _watcher: watcher,
             file_events: rx,
-            cube: GameObjectId::invalid(),
+            cube: GameObjectId::null(),
         }
     }
 }
@@ -129,10 +130,8 @@ impl DynamicShaderExample {
         let mut y_rot = 45.;
         if self.cube.exists() {
             let old_comp = self.cube.get_component::<RotateComponent>().unwrap();
-            let old_comp = old_comp.borrow();
             iter = old_comp.iteration;
             y_rot = old_comp.y_rot;
-            drop(old_comp);
 
             self.cube.delete();
         }
@@ -143,7 +142,7 @@ impl DynamicShaderExample {
 
         self.cube.transform.set_scale(2.0);
         self.cube.transform.set_position(0., 0., -5.0);
-        let new_comp = self.cube.add_component::<RotateComponent>();
+        let mut new_comp = self.cube.add_component::<RotateComponent>();
         new_comp.iteration = iter;
         new_comp.y_rot = y_rot;
         new_comp.rotate_speed = 0.0;

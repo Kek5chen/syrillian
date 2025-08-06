@@ -55,11 +55,11 @@ impl Component for Collider3D {
         }
     }
 
-    fn update(&mut self) {
+    fn update(&mut self, _world: &mut World) {
         let body_comp = (*self.parent).get_component::<RigidBodyComponent>();
         if let Some(body_comp) = body_comp {
             if self.linked_to_body.is_none() {
-                self.link_to_rigid_body(Some(body_comp.borrow().body_handle));
+                self.link_to_rigid_body(Some(body_comp.body_handle));
                 let coll = self.get_collider_mut().unwrap();
                 coll.set_translation(Vector3::zeros());
                 coll.set_rotation(Rotation::identity());
@@ -76,9 +76,7 @@ impl Component for Collider3D {
         }
     }
 
-    fn delete(&mut self) {
-        let world = World::instance();
-
+    fn delete(&mut self, world: &mut World) {
         world.physics.collider_set.remove(
             self.phys_handle,
             &mut world.physics.island_manager,
@@ -108,7 +106,7 @@ impl Collider3D {
         ColliderBuilder::new(shape)
             .density(1.0)
             .friction(0.999)
-            .user_data(parent.0 as u128)
+            .user_data(parent.as_ffi() as u128)
             .build()
     }
 

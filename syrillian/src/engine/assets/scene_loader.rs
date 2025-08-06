@@ -81,7 +81,7 @@ impl SceneLoader {
 
         for child in node.children.borrow().iter() {
             let child_obj = Self::_spawn_object(world, scene, child, depth + 1);
-            trace!("Loaded new scene object {}", child_obj.0);
+            trace!("Loaded new scene object {}", child_obj.name);
             node_obj.add_child(child_obj);
         }
 
