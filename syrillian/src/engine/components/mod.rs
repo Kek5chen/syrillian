@@ -67,7 +67,7 @@ use crate::World;
 use delegate::delegate;
 use slotmap::{new_key_type, Key};
 use std::any::{Any, TypeId};
-use std::fmt::Debug;
+use std::fmt::{Debug, Formatter};
 use std::hash::Hash;
 use std::marker::PhantomData;
 use std::mem;
@@ -166,6 +166,20 @@ impl<C: Component> Default for CRef<C> {
     }
 }
 
+impl<C: Component> PartialEq<Self> for CRef<C> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl<C: Component> Eq for CRef<C> {}
+
+impl<C: Component> Debug for CRef<C> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Component").finish()
+    }
+}
+
 pub struct CWeak<C: Component>(pub(crate) ComponentId, pub(crate) PhantomData<C>);
 
 impl<C: Component> Clone for CWeak<C> {
@@ -175,6 +189,20 @@ impl<C: Component> Clone for CWeak<C> {
 }
 
 impl<C: Component> Copy for CWeak<C> {}
+
+impl<C: Component> PartialEq<Self> for CWeak<C> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl<C: Component> Eq for CWeak<C> {}
+
+impl<C: Component> Debug for CWeak<C> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Weak Component").finish()
+    }
+}
 
 #[allow(unused)]
 impl<C: Component> CWeak<C> {
@@ -206,7 +234,7 @@ impl<C: Component> Default for CWeak<C> {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
 pub struct TypedComponentId(pub(crate) TypeId, pub(crate) ComponentId);
 
 impl From<TypedComponentId> for ComponentId {
@@ -215,9 +243,9 @@ impl From<TypedComponentId> for ComponentId {
     }
 }
 
-impl<COMP: Component> From<CRef<COMP>> for TypedComponentId {
-    fn from(value: CRef<COMP>) -> Self {
-        TypedComponentId(TypeId::of::<COMP>(), value.0)
+impl<C: Component> From<CRef<C>> for TypedComponentId {
+    fn from(value: CRef<C>) -> Self {
+        TypedComponentId(TypeId::of::<C>(), value.0)
     }
 }
 
@@ -228,6 +256,10 @@ impl TypedComponentId {
 
     pub fn as_a<C: Component>(&self) -> Option<CRef<C>> {
         self.is_a::<C>().then(|| CRef(self.1, PhantomData))
+    }
+
+    pub fn type_id(&self) -> TypeId {
+        self.0
     }
 }
 

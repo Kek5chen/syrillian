@@ -1,4 +1,5 @@
 use std::any::Any;
+use std::collections::HashSet;
 use std::fmt::Debug;
 use std::ops::{Deref, DerefMut};
 
@@ -61,7 +62,7 @@ pub struct GameObject {
     pub(crate) parent: Option<GameObjectId>,
     pub transform: Transform,
     pub(crate) drawable: Option<Box<dyn Drawable>>,
-    pub(crate) components: Vec<TypedComponentId>,
+    pub(crate) components: HashSet<TypedComponentId>,
 }
 
 impl GameObject {
@@ -118,7 +119,7 @@ impl GameObject {
         comp.init(world);
 
         let id = world.components.add(comp);
-        self.components.push(id.into());
+        self.components.insert(id.into());
         id
     }
 
@@ -167,6 +168,12 @@ impl GameObject {
         None
     }
 
+    pub fn remove_component(&mut self, comp: impl Into<TypedComponentId>, world: &mut World) {
+        let comp = comp.into();
+        self.components.remove(&comp);
+        world.components.remove(comp);
+    }
+
     pub fn parent(&self) -> &Option<GameObjectId> {
         &self.parent
     }
@@ -176,16 +183,16 @@ impl GameObject {
     }
 
     pub fn delete(&mut self) {
-        for child in &mut self.children {
+        for mut child in self.children.iter().copied() {
             child.delete();
         }
 
         let world = World::instance();
-        for comp in self.components.drain(..) {
-            let Some(comp) = c_any_mut!(comp) else {
-                continue;
-            };
-            comp.delete_internal(world);
+        for typed in self.components.drain() {
+            if let Some(comp) = c_any_mut!(typed) {
+                comp.delete_internal(world);
+                world.components.remove(typed);
+            }
         }
 
         self.children.clear();

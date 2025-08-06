@@ -17,6 +17,7 @@ where
     fn iter<'a>(&'a self) -> Box<dyn Iterator<Item=(K, &'a dyn Component)> + 'a>;
     fn get(&self, key: K) -> Option<&dyn Component>;
     fn get_mut(&mut self, key: K) -> Option<&mut dyn Component>;
+    fn remove(&mut self, key: K);
 }
 
 impl<K, V> HopSlotMapUntyped<K> for HopSlotMap<K, V>
@@ -51,13 +52,16 @@ where
     fn get_mut(&mut self, key: K) -> Option<&mut dyn Component> {
         self.get_mut(key).map(|v| v as &mut dyn Component)
     }
+
+    fn remove(&mut self, key: K) {
+        self.remove(key);
+    }
 }
 
 #[derive(Default)]
 pub struct ComponentStorage {
     inner: HashMap<TypeId, Box<dyn HopSlotMapUntyped<ComponentId>>>,
 }
-
 impl ComponentStorage {
     pub(crate) fn _get_from_id(&self, tid: TypeId) -> Option<&dyn HopSlotMapUntyped<ComponentId>> {
         Some(self.inner.get(&tid)?.as_ref())
@@ -140,5 +144,13 @@ impl ComponentStorage {
 
     pub(crate) fn add<C: Component>(&mut self, component: C) -> CRef<C> {
         CRef(self.map_mut().insert(component), PhantomData)
+    }
+
+    pub(crate) fn remove(&mut self, comp: TypedComponentId) {
+        let Some(map) = self._get_mut_from_id(comp.0) else {
+            // already empty
+            return;
+        };
+        map.remove(comp.1);
     }
 }

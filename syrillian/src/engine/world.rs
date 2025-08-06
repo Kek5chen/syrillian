@@ -18,6 +18,7 @@ use crate::prefabs::CameraPrefab;
 use itertools::Itertools;
 use log::info;
 use slotmap::{HopSlotMap, Key};
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -130,7 +131,7 @@ impl World {
             parent: None,
             transform: Transform::new(GameObjectId::null()),
             drawable: None,
-            components: vec![],
+            components: HashSet::new(),
         };
 
         // TODO: Consider adding the object to the world right away
