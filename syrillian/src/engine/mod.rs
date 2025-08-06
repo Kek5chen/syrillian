@@ -14,6 +14,7 @@ pub mod world;
 pub mod assets;
 pub mod prefabs;
 pub mod rendering;
+pub mod audio;
 
 pub use self::world::World;
 
