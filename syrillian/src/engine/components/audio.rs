@@ -17,7 +17,7 @@ impl Component for AudioEmitter {
         Self { parent, sound_id: String::new(), playing: false }
     }
 
-    fn update(&mut self) {
+    fn update(&mut self, world: &mut World) {
         if !self.playing {
             return;
         }
@@ -48,7 +48,7 @@ impl Component for AudioReceiver {
         Self { parent, }
     }
 
-    fn update(&mut self) {
+    fn update(&mut self, world: &mut World) {
         let transform = &self.parent().transform;
         World::instance().audio_scene.set_receiver_position(transform.position());
     }

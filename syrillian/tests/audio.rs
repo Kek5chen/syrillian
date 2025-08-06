@@ -1,10 +1,10 @@
-use syrillian::audio::audio:: {
+use syrillian::audio:: {
     AudioScene, AudioSystem
 };
 
 #[test]
 fn test_load_sounds() {
-    let mut audio = AudioSystem::new();
+    let mut audio = AudioSystem::default();
     audio.load_sound("pop", "examples/assets/pop.wav");
     assert!(audio.has_asset("pop"));
 }
