@@ -15,12 +15,14 @@ use crate::engine::rendering::Renderer;
 use crate::input::InputManager;
 use crate::physics::PhysicsManager;
 use crate::prefabs::CameraPrefab;
+use crate::audio::AudioScene;
 use itertools::Itertools;
 use log::info;
 use slotmap::{HopSlotMap, Key};
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+
 
 static mut G_WORLD: *mut World = std::ptr::null_mut();
 
@@ -45,6 +47,8 @@ pub struct World {
     pub input: InputManager,
     /// Asset storage containing meshes, textures, materials, etc.
     pub assets: Arc<AssetStore>,
+    /// Audio scene manager
+    pub audio_scene: AudioScene,
 
     /// Time when the world was created
     start_time: Instant,
@@ -74,6 +78,7 @@ impl World {
             physics: PhysicsManager::default(),
             input: InputManager::default(),
             assets: AssetStore::empty(),
+            audio_scene: AudioScene::default(),
             start_time: Instant::now(),
             delta_time: Duration::default(),
             last_frame_time: Instant::now(),

@@ -88,7 +88,10 @@ impl<S: AppState> ApplicationHandler for App<S> {
             }
         };
 
+
+
         renderer.init();
+
 
         if let Err(e) = self.state.init(&mut self.world, renderer.window()) {
             panic!("World init function hook returned: {e}");
