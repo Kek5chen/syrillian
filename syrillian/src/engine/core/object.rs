@@ -145,8 +145,7 @@ impl GameObject {
     pub fn get_component<C: Component + 'static>(&self) -> Option<CRef<C>> {
         self.components
             .iter()
-            .filter_map(|c| c.as_a::<C>())
-            .next()
+            .find_map(|c| c.as_a::<C>())
     }
 
     pub fn get_components<C: Component + 'static>(&self) -> impl Iterator<Item=CRef<C>> {
