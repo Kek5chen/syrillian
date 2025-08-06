@@ -152,9 +152,6 @@ impl Renderer {
         let post_process_data =
             PostProcessData::new(&state.device, &pp_bgl, &offscreen_surface.view());
 
-        drop(render_bgl);
-        drop(pp_bgl);
-
         Ok(Renderer {
             state,
             window,
