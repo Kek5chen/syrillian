@@ -12,8 +12,8 @@ pub struct FirstPersonMovementController {
     parent: GameObjectId,
     pub move_speed: f32,
     pub jump_factor: f32,
-    rigid_body: Option<CWeak<RigidBodyComponent>>,
-    camera_controller: Option<CWeak<FirstPersonCameraController>>,
+    rigid_body: CWeak<RigidBodyComponent>,
+    camera_controller: CWeak<FirstPersonCameraController>,
     pub velocity: Vector3<f32>,
     pub sprint_multiplier: f32,
     velocity_interp_t: f32,
@@ -28,8 +28,8 @@ impl Component for FirstPersonMovementController {
             parent,
             move_speed: 5.0,
             jump_factor: 100.0,
-            rigid_body: None,
-            camera_controller: None,
+            rigid_body: CWeak::null(),
+            camera_controller: CWeak::null(),
             velocity: Vector3::zero(),
             sprint_multiplier: 2.0,
             velocity_interp_t: 0.06,
@@ -44,16 +44,17 @@ impl Component for FirstPersonMovementController {
                 rigid.enable_ccd(true);
             }
         }
-        self.rigid_body = rigid.map(CRef::downgrade);
+        self.rigid_body = rigid.map(CRef::downgrade).unwrap_or_default();
 
         self.camera_controller = self
             .parent
             .get_child_component::<FirstPersonCameraController>()
-            .map(CRef::downgrade);
+            .map(CRef::downgrade)
+            .unwrap_or_default();
     }
 
     fn update(&mut self, world: &mut World) {
-        let mut rigid = match self.rigid_body.and_then(|r| r.upgrade(world)) {
+        let mut rigid = match self.rigid_body.upgrade(world) {
             None => {
                 warn!("Rigid body not set!");
                 return;
@@ -125,7 +126,7 @@ impl Component for FirstPersonMovementController {
         target_velocity *= speed_factor;
         self.velocity = self.velocity.lerp(&target_velocity, self.velocity_interp_t);
 
-        if let Some(mut camera) = self.camera_controller.and_then(|c| c.upgrade(world)) {
+        if let Some(mut camera) = self.camera_controller.upgrade(world) {
             let delta_time = world.delta_time().as_secs_f32();
             camera.update_roll(
                 -lr_movement * speed_factor * delta_time * 100.,

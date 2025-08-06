@@ -64,7 +64,8 @@ pub use spring::*;
 
 use crate::core::GameObjectId;
 use crate::World;
-use slotmap::new_key_type;
+use delegate::delegate;
+use slotmap::{new_key_type, Key};
 use std::any::{Any, TypeId};
 use std::fmt::Debug;
 use std::hash::Hash;
@@ -138,6 +139,7 @@ impl<C: Component> From<CRef<C>> for CWeak<C> {
     }
 }
 
+#[allow(unused)]
 impl<C: Component> CRef<C> {
     pub(crate) fn forget_lifetime(mut self) -> &'static mut C {
         unsafe { mem::transmute(self.deref_mut()) }
@@ -145,6 +147,22 @@ impl<C: Component> CRef<C> {
 
     pub fn downgrade(self) -> CWeak<C> {
         self.into()
+    }
+
+    pub fn null() -> CRef<C> {
+        CRef(ComponentId::null(), PhantomData)
+    }
+
+    delegate! {
+        to self.0 {
+            fn is_null(&self) -> bool;
+        }
+    }
+}
+
+impl<C: Component> Default for CRef<C> {
+    fn default() -> Self {
+        CRef(ComponentId::default(), PhantomData)
     }
 }
 
@@ -158,6 +176,7 @@ impl<C: Component> Clone for CWeak<C> {
 
 impl<C: Component> Copy for CWeak<C> {}
 
+#[allow(unused)]
 impl<C: Component> CWeak<C> {
     pub fn exists(&self, world: &World) -> bool {
         world
@@ -169,13 +188,23 @@ impl<C: Component> CWeak<C> {
     pub fn upgrade(&self, world: &World) -> Option<CRef<C>> {
         self.exists(world).then(|| CRef(self.0, self.1))
     }
+
+    pub fn null() -> CWeak<C> {
+        CWeak(ComponentId::null(), PhantomData)
+    }
+
+    delegate! {
+        to self.0 {
+            fn is_null(&self) -> bool;
+        }
+    }
 }
-//
-// impl<C: Component> From<Option<CRef<C>>> for Option<CWeak<C>> {
-//     fn from(value: Option<CRef<C>>) -> Self {
-//
-//     }
-// }
+
+impl<C: Component> Default for CWeak<C> {
+    fn default() -> Self {
+        CWeak(ComponentId::default(), PhantomData)
+    }
+}
 
 #[derive(Copy, Clone)]
 pub struct TypedComponentId(pub(crate) TypeId, pub(crate) ComponentId);
