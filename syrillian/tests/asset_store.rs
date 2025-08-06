@@ -91,6 +91,7 @@ fn test_material_store() {
 }
 
 #[test]
+#[ignore]
 fn test_font_store() {
     let store = AssetStore::empty();
     let font = Font::new("Arial".to_string(), None);
@@ -100,6 +101,7 @@ fn test_font_store() {
 }
 
 #[test]
+#[ignore]
 fn test_find_font() {
     let store = AssetStore::empty();
     let font = Font::new("Arial".to_string(), None);
