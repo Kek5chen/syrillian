@@ -127,7 +127,7 @@ impl AppState for MyMain {
 
         {
             let mut text = world.new_object("Text");
-            let mut text2d = Text2D::new("Meow".to_string(), "Helvetica".to_string(), 50., None);
+            let mut text2d = Text2D::new("Meow".to_string(), "Arial".to_string(), 50., None);
             text2d.set_position(0., 50.);
             text2d.text_mut().rainbow_mode(true);
 
@@ -138,7 +138,7 @@ impl AppState for MyMain {
         {
             let mut text = world.new_object("Text 3D");
             let mut text3d =
-                Text3D::new("Meow 3D".to_string(), "Helvetica".to_string(), 100., None);
+                Text3D::new("Meow 3D".to_string(), "Arial".to_string(), 100., None);
 
             text3d.set_alignment(TextAlignment::Center);
             text.transform.set_position(0., 10., -20.);

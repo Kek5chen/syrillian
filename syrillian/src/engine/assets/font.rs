@@ -45,7 +45,7 @@ pub const FONT_ATLAS_CHARS: [[char; FONT_ATLAS_GRID_N as usize]; FONT_ATLAS_GRID
     ['Y', 'Z', '!', '@', '#', '$', '%', '^', '&', '*'],
     ['(', ')', '-', '_', '+', '=', '[', ']', '{', '}'],
     ['|', '\\', ':', ';', '"', '\'', '<', '>', ',', '.'],
-    ['/', '?', '`', '~', ' ', '\t', '\n', '\r', '\0', ' '],
+    ['/', '?', '`', '~', ' ', ' ', ' ', ' ', ' ', ' '],
 ];
 
 pub const DEFAULT_GLYPH_SIZE: i32 = 100;
@@ -104,10 +104,18 @@ pub fn render_font_atlas(font: &font_kit::font::Font, glyph_size: i32) -> Canvas
         for (x, ch) in row.iter().enumerate() {
             let x = x as f32;
             let y = y as f32 + 1.;
-            let glyph_id = font.glyph_for_char(*ch).unwrap();
-            let origin = font.origin(glyph_id).unwrap() * point_size_f;
+            let Some(glyph_id) = font.glyph_for_char(*ch) else {
+                warn!("Font {} is missing character {ch}", font.family_name());
+                continue
+            };
+            let Ok(origin) = font.origin(glyph_id) else {
+                warn!("Font {} is missing character {ch}", font.family_name());
+                continue;
+            };
 
-            font.rasterize_glyph(
+            let origin = origin * point_size_f;
+
+            let raster_result = font.rasterize_glyph(
                 &mut canvas,
                 glyph_id,
                 point_size_f,
@@ -117,8 +125,11 @@ pub fn render_font_atlas(font: &font_kit::font::Font, glyph_size: i32) -> Canvas
                 )),
                 HintingOptions::Full(point_size_f),
                 RasterizationOptions::GrayscaleAa,
-            )
-                .unwrap();
+            );
+
+            if let Err(e) = raster_result {
+                warn!("Font {} couldn't rasterize character {ch}: {e}", font.family_name());
+            }
         }
     }
 
