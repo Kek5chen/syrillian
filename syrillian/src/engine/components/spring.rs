@@ -103,6 +103,9 @@ impl SpringComponent {
             .impulse_joint_set
             .get(self.handle?)?
             .data;
+
+        // SAFETY: this is OK because the SpringJoint type is
+        //         a `repr(transparent)` newtype of `GenericJoint`.
         unsafe { std::mem::transmute(spring) }
     }
 
