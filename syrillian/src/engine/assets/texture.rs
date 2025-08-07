@@ -40,7 +40,7 @@ impl Texture {
         diffuse
     }
 
-    pub(crate) fn desc(&self) -> TextureDescriptor {
+    pub(crate) fn desc(&self) -> TextureDescriptor<'_> {
         TextureDescriptor {
             label: None,
             size: Extent3d {

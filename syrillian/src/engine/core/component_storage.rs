@@ -111,11 +111,11 @@ impl ComponentStorage {
         self._get_mut_from_id(id.0)?.get_mut(id.1)
     }
 
-    pub fn values_of_type<C: Component>(&self) -> Option<Values<ComponentId, C>> {
+    pub fn values_of_type<C: Component>(&self) -> Option<Values<'_, ComponentId, C>> {
         Some(self._get()?.values())
     }
 
-    pub fn values_mut_of_type<C: Component>(&mut self) -> Option<ValuesMut<ComponentId, C>> {
+    pub fn values_mut_of_type<C: Component>(&mut self) -> Option<ValuesMut<'_, ComponentId, C>> {
         Some(self._get_mut()?.values_mut())
     }
 

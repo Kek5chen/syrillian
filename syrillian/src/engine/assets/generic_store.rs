@@ -157,7 +157,7 @@ impl<T: StoreType> Store<T> {
         Some(item?.1)
     }
 
-    pub fn items(&self) -> Iter<AssetKey, T> {
+    pub fn items(&self) -> Iter<'_, AssetKey, T> {
         self.data.iter()
     }
 }
