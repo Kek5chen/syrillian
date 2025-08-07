@@ -137,7 +137,6 @@ impl<S: AppState> ApplicationHandler for App<S> {
                     error!("Error happened when calling late update function hook: {e}");
                 }
 
-                renderer.state.update();
                 renderer.update_world(world);
                 if !renderer.render_world(world) {
                     event_loop.exit();

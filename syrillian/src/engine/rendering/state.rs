@@ -194,8 +194,4 @@ impl State {
         self.surface.configure(&self.device, &self.config);
         self.depth_texture = Self::setup_depth_texture(&self.size, &self.device);
     }
-
-    pub fn update(&mut self) {
-        // TODO
-    }
 }
