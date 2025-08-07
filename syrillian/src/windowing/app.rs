@@ -148,6 +148,7 @@ impl<S: AppState> ApplicationHandler for App<S> {
                 }
 
                 world.next_frame();
+                renderer.window.request_redraw();
             }
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Resized(size) => {

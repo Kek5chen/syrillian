@@ -374,7 +374,6 @@ impl Renderer {
         self.render_final_pass(world, &mut ctx);
 
         ctx.output.present();
-        self.window.request_redraw();
 
         if self.frame_count % 1000 == 0 {
             trace!("Refreshing cache...");
