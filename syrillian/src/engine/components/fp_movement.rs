@@ -32,7 +32,7 @@ impl Component for FirstPersonMovementController {
             camera_controller: CWeak::null(),
             velocity: Vector3::zero(),
             sprint_multiplier: 2.0,
-            velocity_interp_t: 0.06,
+            velocity_interp_t: 6.0,
         }
     }
 
@@ -124,7 +124,7 @@ impl Component for FirstPersonMovementController {
             target_velocity = target_velocity.normalize();
         }
         target_velocity *= speed_factor;
-        self.velocity = self.velocity.lerp(&target_velocity, self.velocity_interp_t);
+        self.velocity = self.velocity.lerp(&target_velocity, self.velocity_interp_t * world.delta_time().as_secs_f32());
 
         if let Some(mut camera) = self.camera_controller.upgrade(world) {
             let delta_time = world.delta_time().as_secs_f32();
