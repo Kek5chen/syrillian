@@ -216,8 +216,8 @@ impl AppState for MyMain {
 
         let text3d = self.text3d.drawable_mut::<Text3D>().unwrap();
         text3d.set_text(format!(
-            "Meow 3D\nYou have: {} FPS",
-            self.frame_counter.fps()
+            "There are {} Objects in the World",
+            world.objects.len(),
         ));
 
         self.do_raycast_test(world);

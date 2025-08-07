@@ -43,7 +43,7 @@ impl Default for PhysicsManager {
             physics_hooks: (),
             event_handler: (),
             last_update: Instant::now(),
-            timestep: Duration::from_millis(1000 / 60),
+            timestep: Duration::from_secs_f64(1.0 / 60.0),
         }
     }
 }
