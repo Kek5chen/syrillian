@@ -4,7 +4,7 @@ use crate::drawables::Drawable;
 use crate::engine::assets::HMesh;
 use crate::engine::rendering::uniform::ShaderUniform;
 use crate::engine::rendering::{DrawCtx, Renderer};
-use crate::rendering::RuntimeMesh;
+use crate::rendering::{RuntimeMesh, RuntimeMeshData};
 use crate::World;
 use log::warn;
 use nalgebra::{Matrix4, Vector3};
@@ -50,13 +50,6 @@ impl BoneData {
     }
 }
 
-#[derive(Debug)]
-pub struct RuntimeMeshData {
-    mesh_data: ModelUniform,
-    bone_data: BoneData,
-    uniform: ShaderUniform<MeshUniformIndex>,
-}
-
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct DebugVertexNormal {
@@ -64,19 +57,13 @@ pub struct DebugVertexNormal {
     normal: Vector3<f32>,
 }
 
-#[derive(Debug)]
-#[cfg(debug_assertions)]
-struct ColliderDebugData {
-    vertex_buf: wgpu::Buffer,
-    index_buf: wgpu::Buffer,
-    collider_indices_count: u32,
-}
-
+// TODO: Just use the same bind and add a array stride to the vertex normal shader
+//       This is possible now that i discovered the builtin vertex / instance ids :)
+//       No separate buffer, just share the same bind! wee
 #[derive(Debug)]
 #[cfg(debug_assertions)]
 struct RuntimeDebugData {
     mesh_vertices_buf: wgpu::Buffer,
-    collider_buffers: Vec<ColliderDebugData>,
 }
 
 #[derive(Debug)]
@@ -139,11 +126,6 @@ impl Drawable for MeshRenderer {
 
             if ctx.frame.debug.mesh_edges {
                 draw_edges(ctx, &mesh, &mesh_data, &mut pass);
-            }
-
-            // TODO: Should probably make the collider debug draw part of the colliders somehow
-            if ctx.frame.debug.colliders_edges {
-                draw_collider_edges(ctx, &debug_data, &mut pass);
             }
 
             if ctx.frame.debug.vertex_normals {
@@ -245,7 +227,7 @@ impl MeshRenderer {
     }
 
     #[cfg(debug_assertions)]
-    fn setup_debug_data(&mut self, renderer: &Renderer, world: &mut World, parent: GameObjectId) {
+    fn setup_debug_data(&mut self, renderer: &Renderer, world: &mut World, _parent: GameObjectId) {
         use wgpu::BufferUsages;
         use wgpu::util::{BufferInitDescriptor, DeviceExt};
 
@@ -269,84 +251,15 @@ impl MeshRenderer {
             usage: BufferUsages::VERTEX | BufferUsages::COPY_DST,
         });
 
-        let collider_data = Self::generate_collider_data(parent, &renderer.state.device);
-
         let debug_data = RuntimeDebugData {
             mesh_vertices_buf: vertices_buf,
-            collider_buffers: collider_data,
         };
 
         self.debug_data = Some(debug_data);
     }
 
-    /// Returns Vertices and Indices
-    #[cfg(debug_assertions)]
-    fn generate_collider_data(
-        parent: GameObjectId,
-        device: &wgpu::Device,
-    ) -> Vec<ColliderDebugData> {
-        use crate::components::Collider3D;
-        use crate::components::MeshShapeExtra;
-        use nalgebra::Vector2;
-        use wgpu::BufferUsages;
-        use wgpu::util::{BufferInitDescriptor, DeviceExt};
-
-        let colliders: Vec<_> = parent
-            .get_components::<Collider3D>()
-            .map(|c| c.get_collider().unwrap().shared_shape().to_trimesh())
-            .collect();
-
-        let mut buffers = Vec::new();
-
-        for (vertices, tri_indices) in colliders {
-            let vertices: Vec<_> = vertices
-                .iter()
-                .map(|v| Vertex3D {
-                    position: v.coords,
-                    uv: Vector2::zeros(),
-                    normal: Vector3::y(),
-                    tangent: Vector3::x(),
-                    bitangent: Vector3::z(),
-                    bone_indices: [0; 4],
-                    bone_weights: [0.0; 4],
-                })
-                .collect();
-
-            let vertex_bytes = bytemuck::cast_slice(&vertices[..]);
-
-            if cfg!(debug_assertions) {
-                let vertex_bytes_size = size_of_val(vertex_bytes) as i64;
-                let expected_vertex_bytes_size = (tri_indices
-                    .iter()
-                    .flatten()
-                    .max()
-                    .map(|i| *i as i64)
-                    .unwrap_or(-1)
-                    + 1)
-                    * size_of::<Vertex3D>() as i64;
-
-                assert_eq!(vertex_bytes_size, expected_vertex_bytes_size);
-            }
-
-            let vertex_buf = device.create_buffer_init(&BufferInitDescriptor {
-                label: Some("Collider Debug Vertex Buffer"),
-                contents: vertex_bytes,
-                usage: BufferUsages::VERTEX,
-            });
-            let index_buf = device.create_buffer_init(&BufferInitDescriptor {
-                label: Some("Collider Debug Index Buffer"),
-                contents: bytemuck::cast_slice(&tri_indices[..]),
-                usage: BufferUsages::INDEX,
-            });
-
-            buffers.push(ColliderDebugData {
-                vertex_buf,
-                index_buf,
-                collider_indices_count: tri_indices.len() as u32 * 3,
-            })
-        }
-
-        buffers
+    pub fn mesh_data(&self) -> Option<&RuntimeMeshData> {
+        self.runtime_data.as_ref()
     }
 }
 
@@ -406,28 +319,6 @@ fn draw_edges(
         pass.draw_indexed(0..mesh_data.indices_count() as u32, 0, 0..1);
     } else {
         pass.draw(0..mesh_data.vertex_count() as u32, 0..1);
-    }
-}
-
-#[cfg(debug_assertions)]
-fn draw_collider_edges(
-    ctx: &DrawCtx,
-    debug_data: &RuntimeDebugData,
-    pass: &mut RwLockWriteGuard<RenderPass>,
-) {
-    use nalgebra::Vector4;
-    use wgpu::ShaderStages;
-
-    const COLOR: Vector4<f32> = Vector4::new(0.0, 1.0, 0.2, 1.0);
-
-    let shader = ctx.frame.cache.shader(HShader::DEBUG_EDGES);
-    pass.set_pipeline(&shader.pipeline);
-    pass.set_push_constants(ShaderStages::FRAGMENT, 0, bytemuck::bytes_of(&COLOR));
-
-    for collider in &debug_data.collider_buffers {
-        pass.set_vertex_buffer(0, collider.vertex_buf.slice(..));
-        pass.set_index_buffer(collider.index_buf.slice(..), IndexFormat::Uint32);
-        pass.draw_indexed(0..collider.collider_indices_count, 0, 0..1);
     }
 }
 

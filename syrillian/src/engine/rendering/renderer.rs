@@ -14,9 +14,9 @@ use crate::engine::rendering::offscreen_surface::OffscreenSurface;
 use crate::engine::rendering::post_process_pass::PostProcessData;
 use crate::engine::rendering::uniform::ShaderUniform;
 use crate::engine::rendering::FrameCtx;
-use crate::ensure_aligned;
 use crate::rendering::State;
 use crate::world::World;
+use crate::{c_any_mut, ensure_aligned};
 use log::{error, trace};
 use nalgebra::{Matrix4, Perspective3, Vector2};
 use snafu::ResultExt;
@@ -88,7 +88,7 @@ impl Default for DebugRenderer {
 }
 
 impl DebugRenderer {
-    pub fn next_mode(&mut self) {
+    pub fn next_mode(&mut self) -> u32 {
         if self.colliders_edges {
             *self = DebugRenderer {
                 mesh_edges: true,
@@ -96,7 +96,8 @@ impl DebugRenderer {
                 vertex_normals: true,
                 rays: true,
                 text_geometry: true,
-            }
+            };
+            1
         } else if self.mesh_edges {
             *self = DebugRenderer {
                 mesh_edges: false,
@@ -104,9 +105,11 @@ impl DebugRenderer {
                 vertex_normals: false,
                 rays: false,
                 text_geometry: false,
-            }
+            };
+            2
         } else {
             *self = DebugRenderer::default();
+            0
         }
     }
 }
@@ -305,6 +308,8 @@ impl Renderer {
             );
         }
 
+        world.execute_component_func(|comp, world| comp.draw(world, &draw_ctx));
+
         drop(draw_ctx);
 
         self.state.queue.submit(Some(encoder.finish()));
@@ -326,6 +331,13 @@ impl Renderer {
                     combined_matrix * child.transform.full_matrix().to_homogeneous(),
                 );
             }
+
+            for comp in child.components.iter().copied() {
+                if let Some(comp) = c_any_mut!(comp) {
+                    comp.update_draw(world, self, &combined_matrix);
+                }
+            }
+
             let Some(drawable) = &mut child.clone().drawable else {
                 continue;
             };

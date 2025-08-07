@@ -141,6 +141,18 @@ impl Vertex3D {
 
         LAYOUT
     }
+
+    pub const fn basic(pos: Vector3<f32>) -> Self {
+        Vertex3D {
+            position: pos,
+            uv: Vector2::new(0.0, 0.0),
+            normal: Vector3::new(0.0, 1.0, 0.0),
+            tangent: Vector3::new(1.0, 0.0, 0.0),
+            bitangent: Vector3::new(0.0, 0.0, 1.0),
+            bone_indices: [0; 4],
+            bone_weights: [0.0; 4],
+        }
+    }
 }
 
 pub type Vertex3DTuple<'a, IU, IF> = (

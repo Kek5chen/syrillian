@@ -172,7 +172,10 @@ impl World {
     }
 
     /// Executes a component function on all components of all game objects
-    fn execute_component_func(&mut self, func: fn(&mut dyn Component, &mut World)) {
+    pub(crate) fn execute_component_func<F>(&mut self, func: F)
+    where
+        F: Fn(&mut dyn Component, &mut World),
+    {
         let world = unsafe { &mut *(self as *mut World) };
         self.components.values_mut().for_each(|c| func(c, world))
     }

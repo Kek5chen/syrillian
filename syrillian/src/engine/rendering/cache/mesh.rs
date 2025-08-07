@@ -1,8 +1,21 @@
+use crate::core::ModelUniform;
+use crate::drawables::{BoneData, MeshUniformIndex};
 use crate::engine::assets::Mesh;
 use crate::engine::rendering::cache::generic_cache::CacheType;
 use crate::engine::rendering::cache::AssetCache;
+use crate::rendering::uniform::ShaderUniform;
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::{BufferUsages, Device, Queue};
+
+#[derive(Debug)]
+pub struct RuntimeMeshData {
+    pub mesh_data: ModelUniform,
+    pub bone_data: BoneData,
+
+    // TODO: Consider having a uniform like that, for every Transform by default in some way, or
+    //       lazy-make / provide one by default.
+    pub uniform: ShaderUniform<MeshUniformIndex>,
+}
 
 #[derive(Debug)]
 pub struct RuntimeMesh {

@@ -184,7 +184,15 @@ impl AppState for MyMain {
         renderer: &mut syrillian::rendering::renderer::Renderer,
     ) -> Result<(), Box<dyn Error>> {
         if world.input.is_key_down(KeyCode::KeyL) {
-            renderer.debug.next_mode();
+            let mut collider = self.player.get_component::<Collider3D>().unwrap();
+            if collider.is_debug_render_enabled() {
+                collider.set_debug_render(false);
+            } else {
+                let mode = renderer.debug.next_mode();
+                if mode == 0 {
+                    collider.set_debug_render(true);
+                }
+            }
         }
 
         Ok(())

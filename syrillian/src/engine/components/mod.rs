@@ -63,8 +63,10 @@ pub use rotate::*;
 pub use spring::*;
 
 use crate::core::GameObjectId;
+use crate::rendering::{DrawCtx, Renderer};
 use crate::World;
 use delegate::delegate;
+use nalgebra::Matrix4;
 use slotmap::{new_key_type, Key};
 use std::any::{Any, TypeId};
 use std::fmt::{Debug, Formatter};
@@ -280,6 +282,12 @@ pub trait Component: Any {
 
     // Gets called after physics have evolved
     fn post_update(&mut self, world: &mut World) {}
+
+    // Gets called in preparation of drawing
+    fn update_draw(&mut self, world: &mut World, renderer: &Renderer, outer_transform: &Matrix4<f32>) {}
+
+    // Gets called after Drawables have been rendered
+    fn draw(&self, world: &World, ctx: &DrawCtx) {}
 
     // Gets called when the component is about to be deleted
     fn delete(&mut self, world: &mut World) {}
