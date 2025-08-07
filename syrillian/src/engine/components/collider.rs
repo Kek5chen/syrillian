@@ -1,19 +1,31 @@
-use crate::assets::HShader;
 use crate::components::ColliderError::{
     DesyncedCollider, InvalidMesh, InvalidMeshRef, NoMeshRenderer,
 };
 use crate::components::{Component, RigidBodyComponent};
-use crate::core::{GameObjectId, ModelUniform, Vertex3D};
-use crate::drawables::{BoneData, MeshRenderer, MeshUniformIndex};
+use crate::core::GameObjectId;
+use crate::drawables::MeshRenderer;
 use crate::engine::assets::Mesh;
-use crate::rendering::uniform::ShaderUniform;
-use crate::rendering::{DrawCtx, Renderer};
 use crate::World;
 use log::{trace, warn};
-use nalgebra::{Matrix4, Point3, Vector3};
+use nalgebra::{Point3, Vector3};
 use rapier3d::prelude::*;
 use snafu::Snafu;
+
+#[cfg(debug_assertions)]
+use crate::assets::HShader;
+#[cfg(debug_assertions)]
+use crate::core::{ModelUniform, Vertex3D};
+#[cfg(debug_assertions)]
+use crate::drawables::{BoneData, MeshUniformIndex};
+#[cfg(debug_assertions)]
+use crate::rendering::uniform::ShaderUniform;
+#[cfg(debug_assertions)]
+use crate::rendering::{DrawCtx, Renderer};
+#[cfg(debug_assertions)]
+use nalgebra::Matrix4;
+#[cfg(debug_assertions)]
 use std::sync::RwLockWriteGuard;
+#[cfg(debug_assertions)]
 use wgpu::{IndexFormat, RenderPass};
 
 #[derive(Debug)]
@@ -32,11 +44,13 @@ struct ColliderDebugData {
 // This will not handle the case where the backed uniform goes missing and needs to be
 // phased out for something different. But I imagine the use cases where this will work
 // are far overgrowing the opposite.
+#[cfg(debug_assertions)]
 enum PotentiallyPiggyBackedModelData {
     Backed(ShaderUniform<MeshUniformIndex>),
     Owned(ModelUniform, ShaderUniform<MeshUniformIndex>),
 }
 
+#[cfg(debug_assertions)]
 impl PotentiallyPiggyBackedModelData {
     fn uniform(&self) -> &ShaderUniform<MeshUniformIndex> {
         match self {
@@ -95,8 +109,12 @@ impl Component for Collider3D {
             phys_handle,
             linked_to_body: None,
             parent,
+
+            #[cfg(debug_assertions)]
             enable_debug_render: true,
+            #[cfg(debug_assertions)]
             collider_buffers: None,
+            #[cfg(debug_assertions)]
             model_data: None,
         }
     }
