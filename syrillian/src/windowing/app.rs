@@ -2,7 +2,6 @@ use crate::components::CameraComponent;
 use crate::rendering::Renderer;
 use crate::world::World;
 use crate::AppState;
-use futures::executor::block_on;
 use log::{error, info};
 use std::error::Error;
 use winit::application::ApplicationHandler;
@@ -36,12 +35,12 @@ impl<S: AppState> App<S> {
 }
 
 impl<S: AppState> AppSettings<S> {
-    pub async fn run(self) -> Result<(), Box<dyn Error>> {
-        let (event_loop, app) = self.init_state().await?;
-        app.run(event_loop).await
+    pub fn run(self) -> Result<(), Box<dyn Error>> {
+        let (event_loop, app) = self.init_state()?;
+        app.run(event_loop)
     }
 
-    async fn init_state(self) -> Result<(EventLoop<()>, App<S>), Box<dyn Error>> {
+    fn init_state(self) -> Result<(EventLoop<()>, App<S>), Box<dyn Error>> {
         let event_loop = match EventLoop::new() {
             Err(EventLoopError::NotSupported(_)) => {
                 return Err("No graphics backend found that could be used.".into());
@@ -64,7 +63,7 @@ impl<S: AppState> AppSettings<S> {
 }
 
 impl<S: AppState> App<S> {
-    pub async fn run(mut self, event_loop: EventLoop<()>) -> Result<(), Box<dyn Error>> {
+    pub fn run(mut self, event_loop: EventLoop<()>) -> Result<(), Box<dyn Error>> {
         event_loop.run_app(&mut self)?;
         Ok(())
     }
@@ -79,7 +78,7 @@ impl<S: AppState> ApplicationHandler for App<S> {
 
         let asset_store = self.world.assets.clone();
 
-        let mut renderer = match block_on(Renderer::new(window, asset_store)) {
+        let mut renderer = match Renderer::new(window, asset_store) {
             Ok(r) => r,
             Err(e) => {
                 error!("Error when creating renderer: {e}");

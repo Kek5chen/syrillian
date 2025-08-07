@@ -4,6 +4,7 @@
 //! depth textures. It also exposes methods to resize and recreate these
 //! resources when the window changes.
 
+use futures::executor::block_on;
 use snafu::{ensure, ResultExt, Snafu};
 use std::sync::Arc;
 use wgpu::{
@@ -155,7 +156,7 @@ impl State {
         })
     }
 
-    pub async fn new(window: &Window) -> Result<Self> {
+    pub fn new(window: &Window) -> Result<Self> {
         let size = window.inner_size();
         let size = PhysicalSize {
             height: size.height.max(1),
@@ -164,8 +165,8 @@ impl State {
 
         let instance = Self::setup_instance();
         let surface = Self::setup_surface(&instance, window)?;
-        let adapter = Self::setup_adapter(&instance, &surface).await;
-        let (device, queue) = Self::get_device_and_queue(&adapter).await?;
+        let adapter = block_on(Self::setup_adapter(&instance, &surface));
+        let (device, queue) = block_on(Self::get_device_and_queue(&adapter))?;
         let config = Self::configure_surface(&size, &surface, &adapter, &device)?;
         let depth_texture = Self::setup_depth_texture(&size, &device);
 

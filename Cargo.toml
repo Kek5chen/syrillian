@@ -38,7 +38,3 @@ panic = "abort"
 [workspace.dependencies]
 syrillian_utils = { version = "0.3.0", path = "syrillian_utils", default-features = false }
 syrillian_macros = { version = "0.3.0", path = "syrillian_macros", default-features = false }
-
-[workspace.dependencies.tokio]
-version = "1.47"
-features = ["rt", "rt-multi-thread", "macros", "sync"]

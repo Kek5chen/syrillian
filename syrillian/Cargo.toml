@@ -37,7 +37,6 @@ bon = "3.6"
 const_format = "0.2"
 gilrs = "0.11"
 uuid = { version = "1.17.0", features = ["v4"] }
-tokio.workspace = true
 font-kit = "0.14.3"
 pathfinder_geometry = "0.5.1"
 delegate = "0.13"

@@ -7,7 +7,6 @@ pub use windowing::*;
 
 pub use ::gilrs;
 pub use ::log;
-pub use ::tokio;
 pub use ::winit;
 
 #[cfg(feature = "derive")]

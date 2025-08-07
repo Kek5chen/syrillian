@@ -1,7 +1,7 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::Error;
 use syn::spanned::Spanned;
+use syn::Error;
 
 #[proc_macro_derive(UniformIndex)]
 pub fn uniform_index(input: TokenStream) -> TokenStream {
@@ -79,13 +79,12 @@ pub fn syrillian_app(input: TokenStream) -> TokenStream {
     let app_name = &input.ident;
 
     quote! {
-        #[::syrillian::tokio::main]
-        async fn main() {
+        fn main() {
             let app = ::syrillian::AppRuntime::configure(#app_name::default(), stringify!(#app_name), 800, 600);
 
             #logger
 
-            if let Err(e) = ::syrillian::AppSettings::run(app).await {
+            if let Err(e) = ::syrillian::AppSettings::run(app) {
                 ::syrillian::log::error!("{e}");
             }
         }

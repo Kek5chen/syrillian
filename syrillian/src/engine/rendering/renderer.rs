@@ -129,8 +129,8 @@ pub enum PointLightUniformIndex {
 }
 
 impl Renderer {
-    pub(crate) async fn new(window: Window, store: Arc<AssetStore>) -> Result<Self> {
-        let state = Box::new(State::new(&window).await.context(StateErr)?);
+    pub fn new(window: Window, store: Arc<AssetStore>) -> Result<Self> {
+        let state = Box::new(State::new(&window).context(StateErr)?);
         let offscreen_surface = OffscreenSurface::new(&state.device, &state.config);
         let cache = Arc::new(AssetCache::new(store, &state));
 
