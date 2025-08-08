@@ -29,7 +29,7 @@ impl AssetStore {
             materials: Arc::new(Store::populated()),
             bgls: Arc::new(Store::populated()),
             fonts: Arc::new(Store::empty()),
-            sounds: Arc::new(Store::populated()),
+            sounds: Arc::new(Store::empty()),
         })
     }
 }

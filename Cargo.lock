@@ -2293,6 +2293,7 @@ dependencies = [
  "approx",
  "bytemuck",
  "matrixmultiply",
+ "mint",
  "nalgebra-macros",
  "num-complex",
  "num-rational",
