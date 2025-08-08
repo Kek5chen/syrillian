@@ -5,7 +5,7 @@
 //! It maintains the scene graph, input state and physics simulation and
 //! offers utility such as methods to create, find and remove game objects.
 
-use crate::assets::{Material, Mesh, Shader, Store, Texture, BGL};
+use crate::assets::{Material, Mesh, Shader, Sound, Store, Texture, BGL};
 use crate::components::{CRef, Component};
 use crate::core::component_storage::ComponentStorage;
 use crate::core::{GameObject, GameObjectId, Transform};
@@ -78,7 +78,7 @@ impl World {
             physics: PhysicsManager::default(),
             input: InputManager::default(),
             assets: AssetStore::empty(),
-            audio_scene: AudioScene::default(),
+            audio_scene: AudioScene::new(),
             start_time: Instant::now(),
             delta_time: Duration::default(),
             last_frame_time: Instant::now(),
@@ -363,6 +363,10 @@ impl AsRef<Store<BGL>> for World {
     fn as_ref(&self) -> &Store<BGL> {
         &self.assets.bgls
     }
+}
+
+impl AsRef<Store<Sound>> for World {
+    fn as_ref(&self) -> &Store<Sound> { &self.assets.sounds }
 }
 
 fn print_objects_rec(children: &Vec<GameObjectId>, i: i32) {

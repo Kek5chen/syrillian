@@ -11,14 +11,11 @@ use rapier3d::parry::query::Ray;
 use rapier3d::prelude::QueryFilter;
 use slotmap::Key;
 use std::error::Error;
-
+use std::ops::Deref;
 use syrillian::assets::scene_loader::SceneLoader;
-use syrillian::assets::{HMaterial, StoreType};
+use syrillian::assets::{HMaterial, Sound, StoreType, H};
 use syrillian::assets::{Material, Shader};
-use syrillian::components::{
-    Collider3D, FirstPersonCameraController, PointLightComponent, RigidBodyComponent,
-    RopeComponent, RotateComponent, SpringComponent,
-};
+use syrillian::components::{AudioEmitter, AudioReceiver, Collider3D, FirstPersonCameraController, PointLightComponent, RigidBodyComponent, RopeComponent, RotateComponent, SpringComponent};
 use syrillian::core::{GameObjectExt, GameObjectId};
 use syrillian::drawables::text::glyph::TextAlignment;
 use syrillian::drawables::{Text2D, Text3D};
@@ -42,6 +39,8 @@ struct MyMain {
     player: GameObjectId,
     picked_up: Option<GameObjectId>,
     text3d: GameObjectId,
+    pop_sound: Option<H<Sound>>,
+    cube2: GameObjectId,
 }
 
 impl Default for MyMain {
@@ -51,13 +50,14 @@ impl Default for MyMain {
             player: GameObjectId::null(),
             picked_up: None,
             text3d: GameObjectId::null(),
+            pop_sound: None,
+            cube2: GameObjectId::null(),
         }
     }
 }
 
 impl AppState for MyMain {
     fn init(&mut self, world: &mut World, _window: &Window) -> Result<(), Box<dyn Error>> {
-        world.audio_scene.load_sound("pop", "examples/assets/pop.wav");
 
         world.input.set_auto_cursor_lock(true);
         world.input.set_quit_on_escape(true);
@@ -66,6 +66,10 @@ impl AppState for MyMain {
         world.spawn(&City);
         self.player = world.spawn(&FirstPersonPlayerPrefab);
         self.player.at(0.0, 20.0, 0.0);
+
+        self.pop_sound = Some(Sound::load_sound("./examples/assets/pop.wav", false)?.store(world));
+
+        let receiver = world.active_camera.unwrap().add_component::<AudioReceiver>();
 
         let shader = Shader::new_fragment("Funky Shader", SHADER1).store(world);
         let shader2 = Shader::new_fragment("Funky Shader 2", SHADER2).store(world);
@@ -85,8 +89,13 @@ impl AppState for MyMain {
         let mut big_cube_left = world.spawn(&cube_prefab1);
         let mut big_cube_right = world.spawn(&cube_prefab1);
         let mut cube = world.spawn(&cube_prefab2);
-        let mut cube2 = world.spawn(&cube_prefab2);
+        self.cube2 = world.spawn(&cube_prefab2);
         let mut cube3 = world.spawn(&cube_prefab2);
+
+        self.cube2.add_component::<AudioEmitter>();
+        self.cube2.get_component::<AudioEmitter>().unwrap().init(self.pop_sound.unwrap(), world);
+
+
 
         cube.at(20., 3.9, -20.)
             .build_component::<PointLightComponent>()
@@ -96,7 +105,7 @@ impl AppState for MyMain {
             .build_component::<RotateComponent>()
             .scaling(1.);
 
-        cube2
+        self.cube2
             .at(5.0, 6.9, -20.0)
             .build_component::<PointLightComponent>()
             .build_component::<Collider3D>()
@@ -115,7 +124,7 @@ impl AppState for MyMain {
             .build_component::<RigidBodyComponent>()
             .enable_ccd()
             .build_component::<RopeComponent>()
-            .connect_to(cube2);
+            .connect_to(self.cube2);
 
         big_cube_left
             .at(10.0, 20.0, 20.0)
@@ -221,14 +230,10 @@ impl AppState for MyMain {
         self.do_raycast_test(world);
 
 
-        // If q is pressed, emit a sound at the origin
+        // // If q is pressed, play a sound at the origin
         if world.input.is_key_down(KeyCode::KeyQ) {
-            let origin = Vector3::new(0.0,0.0,0.0);
-            world.audio_scene.play_sound("pop", origin);
+            self.cube2.get_component::<AudioEmitter>().unwrap().play(world);
         }
-
-        // Set receiver source to the camera / player
-        world.audio_scene.set_receiver_position(world.active_camera.unwrap().transform.position());
 
         Ok(())
     }
