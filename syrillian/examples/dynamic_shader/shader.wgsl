@@ -36,6 +36,7 @@ fn fs_main(in: VOutput) -> @location(0) vec4<f32> {
   let opacity = (opacity_x * opacity_y);
 
   var color = vec4(1.0, in.uv, 1.0) * opacity * tri_thing;
+  color.a = 1.0;
 
   return color;
 }

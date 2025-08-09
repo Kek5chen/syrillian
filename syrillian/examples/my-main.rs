@@ -34,6 +34,7 @@ use winit::window::Window;
 
 const SHADER1: &str = include_str!("dynamic_shader/shader.wgsl");
 const SHADER2: &str = include_str!("dynamic_shader/shader2.wgsl");
+const SHADER3: &str = include_str!("dynamic_shader/shader3.wgsl");
 
 #[derive(Debug, SyrillianApp)]
 struct MyMain {
@@ -65,6 +66,7 @@ impl AppState for MyMain {
 
         let shader = Shader::new_fragment("Funky Shader", SHADER1).store(world);
         let shader2 = Shader::new_fragment("Funky Shader 2", SHADER2).store(world);
+        let shader3 = Shader::new_fragment("Funky Shader 3", SHADER3).store(world);
 
         let shader_mat_1 = Material::builder()
             .name("Cube Material 1".into())
@@ -74,12 +76,17 @@ impl AppState for MyMain {
             .name("Cube Material 2".into())
             .shader(shader2)
             .store(&world);
+        let shader_mat_3 = Material::builder()
+            .name("Cube Material 3".into())
+            .shader(shader3)
+            .store(&world);
 
         let cube_prefab1 = CubePrefab::new(shader_mat_1);
         let cube_prefab2 = CubePrefab::new(shader_mat_2);
+        let cube_prefab3 = CubePrefab::new(shader_mat_3);
 
         let mut big_cube_left = world.spawn(&cube_prefab1);
-        let mut big_cube_right = world.spawn(&cube_prefab1);
+        let mut big_cube_right = world.spawn(&cube_prefab3);
         let mut cube = world.spawn(&cube_prefab2);
         let mut cube2 = world.spawn(&cube_prefab2);
         let mut cube3 = world.spawn(&cube_prefab2);
@@ -114,16 +121,12 @@ impl AppState for MyMain {
             .connect_to(cube2);
 
         big_cube_left
-            .at(10.0, 20.0, 20.0)
-            .scale(5.)
-            .build_component::<RotateComponent>()
-            .speed(30.);
+            .at(100.0, 10.0, 200.0)
+            .scale(100.);
 
         big_cube_right
-            .at(-10.0, 20.0, 20.0)
-            .scale(5.)
-            .build_component::<RotateComponent>()
-            .speed(-30.);
+            .at(-100.0, 10.0, 200.0)
+            .scale(100.);
 
         {
             let mut text = world.new_object("Text");

@@ -17,3 +17,9 @@ fn vs_main(in: VInput) -> @builtin(position) vec4<f32> {
 fn fs_main() -> @location(0) vec4<f32> {
     return color;
 }
+
+// this looks cool
+//@fragment
+//fn fs_main(@builtin(position) pos: vec4<f32>) -> @location(0) vec4<f32> {
+//    return vec4(color.rgb, min(1.0, 3.0 + log(pos.w / 2)));
+//}
