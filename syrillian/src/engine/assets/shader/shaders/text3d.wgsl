@@ -1,5 +1,4 @@
 #use model
-#use camera
 
 struct GlyphIn {
     @location(0) offset: vec2<f32>,

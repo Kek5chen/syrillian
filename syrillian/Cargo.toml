@@ -41,6 +41,7 @@ font-kit = "0.14.3"
 pathfinder_geometry = "0.5.1"
 delegate = "0.13"
 slotmap = "1.0"
+debug_panic = "0.2"
 
 [build-dependencies]
 chrono = "0.4"

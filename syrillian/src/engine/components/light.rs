@@ -1,112 +1,83 @@
 use crate::components::Component;
 use crate::core::GameObjectId;
-use crate::{ensure_aligned, World};
-use nalgebra::Vector3;
+use crate::rendering::lights::{Light, LightHandle, LightType};
+use crate::World;
+use debug_panic::debug_panic;
+use std::marker::PhantomData;
 
-#[repr(C)]
-#[derive(Copy, Clone, Default, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct PointLightUniform {
-    pub pos: Vector3<f32>,
-    pub radius: f32,
-    pub color: Vector3<f32>,
-    pub intensity: f32,
-    pub specular_color: Vector3<f32>,
-    pub specular_intensity: f32,
+pub trait LightTypeTrait {
+    fn type_id() -> LightType;
 }
 
-impl PointLightUniform {
-    pub const fn zero() -> Self {
-        PointLightUniform {
-            pos: Vector3::new(0.0, 0.0, 0.0),
-            radius: 0.0,
-            color: Vector3::new(0.0, 0.0, 0.0),
-            intensity: 0.0,
-            specular_color: Vector3::new(0.0, 0.0, 0.0),
-            specular_intensity: 0.0,
-        }
+pub struct Point;
+pub struct Sun;
+
+pub struct LightComponent<L: LightTypeTrait + 'static> {
+    parent: GameObjectId,
+    handle: LightHandle,
+    light_type: PhantomData<L>,
+}
+
+pub type PointLightComponent = LightComponent<Point>;
+pub type SunLightComponent = LightComponent<Sun>;
+
+impl LightTypeTrait for Sun {
+    fn type_id() -> LightType {
+        LightType::Sun
     }
 }
 
-ensure_aligned!(PointLightUniform { pos, color, specular_color }, align <= 16 * 3 => size);
-
-pub struct PointLightComponent {
-    parent: GameObjectId,
-    inner: PointLightUniform,
+impl LightTypeTrait for Point {
+    fn type_id() -> LightType {
+        LightType::Point
+    }
 }
 
-impl Component for PointLightComponent {
+impl<L: LightTypeTrait + 'static> Component for LightComponent<L> {
     fn new(parent: GameObjectId) -> Self
     where
         Self: Sized,
     {
-        PointLightComponent {
+        let world = World::instance();
+        let handle = world.lights.register();
+
+        if let Some(light) = world.lights.get_mut(handle) {
+            light.type_id = L::type_id() as u32;
+        } else {
+            debug_panic!("Light wasn't created");
+        }
+
+        LightComponent {
             parent,
-            inner: PointLightUniform {
-                pos: parent.transform.position(),
-                radius: 100.0,
-                color: Vector3::new(1.0, 1.0, 1.0),
-                intensity: 1.0,
-                specular_color: Vector3::new(1.0, 1.0, 1.0),
-                specular_intensity: 1.0,
-            },
+            handle,
+            light_type: PhantomData,
         }
     }
 
-    fn update(&mut self, _world: &mut World) {
-        self.inner.pos = self.parent.transform.position();
+    fn update(&mut self, world: &mut World) {
+        let Some(data) = world.lights.get_mut(self.handle) else {
+            debug_panic!("Light disappeared");
+            return;
+        };
+
+        data.position = self.parent.transform.position();
+        data.direction = self.parent.transform.forward();
     }
 
+    #[inline]
     fn parent(&self) -> GameObjectId {
         self.parent
     }
 }
 
-impl PointLightComponent {
+impl<L: LightTypeTrait + 'static> Light for LightComponent<L> {
     #[inline]
-    pub fn radius(&self) -> f32 {
-        self.inner.radius
+    fn light_handle(&self) -> LightHandle {
+        self.handle
     }
 
     #[inline]
-    pub fn intensity(&self) -> f32 {
-        self.inner.intensity
-    }
-
-    #[inline]
-    pub fn color(&self) -> &Vector3<f32> {
-        &self.inner.color
-    }
-
-    #[inline]
-    pub fn set_radius(&mut self, radius: f32) {
-        let radius = radius.max(0.0);
-        self.inner.radius = radius;
-    }
-
-    #[inline]
-    pub fn set_intensity(&mut self, intensity: f32) {
-        let intensity = intensity.max(0.0);
-        self.inner.intensity = intensity;
-    }
-
-    #[inline]
-    pub fn set_color_rgb(&mut self, r: f32, g: f32, b: f32) {
-        self.inner.color.x = r;
-        self.inner.color.y = g;
-        self.inner.color.z = b;
-    }
-
-    #[inline]
-    pub fn set_color_rgb_vec(&mut self, color: Vector3<f32>) {
-        self.inner.color = color;
-    }
-
-    pub(crate) fn update_inner_pos(&mut self) {
-        self.inner.pos = self.parent.transform.position();
-    }
-
-    #[inline]
-    pub(crate) fn inner(&self) -> &PointLightUniform {
-        &self.inner
+    fn light_type(&self) -> LightType {
+        L::type_id()
     }
 }

@@ -10,7 +10,7 @@ fn tri(x_og: f32, y_og: f32) -> bool {
 }
 
 @fragment
-fn fs_main(in: VOutput) -> @location(0) vec4<f32> {
+fn fs_main(in: FInput) -> @location(0) vec4<f32> {
   let time = system.time;
   let slices = 20.;
   let uv_x = in.uv.x;

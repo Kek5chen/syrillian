@@ -52,6 +52,7 @@ mod post_process_pass;
 pub mod renderer;
 pub mod state;
 pub(crate) mod uniform;
+pub mod lights;
 
 pub use cache::*;
 pub use context::*;

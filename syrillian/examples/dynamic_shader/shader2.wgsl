@@ -18,7 +18,7 @@ fn tri(x_og: f32, y_og: f32) -> bool {
 }
 
 @fragment
-fn fs_main(in: VOutput) -> @location(0) vec4<f32> {
+fn fs_main(in: FInput) -> @location(0) vec4<f32> {
   let og_x = in.position.x;
   let og_y = in.position.y;
   let x = sin(og_x);

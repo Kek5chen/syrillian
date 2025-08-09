@@ -1,0 +1,218 @@
+use crate::components::Component;
+use crate::rendering::uniform::{ResourceDesc, ShaderUniform};
+use crate::rendering::Renderer;
+use crate::utils::hacks::DenseSlotMapDirectAccess;
+use crate::{ensure_aligned, World};
+use debug_panic::debug_panic;
+use delegate::delegate;
+use nalgebra::{SimdPartialOrd, Vector3};
+use slotmap::{new_key_type, DenseSlotMap};
+use syrillian_macros::UniformIndex;
+
+#[repr(C)]
+#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct LightUniform {
+    pub position: Vector3<f32>,
+    pub _p0: u32,
+    pub direction: Vector3<f32>,
+    pub range: f32,
+    pub color: Vector3<f32>,
+    pub intensity: f32,
+    pub inner_angle: f32,
+    pub outer_angle: f32,
+    pub type_id: u32, // LightType
+    pub _p1: u32,
+}
+
+impl LightUniform {
+    pub const fn dummy() -> Self {
+        Self {
+            position: Vector3::new(0.0, 0.0, 0.0),
+            _p0: 0,
+            direction: Vector3::new(0.0, -1.0, 0.0),
+            range: 10.0,
+            color: Vector3::new(1.0, 1.0, 1.0),
+            intensity: 1.0,
+            inner_angle: 0.0,
+            outer_angle: 0.0,
+            type_id: LightType::Point as u32,
+            _p1: 0,
+        }
+    }
+}
+
+ensure_aligned!(LightUniform { position, color, color }, align <= 16 * 4 => size);
+
+new_key_type! { pub struct LightHandle; }
+
+pub trait Light: Component {
+    fn light_handle(&self) -> LightHandle;
+    fn light_type(&self) -> LightType;
+
+    fn data<'a>(&self, world: &'a World) -> &'a LightUniform {
+        let Some(light) = world.lights.get(self.light_handle()) else {
+            debug_panic!("Light desynced");
+            const DUMMY_LIGHT: LightUniform = LightUniform::dummy();
+            return &DUMMY_LIGHT;
+        };
+        light
+    }
+
+    fn data_mut<'a>(&self, world: &'a mut World) -> &'a mut LightUniform {
+        let Some(light) = world.lights.get_mut(self.light_handle()) else {
+            panic!("Light desynced");
+        };
+        light
+    }
+
+    fn set_range(&mut self, world: &mut World, range: f32) {
+        self.data_mut(world).range = range.max(0.);
+    }
+
+    fn set_intensity(&mut self, world: &mut World, intensity: f32) {
+        self.data_mut(world).intensity = intensity.max(0.);
+    }
+
+    fn set_color(&mut self, world: &mut World, r: f32, g: f32, b: f32) {
+        let light = self.data_mut(world);
+
+        light.color.x = r.clamp(0., 1.);
+        light.color.y = g.clamp(0., 1.);
+        light.color.z = b.clamp(0., 1.);
+    }
+    fn set_color_vec(&mut self, world: &mut World, color: &Vector3<f32>) {
+        let light = self.data_mut(world);
+        light.color = color.simd_clamp(Vector3::new(0., 0., 0.), Vector3::new(1., 1., 1.));
+    }
+}
+
+#[repr(u32)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum LightType {
+    Point = 0,
+    Sun = 1,
+}
+
+impl TryFrom<u32> for LightType {
+    type Error = ();
+
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        let ty = match value {
+            0 => LightType::Point,
+            1 => LightType::Sun,
+            _ => return Err(()),
+        };
+        Ok(ty)
+    }
+}
+
+#[repr(u8)]
+#[derive(Copy, Clone, Debug, UniformIndex)]
+pub enum LightUniformIndex {
+    Count = 0,
+    Lights = 1,
+}
+
+pub struct LightManager {
+    uniform: Option<ShaderUniform<LightUniformIndex>>,
+    inner: DenseSlotMap<LightHandle, LightUniform>,
+}
+
+impl Default for LightManager {
+    fn default() -> Self {
+        Self {
+            uniform: None,
+            inner: DenseSlotMap::with_key(),
+        }
+    }
+}
+
+impl LightManager {
+    delegate! {
+        to self.inner {
+            pub fn get(&self, handle: LightHandle) -> Option<&LightUniform>;
+            pub fn get_mut(&mut self, handle: LightHandle) -> Option<&mut LightUniform>;
+            pub fn insert(&mut self, value: LightUniform) -> LightHandle;
+            pub fn remove(&mut self, handle: LightHandle) -> Option<LightUniform>;
+            pub fn len(&self) -> usize;
+        }
+    }
+
+    pub fn register(&mut self) -> LightHandle {
+        self.insert(LightUniform::dummy())
+    }
+
+    pub fn uniform(&self) -> &ShaderUniform<LightUniformIndex> {
+        self.uniform
+            .as_ref()
+            .expect("Light data should be initialized")
+    }
+
+    pub fn init(&mut self, renderer: &Renderer) {
+        let bgl = renderer.cache.bgl_light();
+        let count = self.len() as u32;
+        let mut builder = ShaderUniform::builder(&bgl).with_buffer_data(&count);
+
+        const DUMMY_POINT_LIGHT: LightUniform = LightUniform::dummy();
+
+        if count == 0 {
+            builder = builder.with_buffer_storage(&[DUMMY_POINT_LIGHT]);
+        } else {
+            builder = builder.with_buffer_storage(self.inner.as_slice());
+        }
+
+        self.uniform = Some(builder.build(&renderer.state.device));
+    }
+
+    pub fn update(&mut self, renderer: &Renderer) {
+        let queue = &renderer.state.queue;
+        let size = self.len();
+
+        let uniform = self.uniform.as_mut().unwrap();
+        {
+            let data = uniform.buffer(LightUniformIndex::Lights);
+
+            if size * size_of::<LightUniform>() > data.size() as usize {
+                uniform.set_buffer(
+                    ResourceDesc::StorageBuffer {
+                        data: bytemuck::cast_slice(self.inner.as_slice()),
+                        name: LightUniformIndex::Lights,
+                    },
+                    &renderer.state.device,
+                );
+            }
+        }
+
+        let count = uniform.buffer(LightUniformIndex::Count);
+        let data = uniform.buffer(LightUniformIndex::Lights);
+        queue.write_buffer(count, 0, bytemuck::bytes_of(&(size as u32)));
+        queue.write_buffer(data, 0, bytemuck::cast_slice(self.inner.as_slice()));
+    }
+
+    #[cfg(debug_assertions)]
+    pub fn draw_debug_lights(&mut self, draw_ctx: &crate::rendering::DrawCtx) {
+        use crate::assets::HShader;
+        use wgpu::ShaderStages;
+
+        let shader = draw_ctx.frame.cache.shader(HShader::DEBUG_LIGHT);
+        let mut pass = draw_ctx.pass.write().unwrap();
+        pass.set_pipeline(&shader.pipeline);
+
+        let lights = self.inner.as_slice();
+        for i in 0..self.len() {
+            let type_id: LightType = match lights[i].type_id.try_into() {
+                Ok(ty) => ty,
+                Err(()) => {
+                    debug_panic!();
+                    continue;
+                }
+            };
+
+            pass.set_push_constants(ShaderStages::VERTEX, 0, bytemuck::bytes_of(&(i as u32)));
+            match type_id {
+                LightType::Point => pass.draw(0..2, 0..6),
+                LightType::Sun => pass.draw(0..2, 0..9),
+            }
+        }
+    }
+}

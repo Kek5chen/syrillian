@@ -4,7 +4,6 @@ use crate::engine::rendering::cache::generic_cache::CacheType;
 use crate::engine::rendering::cache::AssetCache;
 use crate::rendering::RenderPipelineBuilder;
 use std::borrow::Cow;
-use std::sync::Arc;
 use wgpu::*;
 
 pub mod builder;
@@ -43,42 +42,35 @@ impl CacheType for Shader {
 fn make_layout(shader: &Shader, device: &Device, cache: &AssetCache) -> PipelineLayout {
     let layout_name = format!("{} Pipeline Layout", shader.name());
 
-    // lifetime stuff-
-    let pp_bgl;
-    let mut bgl_arcs: Vec<Arc<BindGroupLayout>>;
-    let bind_group_layouts: Vec<&BindGroupLayout>;
+    let cam_bgl = cache.bgl_render();
+    let mdl_bgl = cache.bgl_model();
+    let mat_bgl = cache.bgl_material();
+    let lgt_bgl = cache.bgl_light();
+    let pp_bgl = cache.bgl_post_process();
+    let empty_bgl = cache.bgl_empty();
 
-    let desc = match shader {
-        Shader::Default { .. } | Shader::Custom { .. } => {
-            bgl_arcs = Vec::new();
+    let mut slots: [Option<&BindGroupLayout>; 5] = [None; 5];
+    slots[0] = Some(&cam_bgl);
 
-            bgl_arcs.push(cache.bgl_render());
-            if shader.needs_bgl(HBGL::MODEL) {
-                bgl_arcs.push(cache.bgl_model());
-                bgl_arcs.push(cache.bgl_material());
-            }
-            if shader.needs_bgl(HBGL::LIGHT) {
-                bgl_arcs.push(cache.bgl_light());
-            }
-
-            bind_group_layouts = bgl_arcs.iter().map(Arc::as_ref).collect();
-
-            PipelineLayoutDescriptor {
-                label: Some(&layout_name),
-                bind_group_layouts: &bind_group_layouts,
-                push_constant_ranges: &shader.push_constant_ranges(),
-            }
+    if matches!(shader, Shader::PostProcess { .. }) {
+        slots[1] = Some(&pp_bgl);
+    } else {
+        if shader.needs_bgl(HBGL::MODEL) {
+            slots[1] = Some(&mdl_bgl);
+            slots[2] = Some(&mat_bgl);
         }
-        Shader::PostProcess { .. } => {
-            pp_bgl = cache.bgl_post_process();
-
-            PipelineLayoutDescriptor {
-                label: Some(&layout_name),
-                bind_group_layouts: &[&pp_bgl],
-                push_constant_ranges: &[],
-            }
+        if shader.needs_bgl(HBGL::LIGHT) {
+            slots[3] = Some(&lgt_bgl);
         }
+    }
+
+    let last = slots.iter().rposition(|s| s.is_some()).unwrap_or(0);
+    let fixed: Vec<&BindGroupLayout> = (0..=last).map(|i| slots[i].unwrap_or(&empty_bgl)).collect();
+
+    let desc = PipelineLayoutDescriptor {
+        label: Some(&layout_name),
+        bind_group_layouts: &fixed,
+        push_constant_ranges: &shader.push_constant_ranges(),
     };
-
     device.create_pipeline_layout(&desc)
 }

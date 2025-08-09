@@ -21,6 +21,7 @@ pub fn uniform_index(input: TokenStream) -> TokenStream {
     let type_ident_str = type_ident.to_string().replace("Uniform", "").replace("Index", "");
 
     let variants = input.variants.iter().map(|var| &var.ident);
+    let variants2 = input.variants.iter().map(|var| &var.ident);
     let index_max = input.variants.len() - 1;
     let amount_addon_impl = match input.variants.len() {
         0 => quote! { impl ::syrillian_utils::ShaderUniformSingleIndex for #type_ident {} },
@@ -32,12 +33,12 @@ pub fn uniform_index(input: TokenStream) -> TokenStream {
             const MAX: usize = #index_max;
 
             #[inline]
-            fn index(&self) -> u64 {
-               *self as u64
+            fn index(&self) -> usize {
+               *self as usize
             }
 
             #[inline]
-            fn by_index(index: u64) -> Option<Self> {
+            fn by_index(index: usize) -> Option<Self> {
                 index.try_into().ok()
             }
 
@@ -49,11 +50,21 @@ pub fn uniform_index(input: TokenStream) -> TokenStream {
 
         #amount_addon_impl
 
+        impl ::std::convert::TryFrom<usize> for #type_ident {
+            type Error = ();
+            fn try_from(value: usize) -> Result<Self, Self::Error> {
+                match value {
+                    #(x if x == Self::#variants as usize => Ok(Self::#variants),)*
+                    _ => Err(()),
+                }
+            }
+        }
+
         impl ::std::convert::TryFrom<u64> for #type_ident {
             type Error = ();
             fn try_from(value: u64) -> Result<Self, Self::Error> {
                 match value {
-                    #(x if x == Self::#variants as u64 => Ok(Self::#variants),)*
+                    #(x if x == Self::#variants2 as u64 => Ok(Self::#variants2),)*
                     _ => Err(()),
                 }
             }

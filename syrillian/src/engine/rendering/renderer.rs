@@ -5,7 +5,7 @@
 //! It also provides debug drawing and post-processing utilities.
 
 use super::error::*;
-use crate::components::{CameraComponent, CameraUniform, PointLightComponent, PointLightUniform};
+use crate::components::{CameraComponent, CameraUniform};
 use crate::core::GameObjectId;
 use crate::engine::assets::AssetStore;
 use crate::engine::rendering::cache::AssetCache;
@@ -71,6 +71,7 @@ pub struct DebugRenderer {
     pub rays: bool,
     pub colliders_edges: bool,
     pub text_geometry: bool,
+    pub light: bool,
 }
 
 impl Default for DebugRenderer {
@@ -78,33 +79,30 @@ impl Default for DebugRenderer {
         const DEBUG_BUILD: bool = cfg!(debug_assertions);
 
         DebugRenderer {
-            mesh_edges: false,
-            colliders_edges: DEBUG_BUILD,
+            mesh_edges: DEBUG_BUILD,
+            colliders_edges: false,
             vertex_normals: DEBUG_BUILD,
             rays: DEBUG_BUILD,
             text_geometry: false,
+            light: DEBUG_BUILD,
         }
     }
 }
 
 impl DebugRenderer {
     pub fn next_mode(&mut self) -> u32 {
-        if self.colliders_edges {
-            *self = DebugRenderer {
-                mesh_edges: true,
-                colliders_edges: false,
-                vertex_normals: true,
-                rays: true,
-                text_geometry: true,
-            };
+        if self.mesh_edges {
+            self.mesh_edges = false;
+            self.colliders_edges = true;
             1
-        } else if self.mesh_edges {
+        } else if self.colliders_edges {
             *self = DebugRenderer {
                 mesh_edges: false,
                 colliders_edges: false,
                 vertex_normals: false,
                 rays: false,
                 text_geometry: false,
+                light: false,
             };
             2
         } else {
@@ -119,13 +117,6 @@ impl DebugRenderer {
 pub enum RenderUniformIndex {
     Camera = 0,
     System = 1,
-}
-
-#[repr(u8)]
-#[derive(Copy, Clone, Debug, UniformIndex)]
-pub enum PointLightUniformIndex {
-    Count = 0,
-    Lights = 1,
 }
 
 impl Renderer {
@@ -170,8 +161,6 @@ impl Renderer {
         })
     }
 
-    pub fn init(&mut self) {}
-
     pub fn update_world(&mut self, world: &mut World) {
         if let Err(e) = self._update_world(world) {
             error!("Error when updating world drawables: {e}");
@@ -212,7 +201,6 @@ impl Renderer {
         };
 
         self.render(&mut ctx, world);
-
         self.end_render(world, ctx);
 
         true
@@ -278,8 +266,6 @@ impl Renderer {
     }
 
     fn render_inner(&mut self, ctx: &mut FrameCtx, world: &mut World) -> Result<()> {
-        let light_uniform = self.setup_lights(world)?;
-
         let mut encoder = self
             .state
             .device
@@ -290,6 +276,7 @@ impl Renderer {
         let mut pass = self.prepare_render_pass(&mut encoder, ctx);
 
         let render_uniform = &self.render_uniform_data.uniform;
+        let light_uniform = world.lights.uniform();
 
         pass.set_bind_group(0, render_uniform.bind_group(), &[]);
         pass.set_bind_group(3, light_uniform.bind_group(), &[]);
@@ -309,6 +296,11 @@ impl Renderer {
         }
 
         world.execute_component_func(|comp, world| comp.draw(world, &draw_ctx));
+
+        #[cfg(debug_assertions)]
+        if self.debug.light {
+            world.lights.draw_debug_lights(&draw_ctx);
+        }
 
         drop(draw_ctx);
 
@@ -407,7 +399,8 @@ impl Renderer {
 
         let post_shader = self.cache.shader_post_process();
         pass.set_pipeline(&post_shader.pipeline);
-        pass.set_bind_group(0, self.post_process_data.uniform.bind_group(), &[]);
+        pass.set_bind_group(0, self.render_uniform_data.uniform.bind_group(), &[]);
+        pass.set_bind_group(1, self.post_process_data.uniform.bind_group(), &[]);
         pass.draw(0..6, 0..1);
 
         drop(pass);
@@ -423,9 +416,10 @@ impl Renderer {
         &mut self.window
     }
 
-    fn update_render_data(&mut self, world: &World) -> Result<()> {
+    fn update_render_data(&mut self, world: &mut World) -> Result<()> {
         self.update_camera_data(world)?;
         self.update_system_data(world)?;
+        world.lights.update(self);
 
         Ok(())
     }
@@ -475,42 +469,6 @@ impl Renderer {
         );
 
         Ok(())
-    }
-
-    fn setup_lights(&self, world: &World) -> Result<ShaderUniform<PointLightUniformIndex>> {
-        // TODO: cache this if light data doesn't change?
-        let point_lights = world.get_all_components_of_type::<PointLightComponent>();
-        let point_light_count = point_lights.len() as u32;
-
-        let light_bgl = self.cache.bgl_light();
-
-        const DUMMY_POINT_LIGHT: PointLightUniform = PointLightUniform::zero();
-
-        let builder = ShaderUniform::<PointLightUniformIndex>::builder(&light_bgl)
-            .with_buffer_data(&point_light_count);
-
-        let uniform;
-
-        if point_light_count == 0 {
-            uniform = builder
-                .with_buffer_storage(&[DUMMY_POINT_LIGHT])
-                .build(&self.state.device);
-        } else {
-            let light_data: Vec<PointLightUniform> = point_lights
-                .iter()
-                .copied()
-                .map(|mut light| {
-                    light.update_inner_pos();
-                    *light.inner()
-                })
-                .collect();
-
-            uniform = builder
-                .with_buffer_storage(light_data.as_slice())
-                .build(&self.state.device);
-        };
-
-        Ok(uniform)
     }
 
     fn prepare_render_pass<'a>(

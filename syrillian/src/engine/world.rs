@@ -1,9 +1,8 @@
 //! The [`World`] struct stores and updates all game objects. Its use is to manage any
-//! "raw" data, store and provide access to the objects and behavior in an intended
-//! way, with a focus on ease of use.
+//! "raw" data, store and provide access to the objects and behavior, with a focus on ease of use.
 //!
 //! It maintains the scene graph, input state and physics simulation and
-//! offers utility such as methods to create, find and remove game objects.
+//! offers utilities such as methods to create, find and remove game objects.
 
 use crate::assets::{Material, Mesh, Shader, Store, Texture, BGL};
 use crate::components::{CRef, Component};
@@ -15,6 +14,7 @@ use crate::engine::rendering::Renderer;
 use crate::input::InputManager;
 use crate::physics::PhysicsManager;
 use crate::prefabs::CameraPrefab;
+use crate::rendering::lights::LightManager;
 use itertools::Itertools;
 use log::info;
 use slotmap::{HopSlotMap, Key};
@@ -43,6 +43,8 @@ pub struct World {
     pub physics: PhysicsManager,
     /// Input management system
     pub input: InputManager,
+    /// Light management system
+    pub lights: LightManager,
     /// Asset storage containing meshes, textures, materials, etc.
     pub assets: Arc<AssetStore>,
 
@@ -73,6 +75,7 @@ impl World {
             active_camera: None,
             physics: PhysicsManager::default(),
             input: InputManager::default(),
+            lights: LightManager::default(),
             assets: AssetStore::empty(),
             start_time: Instant::now(),
             delta_time: Duration::default(),
@@ -287,6 +290,7 @@ impl World {
     /// If you're using the App runtime, this will be handled for you. Only call this function
     /// if you are trying to use a detached world context.
     pub fn initialize_runtime(&mut self, renderer: &Renderer) {
+        self.lights.init(&renderer);
         let world_ptr: *mut World = self;
         unsafe {
             for (id, obj) in &mut self.objects {

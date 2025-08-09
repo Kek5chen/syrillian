@@ -45,9 +45,48 @@ fn get_normal_from_map(
     return normalize(tbn * unpacked_normal);
 }
 
+fn point_light(in: FInput, light: Light, world_normal: vec3<f32>, view_dir: vec3<f32>, base_color: vec3<f32>) -> vec3<f32> {
+    var light_dir = light.position - in.position;
+    var distance = length(light_dir);
+    light_dir = light_dir / distance;
+
+    if distance > light.range * light.intensity * 2 {
+        return vec3(0.0, 0.0, 0.0);
+    }
+
+    let diffuse_angle = dot(world_normal, light_dir);
+
+    if diffuse_angle <= 0 {
+        return vec3(0.0, 0.0, 0.0);
+    }
+
+    let attenuation = calculate_attenuation(distance, light.range);
+    let light_strength = light.color * light.intensity * attenuation;
+
+    let diffuse_contrib = base_color * diffuse_angle * light_strength;
+    var lit_color = diffuse_contrib;
+
+    distance = distance * distance;
+
+    let specular_color = light.color * light.intensity;
+    let specular_contrib = calculate_specular(
+        light_dir, view_dir, world_normal,
+        material.shininess
+    );
+    let specular = specular_contrib * specular_color / distance;
+    lit_color = lit_color + specular;
+    return lit_color;
+}
+
+fn sun_light(in: FInput, light: Light, world_normal: vec3<f32>, view_dir: vec3<f32>, base_color: vec3<f32>) -> vec3<f32> {
+    let light_dot = clamp(dot(world_normal, light.direction), 0.0, 1.0);
+    let color = base_color * light_dot * light.intensity;
+
+    return color;
+}
 
 @fragment
-fn fs_main(in: VOutput) -> @location(0) vec4<f32> {
+fn fs_main(in: FInput) -> @location(0) vec4<f32> {
     // Color 
     var base_color: vec4<f32>;
     if material.use_diffuse_texture != 0u {
@@ -77,38 +116,15 @@ fn fs_main(in: VOutput) -> @location(0) vec4<f32> {
 
     var lit_color = base_color.rgb * AMBIENT_STRENGTH;
 
-    let count = point_light_count;
+    let count = light_count;
     for (var i: u32 = 0u; i < count; i = i + 1u) {
-        let light = point_lights[i];
-        var light_dir = light.position - in.position;
-        var distance = length(light_dir);
-        light_dir = light_dir / distance;
+        let light = lights.data[i];
 
-        if distance > light.radius {
-            continue;
+        if light.type_id == LIGHT_TYPE_POINT {
+            lit_color = lit_color + point_light(in, light, world_normal, view_dir, base_color.xyz);
+        } else if light.type_id == LIGHT_TYPE_SUN {
+            lit_color = lit_color + sun_light(in, light, world_normal, view_dir, base_color.xyz);
         }
-
-        let diffuse_angle = dot(world_normal, light_dir);
-
-        if diffuse_angle <= 0 {
-            continue;
-        }
-
-        let attenuation = calculate_attenuation(distance, light.radius);
-        let light_strength = light.color * light.intensity * attenuation;
-
-        let diffuse_contrib = base_color.rgb * diffuse_angle * light_strength;
-        lit_color = lit_color + diffuse_contrib;
-
-        distance = distance * distance;
-
-        let specular_color = light.specular_color * light.specular_intensity;
-        let specular_contrib = calculate_specular(
-            light_dir, view_dir, world_normal,
-            material.shininess
-        );
-        let specular = specular_contrib * specular_color / distance;
-        lit_color = lit_color + specular;
     }
 
     let final_color = vec4(lit_color, base_color.a * material.opacity);

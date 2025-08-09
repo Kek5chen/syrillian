@@ -1,7 +1,7 @@
-use crate::components::{
-    Collider3D, Component, PointLightComponent, RigidBodyComponent, RopeComponent, RotateComponent,
-};
+use crate::components::{Collider3D, Component, LightComponent, LightTypeTrait, RigidBodyComponent, RopeComponent, RotateComponent};
 use crate::core::{GameObject, GameObjectId};
+use crate::rendering::lights::Light;
+use crate::World;
 use nalgebra::Vector3;
 use rapier3d::dynamics::RigidBody;
 use rapier3d::prelude::Collider;
@@ -25,7 +25,7 @@ pub trait GOComponentExt<'a>: Component {
 
 pub struct GOColliderExt<'a>(&'a mut Collider, &'a mut GameObject);
 pub struct GORigidBodyExt<'a>(&'a mut RigidBody, &'a mut GameObject);
-pub struct GOLightExt<'a>(&'a mut PointLightComponent, &'a mut GameObject);
+pub struct GOLightExt<'a, L: LightTypeTrait + 'static>(&'a mut LightComponent<L>, &'a mut GameObject);
 pub struct GORotateExt<'a>(&'a mut RotateComponent, &'a mut GameObject);
 pub struct GORopeExt<'a>(&'a mut RopeComponent, &'a mut GameObject);
 
@@ -173,8 +173,8 @@ impl DerefMut for GORigidBodyExt<'_> {
     }
 }
 
-impl<'a> GOComponentExt<'a> for PointLightComponent {
-    type Outer = GOLightExt<'a>;
+impl<'a, L: LightTypeTrait> GOComponentExt<'a> for LightComponent<L> {
+    type Outer = GOLightExt<'a, L>;
 
     #[inline]
     fn build_component(&'a mut self, obj: &'a mut GameObject) -> Self::Outer {
@@ -182,21 +182,21 @@ impl<'a> GOComponentExt<'a> for PointLightComponent {
     }
 }
 
-impl GOLightExt<'_> {
+impl<L: LightTypeTrait + 'static> GOLightExt<'_, L> {
     #[inline]
-    pub fn color(self, r: f32, g: f32, b: f32) -> Self {
-        self.0.set_color_rgb(r, g, b);
+    pub fn color(self, world: &mut World, r: f32, g: f32, b: f32) -> Self {
+        self.0.set_color(world, r, g, b);
         self
     }
 
     #[inline]
-    pub fn brightness(self, amount: f32) -> Self {
-        self.0.set_intensity(amount);
+    pub fn brightness(self, world: &mut World, amount: f32) -> Self {
+        self.0.set_intensity(world, amount);
         self
     }
 }
 
-impl Deref for GOLightExt<'_> {
+impl<L: LightTypeTrait + 'static> Deref for GOLightExt<'_, L> {
     type Target = GameObject;
 
     #[inline]
@@ -205,7 +205,7 @@ impl Deref for GOLightExt<'_> {
     }
 }
 
-impl DerefMut for GOLightExt<'_> {
+impl<L: LightTypeTrait + 'static> DerefMut for GOLightExt<'_, L> {
     #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.1

@@ -14,16 +14,13 @@ use std::error::Error;
 use syrillian::assets::scene_loader::SceneLoader;
 use syrillian::assets::{HMaterial, StoreType};
 use syrillian::assets::{Material, Shader};
-use syrillian::components::{
-    Collider3D, FirstPersonCameraController, PointLightComponent, RigidBodyComponent,
-    RopeComponent, RotateComponent, SpringComponent,
-};
+use syrillian::components::{Collider3D, FirstPersonCameraController, PointLightComponent, RigidBodyComponent, RopeComponent, RotateComponent, SpringComponent};
 use syrillian::core::{GameObjectExt, GameObjectId};
 use syrillian::drawables::text::glyph::TextAlignment;
 use syrillian::drawables::{Text2D, Text3D};
 use syrillian::prefabs::first_person_player::FirstPersonPlayerPrefab;
 use syrillian::prefabs::prefab::Prefab;
-use syrillian::prefabs::CubePrefab;
+use syrillian::prefabs::{CubePrefab, SunPrefab};
 use syrillian::utils::frame_counter::FrameCounter;
 use syrillian::SyrillianApp;
 use syrillian::{AppState, World};
@@ -174,6 +171,8 @@ impl AppState for MyMain {
             spring.connect_to(spring_top);
             spring.set_rest_length(10.);
         }
+
+        world.spawn(&SunPrefab);
 
         world.print_objects();
 

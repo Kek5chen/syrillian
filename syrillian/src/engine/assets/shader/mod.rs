@@ -87,7 +87,9 @@ impl H<Shader> {
     #[cfg(debug_assertions)]
     pub const DEBUG_TEXT3D_GEOMETRY_ID: u32 = 10;
     #[cfg(debug_assertions)]
-    pub const MAX_BUILTIN_ID: u32 = 10;
+    pub const DEBUG_LIGHT_ID: u32 = 11;
+    #[cfg(debug_assertions)]
+    pub const MAX_BUILTIN_ID: u32 = 11;
 
     // The fallback shader if a pipeline fails
     pub const FALLBACK: H<Shader> = H::new(Self::FALLBACK_ID);
@@ -122,6 +124,8 @@ impl H<Shader> {
     pub const DEBUG_TEXT2D_GEOMETRY: H<Shader> = H::new(Self::DEBUG_TEXT2D_GEOMETRY_ID);
     #[cfg(debug_assertions)]
     pub const DEBUG_TEXT3D_GEOMETRY: H<Shader> = H::new(Self::DEBUG_TEXT3D_GEOMETRY_ID);
+    #[cfg(debug_assertions)]
+    pub const DEBUG_LIGHT: H<Shader> = H::new(Self::DEBUG_LIGHT_ID);
 }
 
 const SHADER_FALLBACK3D: &str = include_str!("shaders/fallback_shader3d.wgsl");
@@ -141,6 +145,8 @@ const DEBUG_RAY_SHADER: &str = include_str!("shaders/debug/rays.wgsl");
 const DEBUG_TEXT2D_GEOMETRY: &str = include_str!("shaders/debug/text2d_geometry.wgsl");
 #[cfg(debug_assertions)]
 const DEBUG_TEXT3D_GEOMETRY: &str = include_str!("shaders/debug/text3d_geometry.wgsl");
+#[cfg(debug_assertions)]
+const DEBUG_LIGHT_SHADER: &str = include_str!("shaders/debug/light.wgsl");
 
 impl StoreDefaults for Shader {
     fn populate(store: &mut Store<Self>) {
@@ -201,9 +207,9 @@ impl StoreDefaults for Shader {
 
         #[cfg(debug_assertions)]
         {
+            use crate::rendering::DEFAULT_VBL;
             use crate::utils::sizes::{VEC3_SIZE, WGPU_VEC3_ALIGN};
             use wgpu::{VertexAttribute, VertexFormat, VertexStepMode};
-            use crate::rendering::DEFAULT_VBL;
 
             store_add_checked!(
                 store,
@@ -321,6 +327,22 @@ impl StoreDefaults for Shader {
                     push_constant_ranges: TEXT_PC,
                 }
             );
+
+            store_add_checked!(
+                store,
+                HShader::DEBUG_LIGHT_ID,
+                Shader::Custom {
+                    name: "Light Debug".to_owned(),
+                    code: ShaderCode::Full(DEBUG_LIGHT_SHADER.to_string()),
+                    topology: PrimitiveTopology::LineList,
+                    polygon_mode: PolygonMode::Line,
+                    vertex_buffers: &[],
+                    push_constant_ranges: &[PushConstantRange {
+                        stages: ShaderStages::VERTEX,
+                        range: 0..4,
+                    }],
+                }
+            );
         }
     }
 }
@@ -346,31 +368,31 @@ impl StoreType for Shader {
     }
 
     fn ident_fmt(handle: H<Self>) -> HandleName<Self> {
-        match handle.id() {
-            HShader::FALLBACK_ID => HandleName::Static("Diffuse Fallback"),
-            HShader::DIM2_ID => HandleName::Static("2 Dimensional Shader"),
-            HShader::DIM3_ID => HandleName::Static("3 Dimensional Shader"),
-            HShader::TEXT_2D_ID => HandleName::Static("2D Text Shader"),
-            HShader::TEXT_3D_ID => HandleName::Static("3D Text Shader"),
-            HShader::POST_PROCESS_ID => HandleName::Static("Post Process Shader"),
+        let name = match handle.id() {
+            HShader::FALLBACK_ID => "Diffuse Fallback",
+            HShader::DIM2_ID => "2 Dimensional Shader",
+            HShader::DIM3_ID => "3 Dimensional Shader",
+            HShader::TEXT_2D_ID => "2D Text Shader",
+            HShader::TEXT_3D_ID => "3D Text Shader",
+            HShader::POST_PROCESS_ID => "Post Process Shader",
 
             #[cfg(debug_assertions)]
-            HShader::DEBUG_EDGES_ID => HandleName::Static("Debug Edges Shader"),
+            HShader::DEBUG_EDGES_ID => "Debug Edges Shader",
             #[cfg(debug_assertions)]
-            HShader::DEBUG_VERTEX_NORMALS_ID => HandleName::Static("Debug Vertex Normals Shader"),
+            HShader::DEBUG_VERTEX_NORMALS_ID => "Debug Vertex Normals Shader",
             #[cfg(debug_assertions)]
-            HShader::DEBUG_RAYS_ID => HandleName::Static("Debug Rays Shader"),
+            HShader::DEBUG_RAYS_ID => "Debug Rays Shader",
             #[cfg(debug_assertions)]
-            HShader::DEBUG_TEXT2D_GEOMETRY_ID => {
-                HandleName::Static("Debug Text 2D Geometry Shader")
-            }
+            HShader::DEBUG_TEXT2D_GEOMETRY_ID => "Debug Text 2D Geometry Shader",
             #[cfg(debug_assertions)]
-            HShader::DEBUG_TEXT3D_GEOMETRY_ID => {
-                HandleName::Static("Debug Text 3D Geometry Shader")
-            }
+            HShader::DEBUG_TEXT3D_GEOMETRY_ID => "Debug Text 3D Geometry Shader",
+            #[cfg(debug_assertions)]
+            HShader::DEBUG_LIGHT_ID => "Debug Lights Shader",
 
-            _ => HandleName::Id(handle),
-        }
+            _ => return HandleName::Id(handle),
+        };
+
+        HandleName::Static(name)
     }
 
     fn is_builtin(handle: H<Self>) -> bool {

@@ -18,14 +18,16 @@ impl H<BGL> {
     pub(super) const MATERIAL_ID: u32 = 2;
     pub(super) const LIGHT_ID: u32 = 3;
     pub(super) const POST_PROCESS_ID: u32 = 4;
+    pub(super) const EMPTY_ID: u32 = 5;
 
-    const MAX_BUILTIN_ID: u32 = 4;
+    const MAX_BUILTIN_ID: u32 = 5;
 
     pub const RENDER: HBGL = HBGL::new(Self::RENDER_ID);
     pub const MODEL: HBGL = HBGL::new(Self::MODEL_ID);
     pub const MATERIAL: HBGL = HBGL::new(Self::MATERIAL_ID);
     pub const LIGHT: HBGL = HBGL::new(Self::LIGHT_ID);
     pub const POST_PROCESS: HBGL = HBGL::new(Self::POST_PROCESS_ID);
+    pub const EMPTY: HBGL = HBGL::new(Self::EMPTY_ID);
 }
 
 impl StoreType for BGL {
@@ -203,6 +205,15 @@ impl StoreDefaults for BGL {
             BGL {
                 label: HBGL::POST_PROCESS.ident(),
                 entries: PP_ENTRIES.to_vec()
+            }
+        );
+
+        store_add_checked!(
+            store,
+            HBGL::EMPTY_ID,
+            BGL {
+                label: "".to_string(),
+                entries: [].to_vec()
             }
         );
     }

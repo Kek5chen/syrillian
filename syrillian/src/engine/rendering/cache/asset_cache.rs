@@ -81,6 +81,12 @@ impl AssetCache {
         self.bgls.try_get(handle, self)
     }
 
+    pub fn bgl_empty(&self) -> Arc<BindGroupLayout> {
+        self.bgls
+            .try_get(HBGL::EMPTY, self)
+            .expect("Light is a default layout")
+    }
+    
     pub fn bgl_model(&self) -> Arc<BindGroupLayout> {
         self.bgls
             .try_get(HBGL::MODEL, self)

@@ -35,11 +35,6 @@ impl SimpleVertex3D {
         let tz = world_up[2] - nz * dot;
         let tangent = Vector3::new(tx, ty, tz);
 
-        let bx = ny * tz - nz * ty;
-        let by = nz * tx - nx * tz;
-        let bz = nx * ty - ny * tx;
-        let bitangent = Vector3::new(bx, by, bz);
-
         let position = Vector3::new(px, py, pz);
         let uv = Vector2::new(u, v);
         let normal = Vector3::new(nx, ny, nz);
@@ -49,7 +44,6 @@ impl SimpleVertex3D {
             uv,
             normal,
             tangent,
-            bitangent,
             bone_indices: [0xFF, 0xFF, 0xFF, 0xFF],
             bone_weights: [0.0, 0.0, 0.0, 0.0],
         }
@@ -64,7 +58,6 @@ pub struct Vertex3D {
     pub uv: Vector2<f32>,
     pub normal: Vector3<f32>,
     pub tangent: Vector3<f32>,
-    pub bitangent: Vector3<f32>,
     pub bone_indices: [u32; 4],
     pub bone_weights: [f32; 4],
 }
@@ -76,7 +69,6 @@ impl Vertex3D {
         tex_coord: Vector2<f32>,
         normal: Vector3<f32>,
         tangent: Vector3<f32>,
-        bitangent: Vector3<f32>,
         bone_indices: &[u32],
         bone_weights: &[f32],
     ) -> Self {
@@ -85,7 +77,6 @@ impl Vertex3D {
             uv: tex_coord,
             normal,
             tangent,
-            bitangent,
             bone_indices: pad_to_four(bone_indices, 0xFF),
             bone_weights: pad_to_four(bone_weights, 0.0),
         }
@@ -120,19 +111,14 @@ impl Vertex3D {
                     shader_location: 3,
                 },
                 VertexAttribute {
-                    format: VertexFormat::Float32x3,
+                    format: VertexFormat::Uint32x4,
                     offset: (VEC3_SIZE * 3 + VEC2_SIZE) as BufferAddress,
                     shader_location: 4,
                 },
                 VertexAttribute {
-                    format: VertexFormat::Uint32x4,
-                    offset: (VEC3_SIZE * 4 + VEC2_SIZE) as BufferAddress,
-                    shader_location: 5,
-                },
-                VertexAttribute {
                     format: VertexFormat::Float32x4,
-                    offset: (VEC4_SIZE + VEC3_SIZE * 4 + VEC2_SIZE) as BufferAddress,
-                    shader_location: 6,
+                    offset: (VEC4_SIZE + VEC3_SIZE * 3 + VEC2_SIZE) as BufferAddress,
+                    shader_location: 5,
                 },
             ],
         };
@@ -148,7 +134,6 @@ impl Vertex3D {
             uv: Vector2::new(0.0, 0.0),
             normal: Vector3::new(0.0, 1.0, 0.0),
             tangent: Vector3::new(1.0, 0.0, 0.0),
-            bitangent: Vector3::new(0.0, 0.0, 1.0),
             bone_indices: [0; 4],
             bone_weights: [0.0; 4],
         }
@@ -172,7 +157,6 @@ impl<'a, IU: AsRef<[u32]>, IF: AsRef<[f32]>> From<Vertex3DTuple<'a, IU, IF>> for
             value.1,
             value.2,
             value.3,
-            value.4,
             value.5.as_ref(),
             value.6.as_ref(),
         )

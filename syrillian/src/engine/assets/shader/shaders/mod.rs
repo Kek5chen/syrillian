@@ -65,6 +65,7 @@ test_custom_shader!(debug_rays, "Debug Rays Shader" => "debug/rays.wgsl");
 test_custom_shader!(debug_vertex_normals, "Debug Vertex Normals" => "debug/vertex_normals.wgsl");
 test_custom_shader!(debug_text2d, "Debug Text 2D Geometry Shader" => "debug/text2d_geometry.wgsl");
 test_custom_shader!(debug_text3d, "Debug Text 3D Geometry Shader" => "debug/text3d_geometry.wgsl");
+test_custom_shader!(debug_light, "Debug Light Geometry Shader" => "debug/light.wgsl");
 
 // Post-Processing Shaders
 test_post_shader!(fullscreen_passthrough, "Fullscreen Passthrough Shader" => "fullscreen_passhthrough.wgsl");

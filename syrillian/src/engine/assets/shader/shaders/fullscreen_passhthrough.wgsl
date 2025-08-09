@@ -1,5 +1,5 @@
 @vertex
-fn vs_main(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
+fn vs_main(@builtin(vertex_index) vertex_index: u32) -> FInput {
     let positions = array<vec2f,6>(
         vec2f(-1.0, -1.0),
         vec2f( 1.0, -1.0),
@@ -17,7 +17,7 @@ fn vs_main(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
         vec2f(1.0, 0.0),
     );
 
-    var output: VertexOutput;
+    var output: FInput;
     output.position = vec4f(positions[vertex_index], 0.0, 1.0);
     output.uv = uvs[vertex_index];
     return output;

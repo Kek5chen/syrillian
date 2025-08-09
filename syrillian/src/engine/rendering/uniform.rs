@@ -1,3 +1,4 @@
+use delegate::delegate;
 use smallvec::{smallvec, SmallVec};
 use std::marker::PhantomData;
 use syrillian_utils::{ShaderUniformIndex, ShaderUniformMultiIndex, ShaderUniformSingleIndex};
@@ -19,7 +20,7 @@ pub struct ShaderUniformBuilder<'a, I: ShaderUniformIndex> {
 }
 
 #[allow(unused)]
-enum ResourceDesc<'a, I: ShaderUniformIndex> {
+pub enum ResourceDesc<'a, I: ShaderUniformIndex> {
     DataBuffer { data: &'a [u8], name: I },
     StorageBuffer { data: &'a [u8], name: I },
     EmptyBuffer { size: u64, name: I, map: bool },
@@ -49,7 +50,7 @@ impl<'a, I: ShaderUniformIndex + 'static> ShaderUniformBuilder<'a, I> {
 
     #[inline]
     fn _next_index(&self) -> I {
-        let idx = self.data.len() as u64;
+        let idx = self.data.len();
         I::by_index(idx).unwrap_or_else(|| {
             panic!(
                 "The buffer index #{idx} was not registered as a member of shader uniform {}",
@@ -149,11 +150,17 @@ impl<I: ShaderUniformIndex> ShaderUniform<I> {
     pub fn bind_group(&self) -> &BindGroup {
         &self.bind_group
     }
+
+    delegate! {
+        to self.buffers {
+            pub fn set_buffer(&mut self, resource_desc: ResourceDesc<I>, device: &Device);
+        }
+    }
 }
 
 impl<I: ShaderUniformMultiIndex> ShaderUniform<I> {
     pub fn buffer(&self, idx: I) -> &Buffer {
-        self.buffers.buffers[idx.index() as usize]
+        self.buffers.buffers[idx.index()]
             .as_ref()
             .expect("Requested a binding resource that isn't a buffer")
     }
@@ -180,6 +187,11 @@ impl<I: ShaderUniformIndex> UniformBufferStorage<I> {
             _indexer: PhantomData::default(),
         }
     }
+
+    fn set_buffer(&mut self, resource_desc: ResourceDesc<I>, device: &Device) {
+        let idx = resource_desc.index();
+        self.buffers[idx] = resource_desc.make_buffer(device);
+    }
 }
 
 impl<I: ShaderUniformIndex> ResourceDesc<'_, I> {
@@ -196,13 +208,13 @@ impl<I: ShaderUniformIndex> ResourceDesc<'_, I> {
 
     #[inline]
     fn index(&self) -> usize {
-        self.name().index() as usize
+        self.name().index()
     }
 
     #[inline]
-    fn buffer_name(&self) -> Option<String> {
+    fn buffer_name(&self, ty: &'static str) -> Option<String> {
         if cfg!(debug_assertions) {
-            Some(format!("{:?} Uniform Buffer", self.name()))
+            Some(format!("{:?} {ty} Buffer", self.name()))
         } else {
             None
         }
@@ -232,21 +244,21 @@ impl<I: ShaderUniformIndex> ResourceDesc<'_, I> {
         match self {
             ResourceDesc::StorageBuffer { data, .. } => {
                 Some(device.create_buffer_init(&BufferInitDescriptor {
-                    label: self.buffer_name().as_deref(),
+                    label: self.buffer_name("Storage").as_deref(),
                     contents: data,
-                    usage: BufferUsages::STORAGE,
+                    usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
                 }))
             }
             ResourceDesc::DataBuffer { data, .. } => {
                 Some(device.create_buffer_init(&BufferInitDescriptor {
-                    label: self.buffer_name().as_deref(),
+                    label: self.buffer_name("Uniform").as_deref(),
                     contents: data,
                     usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
                 }))
             }
             ResourceDesc::EmptyBuffer { size, map, .. } => {
                 Some(device.create_buffer(&BufferDescriptor {
-                    label: self.buffer_name().as_deref(),
+                    label: self.buffer_name("Uniform").as_deref(),
                     size: *size as BufferAddress,
                     usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
                     mapped_at_creation: *map,

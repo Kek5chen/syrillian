@@ -65,7 +65,6 @@ fn generate_default(code: &ShaderCode, custom: bool) -> String {
 
         let group = line[import + 5..].trim();
         match group {
-            "camera" | "system" | "time" => (),
             "model" => generated.push_str(MODEL_GROUP),
             "light" => generated.push_str(LIGHT_GROUP),
             "default_vertex" => generated.push_str(DEFAULT_HEADER),

@@ -78,7 +78,7 @@ impl<S: AppState> ApplicationHandler for App<S> {
 
         let asset_store = self.world.assets.clone();
 
-        let mut renderer = match Renderer::new(window, asset_store) {
+        let renderer = match Renderer::new(window, asset_store) {
             Ok(r) => r,
             Err(e) => {
                 error!("Error when creating renderer: {e}");
@@ -86,8 +86,6 @@ impl<S: AppState> ApplicationHandler for App<S> {
                 return;
             }
         };
-
-        renderer.init();
 
         if let Err(e) = self.state.init(&mut self.world, renderer.window()) {
             panic!("World init function hook returned: {e}");

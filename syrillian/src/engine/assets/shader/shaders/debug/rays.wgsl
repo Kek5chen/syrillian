@@ -1,5 +1,3 @@
-#use camera
-
 struct VSIn {
     @builtin(vertex_index) index: u32,
     @location(0) origin: vec3<f32>,
