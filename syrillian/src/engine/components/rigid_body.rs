@@ -103,4 +103,8 @@ impl RigidBodyComponent {
         }
         self.kinematic = kinematic;
     }
+
+    pub fn is_kinematic(&self) -> bool {
+        self.kinematic
+    }
 }

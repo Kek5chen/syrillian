@@ -45,36 +45,65 @@ fn get_normal_from_map(
     return normalize(tbn * unpacked_normal);
 }
 
+fn spot_light(in: FInput, light: Light, world_normal: vec3<f32>, view_dir: vec3<f32>, base_color: vec3<f32>) -> vec3<f32> {
+    // Vector from fragment to light
+    var L = light.position - in.position;
+    let dist = length(L);
+    L = L / dist;
+
+    // Lambert
+    let NdotL = max(dot(world_normal, L), 0.0);
+    if NdotL <= 0.0 { return vec3<f32>(0.0); }
+
+    // Spotlight cone factor using cos angles to avoid acos
+    let inner = min(light.inner_angle, light.outer_angle);
+    let outer = max(light.inner_angle, light.outer_angle);
+    let cosInner = cos(inner);
+    let cosOuter = cos(outer);
+
+    // dir_to_frag is from light to fragment
+    let dir_to_frag = normalize(in.position - light.position);
+    let cosTheta = dot(normalize(light.direction), dir_to_frag);
+
+    // Smooth penumbra from outer (0) to inner (1)
+    let spot = smoothstep(cosOuter, cosInner, cosTheta);
+
+    // Range falloff with a soft edge near the limit
+    let range_fade = 1.0 - smoothstep(light.range * 0.85, light.range, dist);
+    let attenuation = calculate_attenuation(dist, light.range) * range_fade * spot;
+
+    let radiance = light.color * light.intensity * attenuation;
+
+    // Diffuse
+    var lit_color = base_color * NdotL * radiance;
+
+    // Specular
+    let spec = calculate_specular(L, view_dir, world_normal, material.shininess);
+    lit_color = lit_color + spec * radiance;
+
+    return lit_color;
+}
+
 fn point_light(in: FInput, light: Light, world_normal: vec3<f32>, view_dir: vec3<f32>, base_color: vec3<f32>) -> vec3<f32> {
-    var light_dir = light.position - in.position;
-    var distance = length(light_dir);
-    light_dir = light_dir / distance;
+    // Vector from fragment to light
+    var L = light.position - in.position;
+    let dist = length(L);
+    L = L / max(dist, 1e-6);
 
-    if distance > light.range * light.intensity * 2 {
-        return vec3(0.0, 0.0, 0.0);
-    }
+    // Lambert
+    let NdotL = max(dot(world_normal, L), 0.0);
+    if NdotL <= 0.0 { return vec3<f32>(0.0); }
 
-    let diffuse_angle = dot(world_normal, light_dir);
+    let range_fade = 1.0 - smoothstep(light.range * 0.85, light.range, dist);
+    let attenuation = calculate_attenuation(dist, light.range) * range_fade;
+    let radiance = light.color * light.intensity * attenuation;
 
-    if diffuse_angle <= 0 {
-        return vec3(0.0, 0.0, 0.0);
-    }
+    // Diffuse
+    var lit_color = base_color * NdotL * radiance;
 
-    let attenuation = calculate_attenuation(distance, light.range);
-    let light_strength = light.color * light.intensity * attenuation;
+    let spec = calculate_specular(L, view_dir, world_normal, material.shininess);
+    lit_color = lit_color + spec * radiance;
 
-    let diffuse_contrib = base_color * diffuse_angle * light_strength;
-    var lit_color = diffuse_contrib;
-
-    distance = distance * distance;
-
-    let specular_color = light.color * light.intensity;
-    let specular_contrib = calculate_specular(
-        light_dir, view_dir, world_normal,
-        material.shininess
-    );
-    let specular = specular_contrib * specular_color / distance;
-    lit_color = lit_color + specular;
     return lit_color;
 }
 
@@ -87,7 +116,7 @@ fn sun_light(in: FInput, light: Light, world_normal: vec3<f32>, view_dir: vec3<f
 
 @fragment
 fn fs_main(in: FInput) -> @location(0) vec4<f32> {
-    // Color 
+    // Color
     var base_color: vec4<f32>;
     if material.use_diffuse_texture != 0u {
         base_color = textureSample(t_diffuse, s_diffuse, in.uv);
@@ -95,12 +124,12 @@ fn fs_main(in: FInput) -> @location(0) vec4<f32> {
         base_color = vec4<f32>(material.diffuse, 1.0);
     }
 
-    // Discard Alpha 
+    // Discard Alpha
     if base_color.a < 0.1 {
         discard;
     }
 
-    // Normal 
+    // Normal
     var world_normal: vec3<f32>;
     if material.use_normal_texture != 0u {
         world_normal = get_normal_from_map(
@@ -124,6 +153,8 @@ fn fs_main(in: FInput) -> @location(0) vec4<f32> {
             lit_color = lit_color + point_light(in, light, world_normal, view_dir, base_color.xyz);
         } else if light.type_id == LIGHT_TYPE_SUN {
             lit_color = lit_color + sun_light(in, light, world_normal, view_dir, base_color.xyz);
+        } else if light.type_id == LIGHT_TYPE_SPOT {
+            lit_color = lit_color + spot_light(in, light, world_normal, view_dir, base_color.xyz);
         }
     }
 

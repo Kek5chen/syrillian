@@ -60,6 +60,47 @@ fn calculate_point_dir(iid: u32) -> vec3<f32> {
     return DIRS[iid];
 }
 
+// Spot Light
+fn calculate_spot_offset(light: Light, vid: u32, iid: u32) -> vec3<f32> {
+    let dir = normalize(light.direction);
+
+    var up = vec3(0.0, 1.0, 0.0);
+    if abs(dot(dir, up)) > 0.99 {
+        up = vec3(1.0, 0.0, 0.0);
+    }
+    let T = normalize(cross(dir, up));
+    let B = cross(dir, T);
+
+    // Treat angles as radians; keep them sane.
+    let inner = min(light.inner_angle, light.outer_angle);
+    let outer = max(light.inner_angle, light.outer_angle);
+
+    // Center ray
+    let r_in  = tan(inner) * light.range;
+    let r_out = tan(outer) * light.range;
+
+    // Instance mapping (expect exactly 9 instances for SPOT):
+    // 0   -> center ray along `dir`
+    // 1..4 -> inner-cone cardinals: +T, -T, +B, -B
+    // 5..8 -> outer-cone cardinals: +T, -T, +B, -B
+
+    // Choose ring and axis for cardinals
+    let use_outer = iid >= 5u;
+    let k = select(iid - 1u, iid - 5u, use_outer); // 0..3 expected
+
+    var axis: vec3<f32>;
+    if k == 0u { axis =  T; }
+    else if k == 1u { axis = -T; }
+    else if k == 2u { axis =  B; }
+    else            { axis = -B; }
+
+    let r = select(r_in, r_out, use_outer);
+    let tip = dir * light.range + axis * r;
+
+    if vid == 0u { return tip; }
+    return vec3(0.0, 0.0, 0.0);
+}
+
 @vertex
 fn vs_main(@builtin(vertex_index) vid: u32, @builtin(instance_index) iid: u32) -> VSOut {
     var out: VSOut;
@@ -70,10 +111,13 @@ fn vs_main(@builtin(vertex_index) vid: u32, @builtin(instance_index) iid: u32) -
 
     if light.type_id == LIGHT_TYPE_SUN {
         offset = calculate_sun_offset(light, vid, iid);
-        alpha = f32(vid);
+        alpha = f32(vid) / 2.;
     } else if light.type_id == LIGHT_TYPE_POINT {
         offset = calculate_point_offset(light, vid, iid);
-        alpha = 1.0;
+        alpha = 0.5;
+    } else if light.type_id == LIGHT_TYPE_SPOT {
+        offset = calculate_spot_offset(light, vid, iid);
+        alpha = f32(vid) / 2.;
     }
 
     out.position = vec4(light.position + offset, 1.0);

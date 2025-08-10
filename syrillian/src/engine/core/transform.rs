@@ -199,7 +199,7 @@ impl Transform {
     ) {
         let parent_global_rotation = self.get_global_rotation_ext(false);
         let local_rotation_change = parent_global_rotation.rotation_to(
-            &UnitQuaternion::from_euler_angles(pitch.as_(), yaw.as_(), roll.as_()),
+            &UnitQuaternion::from_euler_angles(pitch.as_().to_degrees(), yaw.as_().to_degrees(), roll.as_().to_degrees()),
         );
 
         self.set_local_rotation(local_rotation_change);

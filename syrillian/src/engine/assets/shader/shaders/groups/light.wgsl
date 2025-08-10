@@ -1,5 +1,6 @@
 const LIGHT_TYPE_POINT: u32 = 0;
 const LIGHT_TYPE_SUN: u32 = 1;
+const LIGHT_TYPE_SPOT: u32 = 2;
 
 struct Light {
     position: vec3<f32>,

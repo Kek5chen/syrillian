@@ -14,13 +14,13 @@ use std::error::Error;
 use syrillian::assets::scene_loader::SceneLoader;
 use syrillian::assets::{HMaterial, StoreType};
 use syrillian::assets::{Material, Shader};
-use syrillian::components::{Collider3D, FirstPersonCameraController, PointLightComponent, RigidBodyComponent, RopeComponent, RotateComponent, SpringComponent};
+use syrillian::components::{CRef, Collider3D, FirstPersonCameraController, PointLightComponent, RigidBodyComponent, RopeComponent, RotateComponent, SpotLightComponent, SpringComponent};
 use syrillian::core::{GameObjectExt, GameObjectId};
 use syrillian::drawables::text::glyph::TextAlignment;
 use syrillian::drawables::{Text2D, Text3D};
 use syrillian::prefabs::first_person_player::FirstPersonPlayerPrefab;
 use syrillian::prefabs::prefab::Prefab;
-use syrillian::prefabs::{CubePrefab, SunPrefab};
+use syrillian::prefabs::CubePrefab;
 use syrillian::utils::frame_counter::FrameCounter;
 use syrillian::SyrillianApp;
 use syrillian::{AppState, World};
@@ -37,8 +37,10 @@ const SHADER3: &str = include_str!("dynamic_shader/shader3.wgsl");
 struct MyMain {
     frame_counter: FrameCounter,
     player: GameObjectId,
+    player_rb: CRef<RigidBodyComponent>,
     picked_up: Option<GameObjectId>,
     text3d: GameObjectId,
+    light: CRef<SpotLightComponent>,
 }
 
 impl Default for MyMain {
@@ -46,8 +48,10 @@ impl Default for MyMain {
         Self {
             frame_counter: FrameCounter::default(),
             player: GameObjectId::null(),
+            player_rb: CRef::null(),
             picked_up: None,
             text3d: GameObjectId::null(),
+            light: CRef::null(),
         }
     }
 }
@@ -59,6 +63,7 @@ impl AppState for MyMain {
 
         world.spawn(&City);
         self.player = world.spawn(&FirstPersonPlayerPrefab);
+        self.player_rb = self.player.get_component::<RigidBodyComponent>().unwrap();
         self.player.at(0.0, 20.0, 0.0);
 
         let shader = Shader::new_fragment("Funky Shader", SHADER1).store(world);
@@ -117,13 +122,9 @@ impl AppState for MyMain {
             .build_component::<RopeComponent>()
             .connect_to(cube2);
 
-        big_cube_left
-            .at(100.0, 10.0, 200.0)
-            .scale(100.);
+        big_cube_left.at(100.0, 10.0, 200.0).scale(100.);
 
-        big_cube_right
-            .at(-100.0, 10.0, 200.0)
-            .scale(100.);
+        big_cube_right.at(-100.0, 10.0, 200.0).scale(100.);
 
         {
             let mut text = world.new_object("Text");
@@ -137,8 +138,7 @@ impl AppState for MyMain {
 
         {
             let mut text = world.new_object("Text 3D");
-            let mut text3d =
-                Text3D::new("Meow 3D".to_string(), "Arial".to_string(), 100., None);
+            let mut text3d = Text3D::new("Meow 3D".to_string(), "Arial".to_string(), 100., None);
 
             text3d.set_alignment(TextAlignment::Center);
             text.transform.set_position(0., 10., -20.);
@@ -172,7 +172,12 @@ impl AppState for MyMain {
             spring.set_rest_length(10.);
         }
 
-        world.spawn(&SunPrefab);
+        // world.spawn(&SunPrefab);
+        let mut spot = world
+            .new_object("Spot");
+        spot.at(5., 5., -5.).transform.set_euler_rotation(0., 45., 0.);
+
+        self.light = spot.add_component::<SpotLightComponent>();
 
         world.print_objects();
 
@@ -222,7 +227,14 @@ impl AppState for MyMain {
             world.objects.len(),
         ));
 
+        if world.input.is_key_down(KeyCode::KeyF) {
+            let is_kinematic = self.player_rb.is_kinematic();
+            self.player_rb.set_kinematic(!is_kinematic);
+        }
+
         self.do_raycast_test(world);
+
+        self.light.set_inner_angle_tween_target(world.time().as_secs_f32().sin() * 45.);
 
         Ok(())
     }
@@ -257,10 +269,7 @@ impl MyMain {
                 camera.transform.position().into(),
                 camera.transform.forward(),
             );
-            let player_collider = self
-                .player
-                .get_component::<Collider3D>()?
-                .phys_handle;
+            let player_collider = self.player.get_component::<Collider3D>()?.phys_handle;
             let intersect = world.physics.cast_ray(
                 &ray,
                 5.,

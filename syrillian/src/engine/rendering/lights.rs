@@ -6,6 +6,7 @@ use crate::{ensure_aligned, World};
 use debug_panic::debug_panic;
 use delegate::delegate;
 use nalgebra::{SimdPartialOrd, Vector3};
+use num_enum::TryFromPrimitive;
 use slotmap::{new_key_type, DenseSlotMap};
 use syrillian_macros::UniformIndex;
 
@@ -87,23 +88,11 @@ pub trait Light: Component {
 }
 
 #[repr(u32)]
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, TryFromPrimitive)]
 pub enum LightType {
     Point = 0,
     Sun = 1,
-}
-
-impl TryFrom<u32> for LightType {
-    type Error = ();
-
-    fn try_from(value: u32) -> Result<Self, Self::Error> {
-        let ty = match value {
-            0 => LightType::Point,
-            1 => LightType::Sun,
-            _ => return Err(()),
-        };
-        Ok(ty)
-    }
+    Spot = 2,
 }
 
 #[repr(u8)]
@@ -202,8 +191,8 @@ impl LightManager {
         for i in 0..self.len() {
             let type_id: LightType = match lights[i].type_id.try_into() {
                 Ok(ty) => ty,
-                Err(()) => {
-                    debug_panic!();
+                Err(e) => {
+                    debug_panic!("{}", e);
                     continue;
                 }
             };
@@ -212,6 +201,7 @@ impl LightManager {
             match type_id {
                 LightType::Point => pass.draw(0..2, 0..6),
                 LightType::Sun => pass.draw(0..2, 0..9),
+                LightType::Spot => pass.draw(0..2, 0..9),
             }
         }
     }
