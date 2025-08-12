@@ -1,12 +1,16 @@
-use crate::engine::assets::Texture;
+use crate::engine::assets::Texture as CpuTexture;
 use crate::engine::rendering::cache::{AssetCache, CacheType};
 use wgpu::util::{DeviceExt, TextureDataOrder};
-use wgpu::{
-    Device, Queue, TextureAspect, TextureViewDescriptor, TextureViewDimension,
-};
+use wgpu::{Device, Queue, Texture as WgpuTexture, TextureAspect, TextureView, TextureViewDescriptor, TextureViewDimension};
 
-impl CacheType for Texture {
-    type Hot = wgpu::TextureView;
+#[derive(Debug)]
+pub struct GpuTexture {
+    pub texture: WgpuTexture,
+    pub view: TextureView,
+}
+
+impl CacheType for CpuTexture {
+    type Hot = GpuTexture;
 
     fn upload(&self, device: &Device, queue: &Queue, _cache: &AssetCache) -> Self::Hot {
         let texture = match &self.data {
@@ -19,7 +23,7 @@ impl CacheType for Texture {
             ),
         };
 
-        texture.create_view(&TextureViewDescriptor {
+        let view = texture.create_view(&TextureViewDescriptor {
             label: Some("Texture View"),
             format: Some(self.format),
             dimension: Some(TextureViewDimension::D2),
@@ -29,6 +33,8 @@ impl CacheType for Texture {
             base_array_layer: 0,
             array_layer_count: None,
             usage: None,
-        })
+        });
+
+        GpuTexture { texture, view }
     }
 }

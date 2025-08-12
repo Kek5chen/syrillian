@@ -6,9 +6,10 @@ use crate::engine::assets::*;
 use crate::engine::rendering::cache::generic_cache::Cache;
 use crate::engine::rendering::State;
 use crate::rendering::cache::font::FontAtlas;
+use crate::rendering::cache::GpuTexture;
 use crate::rendering::{RuntimeMaterial, RuntimeMesh, RuntimeShader};
 use std::sync::Arc;
-use wgpu::{BindGroupLayout, TextureView};
+use wgpu::BindGroupLayout;
 
 pub struct AssetCache {
     meshes: Cache<Mesh>,
@@ -58,15 +59,15 @@ impl AssetCache {
         self.shaders.get(HShader::POST_PROCESS, self)
     }
 
-    pub fn texture(&self, handle: HTexture) -> Arc<TextureView> {
+    pub fn texture(&self, handle: HTexture) -> Arc<GpuTexture> {
         self.textures.get(handle, self)
     }
 
-    pub fn texture_fallback(&self) -> Arc<TextureView> {
+    pub fn texture_fallback(&self) -> Arc<GpuTexture> {
         self.textures.get(HTexture::FALLBACK_DIFFUSE, self)
     }
 
-    pub fn texture_opt(&self, handle: Option<HTexture>, alt: HTexture) -> Arc<TextureView> {
+    pub fn texture_opt(&self, handle: Option<HTexture>, alt: HTexture) -> Arc<GpuTexture> {
         match handle {
             None => self.textures.get(alt, self),
             Some(handle) => self.textures.get(handle, self),

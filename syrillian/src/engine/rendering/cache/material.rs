@@ -79,9 +79,9 @@ impl CacheType for Material {
 
         let uniform = ShaderUniform::<MaterialUniformIndex>::builder(&mat_bgl)
             .with_buffer_data(&data)
-            .with_texture(&diffuse)
+            .with_texture(&diffuse.view)
             .with_sampler(&sampler)
-            .with_texture(&normal)
+            .with_texture(&normal.view)
             .with_sampler(&sampler)
             .build(device);
 
