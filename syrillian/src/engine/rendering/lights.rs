@@ -4,7 +4,7 @@ use crate::rendering::uniform::{ResourceDesc, ShaderUniform};
 use crate::rendering::{AssetCache, Renderer};
 use crate::utils::hacks::DenseSlotMapDirectAccess;
 use crate::utils::MATRIX4_ID;
-use crate::{ensure_aligned, must_pipeline, World};
+use crate::{ensure_aligned, World};
 use delegate::delegate;
 use nalgebra::{Matrix4, SimdPartialOrd, Vector3};
 use num_enum::TryFromPrimitive;
@@ -287,7 +287,7 @@ impl LightManager {
         let mut pass = ctx.pass.write().unwrap();
 
         let shader = ctx.frame.cache.shader(HShader::DEBUG_LIGHT);
-        must_pipeline!(pipeline = shader, ctx.pass_type => return);
+        crate::must_pipeline!(pipeline = shader, ctx.pass_type => return);
 
         pass.set_pipeline(pipeline);
 
