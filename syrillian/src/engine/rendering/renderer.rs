@@ -1,31 +1,32 @@
-//! High level renderer driving all drawing operations.
+//! High-level renderer driving all drawing operations.
 //!
 //! The [`Renderer`] owns the [`State`], manages frame buffers and traverses
 //! the [`World`](crate::engine::world::World) to draw all objects each frame.
 //! It also provides debug drawing and post-processing utilities.
 
 use super::error::*;
-use crate::components::{CameraComponent, CameraUniform};
+use crate::c_any_mut;
+use crate::components::CameraComponent;
 use crate::core::GameObjectId;
 use crate::engine::assets::AssetStore;
 use crate::engine::rendering::cache::AssetCache;
 use crate::engine::rendering::context::DrawCtx;
 use crate::engine::rendering::offscreen_surface::OffscreenSurface;
 use crate::engine::rendering::post_process_pass::PostProcessData;
-use crate::engine::rendering::uniform::ShaderUniform;
 use crate::engine::rendering::FrameCtx;
-use crate::rendering::State;
+use crate::rendering::lights::{LightType, LightUniform};
+use crate::rendering::render_data::RenderUniformData;
+use crate::rendering::{RenderPassType, State};
 use crate::world::World;
-use crate::{c_any_mut, ensure_aligned};
 use log::{error, trace};
 use nalgebra::{Matrix4, Perspective3, Vector2};
 use snafu::ResultExt;
 use std::fmt::Debug;
 use std::sync::{Arc, RwLock};
-use syrillian_macros::UniformIndex;
+use syrillian_utils::debug_panic;
 use wgpu::{
     Color, CommandEncoderDescriptor, LoadOp, Operations, RenderPass, RenderPassColorAttachment,
-    RenderPassDepthStencilAttachment, RenderPassDescriptor, StoreOp, SurfaceError,
+    RenderPassDepthStencilAttachment, RenderPassDescriptor, StoreOp, SurfaceError, TextureView,
     TextureViewDescriptor,
 };
 use winit::dpi::PhysicalSize;
@@ -35,7 +36,8 @@ use winit::window::Window;
 pub struct Renderer {
     pub state: Box<State>,
     pub window: Window,
-    render_uniform_data: RenderUniformData,
+    render_data: RenderUniformData,
+    shadow_render_data: RenderUniformData,
 
     post_process_data: PostProcessData,
     offscreen_surface: OffscreenSurface,
@@ -45,23 +47,6 @@ pub struct Renderer {
     pub debug: DebugRenderer,
 
     frame_count: usize,
-    printed_errors: u32,
-}
-
-#[repr(C)]
-#[derive(Default, Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct SystemUniform {
-    screen_size: Vector2<u32>,
-    time: f32,
-    delta_time: f32,
-}
-
-ensure_aligned!(SystemUniform { screen_size }, align <= 8 * 2 => size);
-
-pub struct RenderUniformData {
-    camera_data: Box<CameraUniform>,
-    system_data: Box<SystemUniform>,
-    uniform: ShaderUniform<RenderUniformIndex>,
 }
 
 #[derive(Debug, Clone)]
@@ -112,13 +97,6 @@ impl DebugRenderer {
     }
 }
 
-#[repr(u8)]
-#[derive(Copy, Clone, Debug, UniformIndex)]
-pub enum RenderUniformIndex {
-    Camera = 0,
-    System = 1,
-}
-
 impl Renderer {
     pub fn new(window: Window, store: Arc<AssetStore>) -> Result<Self> {
         let state = Box::new(State::new(&window).context(StateErr)?);
@@ -129,19 +107,8 @@ impl Renderer {
         let render_bgl = cache.bgl_render();
         let pp_bgl = cache.bgl_post_process();
 
-        let camera_data = Box::<CameraUniform>::default();
-        let system_data = Box::<SystemUniform>::default();
-
-        let render_uniform = ShaderUniform::<RenderUniformIndex>::builder(&render_bgl)
-            .with_buffer_data(camera_data.as_ref())
-            .with_buffer_data(system_data.as_ref())
-            .build(&state.device);
-
-        let render_uniform_data = RenderUniformData {
-            camera_data,
-            system_data,
-            uniform: render_uniform,
-        };
+        let render_data = RenderUniformData::empty(&state.device, &render_bgl);
+        let shadow_render_data = RenderUniformData::empty(&state.device, &render_bgl);
 
         let post_process_data =
             PostProcessData::new(&state.device, &pp_bgl, &offscreen_surface.view());
@@ -149,7 +116,8 @@ impl Renderer {
         Ok(Renderer {
             state,
             window,
-            render_uniform_data,
+            render_data,
+            shadow_render_data,
             post_process_data,
             offscreen_surface,
             cache,
@@ -157,7 +125,6 @@ impl Renderer {
             debug: DebugRenderer::default(),
 
             frame_count: 0,
-            printed_errors: 0,
         })
     }
 
@@ -170,16 +137,12 @@ impl Renderer {
     pub fn _update_world(&mut self, world: &mut World) -> Result<()> {
         unsafe {
             let world_ptr = world as *mut World;
-            self.traverse_and_update(
-                &mut *world_ptr,
-                &world.children,
-                Matrix4::identity(),
-            );
+            self.traverse_and_update(&mut *world_ptr, &world.children, Matrix4::identity());
         }
         self.update_render_data(world)
     }
 
-    pub fn render_world(&mut self, world: &mut World) -> bool {
+    pub fn render_frame(&mut self, world: &mut World) -> bool {
         let mut ctx = match self.begin_render() {
             Ok(ctx) => ctx,
             Err(RenderError::Surface {
@@ -255,17 +218,55 @@ impl Renderer {
     }
 
     fn render(&mut self, ctx: &mut FrameCtx, world: &mut World) {
-        if let Err(e) = self.render_inner(ctx, world) {
-            if self.printed_errors < 5 {
-                self.printed_errors += 1;
-                error!("{e}")
-            }
-            return;
-        }
-        self.printed_errors = 0;
+        self.shadow_pass(ctx, world);
+        self.main_pass(ctx, world);
     }
 
-    fn render_inner(&mut self, ctx: &mut FrameCtx, world: &mut World) -> Result<()> {
+    fn shadow_pass(&mut self, ctx: &mut FrameCtx, world: &mut World) {
+        world.lights.update(self);
+
+        let shadow_layers = world
+            .lights
+            .shadow_array(&world.assets)
+            .unwrap()
+            .array_layers;
+        let light_count = world.lights.update_shadow_map_ids(shadow_layers);
+
+        for layer in 0..light_count {
+            let Some(light) = world.lights.light_for_layer(layer) else {
+                debug_panic!("Invalid light layer");
+                continue;
+            };
+
+            if light.type_id == LightType::Spot as u32 {
+                self.update_shadow_camera_for_spot(light);
+                self.prepare_shadow_map(world, ctx, layer);
+            } else {
+                // TODO: Other Light Type Shadow Maps
+            }
+        }
+    }
+
+    fn prepare_shadow_map(&mut self, world: &mut World, ctx: &mut FrameCtx, layer: u32) {
+        let mut encoder = self
+            .state
+            .device
+            .create_command_encoder(&CommandEncoderDescriptor {
+                label: Some("Shadow Pass Encoder"),
+            });
+
+        let layer_view = world.lights.shadow_layer(&self.cache, layer);
+        let mut pass = self.prepare_shadow_pass(&mut encoder, &layer_view);
+
+        let render_uniform = &self.shadow_render_data.uniform;
+        pass.set_bind_group(0, render_uniform.bind_group(), &[]);
+
+        self.render_world(world, ctx, pass, RenderPassType::Shadow);
+
+        self.state.queue.submit(Some(encoder.finish()));
+    }
+
+    fn main_pass(&mut self, ctx: &mut FrameCtx, world: &mut World) {
         let mut encoder = self
             .state
             .device
@@ -273,27 +274,39 @@ impl Renderer {
                 label: Some("Main Encoder"),
             });
 
-        let mut pass = self.prepare_render_pass(&mut encoder, ctx);
+        let mut pass = self.prepare_main_render_pass(&mut encoder, ctx);
 
-        let render_uniform = &self.render_uniform_data.uniform;
+        let render_uniform = &self.render_data.uniform;
+        pass.set_bind_group(0, render_uniform.bind_group(), &[]);
+
+        self.render_world(world, ctx, pass, RenderPassType::Color);
+
+        self.state.queue.submit(Some(encoder.finish()));
+    }
+
+    fn render_world(
+        &self,
+        world: &mut World,
+        frame_ctx: &FrameCtx,
+        mut pass: RenderPass,
+        pass_type: RenderPassType,
+    ) {
         let light_uniform = world.lights.uniform();
 
-        pass.set_bind_group(0, render_uniform.bind_group(), &[]);
         pass.set_bind_group(3, light_uniform.bind_group(), &[]);
 
+        if pass_type == RenderPassType::Color {
+            let shadow_uniform = world.lights.shadow_uniform();
+            pass.set_bind_group(4, shadow_uniform.bind_group(), &[]);
+        }
+
         let draw_ctx = DrawCtx {
-            frame: ctx,
+            frame: frame_ctx,
             pass: RwLock::new(pass),
+            pass_type,
         };
 
-        let world_ptr = world as *mut World;
-        unsafe {
-            self.traverse_and_render(
-                &mut *world_ptr,
-                &world.children,
-                &draw_ctx,
-            );
-        }
+        self.traverse_and_render(world, &world.children, &draw_ctx);
 
         world.execute_component_func(|comp, world| comp.draw(world, &draw_ctx));
 
@@ -303,10 +316,6 @@ impl Renderer {
         }
 
         drop(draw_ctx);
-
-        self.state.queue.submit(Some(encoder.finish()));
-
-        Ok(())
     }
 
     fn traverse_and_update(
@@ -320,7 +329,7 @@ impl Renderer {
                 self.traverse_and_update(
                     world,
                     &child.children,
-                    combined_matrix * child.transform.full_matrix().to_homogeneous(),
+                    combined_matrix * child.transform.full_matrix().matrix(),
                 );
             }
 
@@ -338,20 +347,10 @@ impl Renderer {
         }
     }
 
-
-    fn traverse_and_render(
-        &self,
-        world: &mut World,
-        children: &[GameObjectId],
-        ctx: &DrawCtx,
-    ) {
+    fn traverse_and_render(&self, world: &World, children: &[GameObjectId], ctx: &DrawCtx) {
         for child in children {
             if !child.children.is_empty() {
-                self.traverse_and_render(
-                    world,
-                    &child.children,
-                    ctx,
-                );
+                self.traverse_and_render(world, &child.children, ctx);
             }
 
             let Some(drawable) = &mut child.clone().drawable else {
@@ -398,8 +397,8 @@ impl Renderer {
         });
 
         let post_shader = self.cache.shader_post_process();
-        pass.set_pipeline(&post_shader.pipeline);
-        pass.set_bind_group(0, self.render_uniform_data.uniform.bind_group(), &[]);
+        pass.set_pipeline(&post_shader.solid_pipeline());
+        pass.set_bind_group(0, self.render_data.uniform.bind_group(), &[]);
         pass.set_bind_group(1, self.post_process_data.uniform.bind_group(), &[]);
         pass.draw(0..6, 0..1);
 
@@ -417,14 +416,14 @@ impl Renderer {
     }
 
     fn update_render_data(&mut self, world: &mut World) -> Result<()> {
-        self.update_camera_data(world)?;
+        self.update_view_camera_data(world)?;
         self.update_system_data(world)?;
         world.lights.update(self);
 
         Ok(())
     }
 
-    fn update_camera_data(&mut self, world: &World) -> Result<()> {
+    fn update_view_camera_data(&mut self, world: &World) -> Result<()> {
         let camera_rc = world
             .active_camera
             .as_ref()
@@ -435,43 +434,67 @@ impl Renderer {
             .get_component::<CameraComponent>()
             .ok_or(RenderError::NoCameraComponentSet)?;
 
-        let projection_matrix: &Perspective3<f32> = &camera_comp.projection;
+        let projection_matrix = camera_comp.projection.as_matrix();
         let camera_transform = &camera.transform;
 
-        let render_data = &mut self.render_uniform_data;
-
-        render_data
+        self.render_data
             .camera_data
-            .update(projection_matrix, camera_transform);
-
-        self.state.queue.write_buffer(
-            &render_data.uniform.buffer(RenderUniformIndex::Camera),
-            0,
-            bytemuck::bytes_of(render_data.camera_data.as_ref()),
-        );
+            .update_with_transform(projection_matrix, camera_transform);
+        self.render_data.upload_camera_data(&self.state.queue);
 
         Ok(())
+    }
+
+    fn update_shadow_camera_for_spot(&mut self, light: &LightUniform) {
+        let fovy = (2.0 * light.outer_angle).clamp(0.0175, 3.12);
+        let near = 0.05_f32;
+        let far = light.range.max(near + 0.01);
+        let proj = Perspective3::new(1.0, fovy, near, far);
+
+        self.shadow_render_data.camera_data.update(
+            &proj.as_matrix(),
+            &light.position,
+            &light.view_mat,
+        );
+        self.shadow_render_data
+            .upload_camera_data(&self.state.queue);
     }
 
     fn update_system_data(&mut self, world: &World) -> Result<()> {
         let window_size = self.window.inner_size();
         let window_size = Vector2::new(window_size.width, window_size.height);
 
-        let render_data = &mut self.render_uniform_data;
-        render_data.system_data.screen_size = window_size;
-        render_data.system_data.time = world.time().as_secs_f32();
-        render_data.system_data.delta_time = world.delta_time().as_secs_f32();
+        let system_data = &mut self.render_data.system_data;
+        system_data.screen_size = window_size;
+        system_data.time = world.time().as_secs_f32();
+        system_data.delta_time = world.delta_time().as_secs_f32();
 
-        self.state.queue.write_buffer(
-            &render_data.uniform.buffer(RenderUniformIndex::System),
-            0,
-            bytemuck::bytes_of(render_data.system_data.as_ref()),
-        );
+        self.render_data.upload_system_data(&self.state.queue);
 
         Ok(())
     }
 
-    fn prepare_render_pass<'a>(
+    fn prepare_shadow_pass<'a>(
+        &self,
+        encoder: &'a mut wgpu::CommandEncoder,
+        shadow_map: &TextureView,
+    ) -> RenderPass<'a> {
+        encoder.begin_render_pass(&RenderPassDescriptor {
+            label: Some("Shadow Pass"),
+            color_attachments: &[],
+            depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
+                view: &shadow_map,
+                depth_ops: Some(Operations {
+                    load: LoadOp::Clear(1.0),
+                    store: StoreOp::Store,
+                }),
+                stencil_ops: None,
+            }),
+            ..RenderPassDescriptor::default()
+        })
+    }
+
+    fn prepare_main_render_pass<'a>(
         &self,
         encoder: &'a mut wgpu::CommandEncoder,
         ctx: &mut FrameCtx,

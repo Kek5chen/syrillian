@@ -3,8 +3,8 @@ use crate::core::GameObjectId;
 use crate::rendering::lights::{Light, LightHandle, LightType};
 use crate::utils::FloatMathExt;
 use crate::World;
-use debug_panic::debug_panic;
 use std::marker::PhantomData;
+use syrillian_utils::debug_panic;
 
 pub trait LightTypeTrait {
     fn type_id() -> LightType;
@@ -95,6 +95,8 @@ impl<L: LightTypeTrait + 'static> Component for LightComponent<L> {
 
         data.outer_angle = data.outer_angle.lerp(self.target_outer_angle, self.outer_angle_t * delta);
         data.inner_angle = data.inner_angle.lerp(self.target_inner_angle, self.inner_angle_t * delta);
+
+        data.view_mat = self.parent.transform.view_matrix_rigid().to_matrix();
     }
 
     #[inline]

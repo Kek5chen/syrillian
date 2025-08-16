@@ -1,3 +1,5 @@
+mod logging;
+
 use std::fmt::Debug;
 
 /// Trait implemented by index enums used for uniform buffers.

@@ -13,7 +13,6 @@ impl Prefab for CameraPrefab {
     fn build(&self, world: &mut World) -> GameObjectId {
         let mut obj = world.new_object("Camera");
 
-        obj.transform.set_compound_pos_first(true);
         obj.add_component::<CameraComponent>();
 
         obj

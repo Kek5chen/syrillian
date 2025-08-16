@@ -175,7 +175,7 @@ impl AppState for MyMain {
         // world.spawn(&SunPrefab);
         let mut spot = world
             .new_object("Spot");
-        spot.at(5., 5., -5.).transform.set_euler_rotation(0., 45., 0.);
+        spot.at(5., 5., -5.).transform.set_euler_rotation(0., 90., 0.);
 
         self.light = spot.add_component::<SpotLightComponent>();
 
@@ -234,7 +234,7 @@ impl AppState for MyMain {
 
         self.do_raycast_test(world);
 
-        self.light.set_inner_angle_tween_target(world.time().as_secs_f32().sin() * 45.);
+        self.light.set_inner_angle_tween_target(world.time().as_secs_f32().sin() * 2. - 1. + 30.);
 
         Ok(())
     }

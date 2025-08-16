@@ -11,12 +11,12 @@ struct Light {
     inner_angle: f32,
     outer_angle: f32,
     type_id: u32,
+    shadow_map_id: u32,
+    view_mat: mat4x4<f32>,
 }
 
-@group(3) @binding(0)
-var<uniform> light_count: u32;
+@group(3) @binding(0) var<uniform> light_count: u32;
+@group(3) @binding(1) var<storage, read> lights: array<Light>;
 
-struct Lights { data: array<Light>, }
-@group(3) @binding(1)
-var<storage, read> lights: Lights;
-
+@group(4) @binding(0) var shadow_maps: texture_depth_2d_array;
+@group(4) @binding(1) var shadow_sampler: sampler_comparison;

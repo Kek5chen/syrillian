@@ -1,16 +1,16 @@
-use crate::assets::{HShader, Mesh};
+use crate::assets::{HShader, Mesh, Shader, H};
 use crate::core::{Bone, GameObjectId, ModelUniform, Vertex3D};
 use crate::drawables::Drawable;
 use crate::engine::assets::HMesh;
 use crate::engine::rendering::uniform::ShaderUniform;
 use crate::engine::rendering::{DrawCtx, Renderer};
 use crate::rendering::{RuntimeMesh, RuntimeMeshData};
-use crate::World;
+use crate::{must_pipeline, World};
 use log::warn;
 use nalgebra::{Matrix4, Vector3};
 use std::sync::RwLockWriteGuard;
 use syrillian_macros::UniformIndex;
-use wgpu::{IndexFormat, RenderPass};
+use wgpu::{Buffer, IndexFormat, RenderPass};
 
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, UniformIndex)]
@@ -97,7 +97,7 @@ impl Drawable for MeshRenderer {
         self.update_debug_data(world, renderer, parent);
     }
 
-    fn draw(&self, world: &mut World, ctx: &DrawCtx) {
+    fn draw(&self, world: &World, ctx: &DrawCtx) {
         let Some(mesh) = ctx.frame.cache.mesh(self.mesh) else {
             return;
         };
@@ -271,20 +271,35 @@ fn draw_mesh(
 ) {
     let i_buffer = mesh.indices_buf.as_ref();
     let current_shader = HShader::DIM3;
+    let shader = ctx.frame.cache.shader_3d();
 
-    pass.set_pipeline(&ctx.frame.cache.shader_3d().pipeline);
+    must_pipeline!(pipeline = shader, ctx.pass_type => return);
+
+    pass.set_pipeline(pipeline);
 
     pass.set_vertex_buffer(0, mesh.vertices_buf.slice(..));
     if let Some(i_buffer) = i_buffer {
         pass.set_index_buffer(i_buffer.slice(..), IndexFormat::Uint32);
     }
 
+    draw_materials(ctx, mesh_data, pass, i_buffer, current_shader);
+}
+
+fn draw_materials(
+    ctx: &DrawCtx,
+    mesh_data: &Mesh,
+    pass: &mut RwLockWriteGuard<RenderPass>,
+    i_buffer: Option<&Buffer>,
+    current_shader: H<Shader>,
+) {
     for (h_mat, range) in mesh_data.material_ranges.iter().cloned() {
         let material = ctx.frame.cache.material(h_mat);
 
         if material.shader != current_shader {
             let shader = ctx.frame.cache.shader(material.shader);
-            pass.set_pipeline(&shader.pipeline);
+            must_pipeline!(pipeline = shader, ctx.pass_type => continue);
+
+            pass.set_pipeline(&pipeline);
         }
 
         pass.set_bind_group(2, material.uniform.bind_group(), &[]);
@@ -310,7 +325,9 @@ fn draw_edges(
     const COLOR: Vector4<f32> = Vector4::new(1.0, 0.0, 1.0, 1.0);
 
     let shader = ctx.frame.cache.shader(HShader::DEBUG_EDGES);
-    pass.set_pipeline(&shader.pipeline);
+    must_pipeline!(pipeline = shader, ctx.pass_type => return);
+
+    pass.set_pipeline(pipeline);
     pass.set_vertex_buffer(0, mesh.vertices_buf.slice(..));
     pass.set_push_constants(ShaderStages::FRAGMENT, 0, bytemuck::bytes_of(&COLOR));
 
@@ -332,7 +349,9 @@ fn draw_vertex_normals(
     pass.set_vertex_buffer(0, debug_data.mesh_vertices_buf.slice(..));
 
     let shader = ctx.frame.cache.shader(HShader::DEBUG_VERTEX_NORMALS);
-    pass.set_pipeline(&shader.pipeline);
+    must_pipeline!(pipeline = shader, ctx.pass_type => return);
+
+    pass.set_pipeline(pipeline);
 
     pass.draw(0..2, 0..mesh_data.vertex_count() as u32);
 }

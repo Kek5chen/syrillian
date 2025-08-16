@@ -5,6 +5,7 @@ use crate::engine::assets::HMaterial;
 use crate::engine::rendering::cache::AssetCache;
 use crate::engine::rendering::uniform::ShaderUniform;
 use crate::engine::rendering::{DrawCtx, Renderer};
+use crate::rendering::RenderPassType;
 use crate::World;
 use log::error;
 use nalgebra::{Matrix4, Scale3, Translation3};
@@ -94,7 +95,11 @@ impl Drawable for Image {
         self.update_model_matrix(&renderer.state.queue, &renderer.window);
     }
 
-    fn draw(&self, _world: &mut World, ctx: &DrawCtx) {
+    fn draw(&self, _world: &World, ctx: &DrawCtx) {
+        if ctx.pass_type == RenderPassType::Shadow {
+            return; // Don't render shadows for 2D
+        }
+
         let unit_square_runtime = ctx.frame.cache.mesh_unit_square();
         let material = ctx.frame.cache.material(self.material);
         let shader = ctx.frame.cache.shader_2d();
@@ -106,7 +111,7 @@ impl Drawable for Image {
 
         let mut pass = ctx.pass.write().unwrap();
 
-        pass.set_pipeline(&shader.pipeline);
+        pass.set_pipeline(shader.solid_pipeline());
 
         let vertex_buf_slice = unit_square_runtime.vertices_buf.slice(..);
         let material_bind_group = material.uniform.bind_group();

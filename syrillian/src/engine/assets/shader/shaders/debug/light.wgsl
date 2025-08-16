@@ -104,7 +104,7 @@ fn calculate_spot_offset(light: Light, vid: u32, iid: u32) -> vec3<f32> {
 @vertex
 fn vs_main(@builtin(vertex_index) vid: u32, @builtin(instance_index) iid: u32) -> VSOut {
     var out: VSOut;
-    let light = lights.data[light_index];
+    let light = lights[light_index];
 
     var offset: vec3<f32>;
     var alpha: f32;

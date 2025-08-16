@@ -1,8 +1,7 @@
-use crate::assets::HBGL;
 use crate::engine::assets::Shader;
 use crate::engine::rendering::cache::generic_cache::CacheType;
 use crate::engine::rendering::cache::AssetCache;
-use crate::rendering::RenderPipelineBuilder;
+use crate::rendering::{RenderPassType, RenderPipelineBuilder};
 use std::borrow::Cow;
 use wgpu::*;
 
@@ -11,8 +10,8 @@ pub mod builder;
 #[derive(Debug, Clone)]
 pub struct RuntimeShader {
     pub module: ShaderModule,
-    pub pipeline_layout: PipelineLayout,
-    pub pipeline: RenderPipeline,
+    pipeline: RenderPipeline,
+    shadow_pipeline: Option<RenderPipeline>,
     pub push_constant_ranges: &'static [PushConstantRange],
 }
 
@@ -25,52 +24,49 @@ impl CacheType for Shader {
             source: ShaderSource::Wgsl(Cow::Owned(self.gen_code())),
         });
 
-        let pipeline_layout = make_layout(self, device, cache);
-
-        let pipeline =
-            RenderPipelineBuilder::builder(self, &pipeline_layout, &module).build(&device);
+        let solid_layout = self.solid_layout(device, cache);
+        let solid_builder = RenderPipelineBuilder::builder(self, &solid_layout, &module);
+        let pipeline = solid_builder.build(device);
+        let shadow_pipeline = self.shadow_layout(device, cache).and_then(|layout| {
+            let shadow_builder = RenderPipelineBuilder::builder(self, &layout, &module);
+            shadow_builder.build_shadow(&device)
+        });
 
         RuntimeShader {
             module,
-            pipeline_layout,
-            push_constant_ranges: self.push_constant_ranges(),
             pipeline,
+            shadow_pipeline,
+            push_constant_ranges: self.push_constant_ranges(),
         }
     }
 }
 
-fn make_layout(shader: &Shader, device: &Device, cache: &AssetCache) -> PipelineLayout {
-    let layout_name = format!("{} Pipeline Layout", shader.name());
-
-    let cam_bgl = cache.bgl_render();
-    let mdl_bgl = cache.bgl_model();
-    let mat_bgl = cache.bgl_material();
-    let lgt_bgl = cache.bgl_light();
-    let pp_bgl = cache.bgl_post_process();
-    let empty_bgl = cache.bgl_empty();
-
-    let mut slots: [Option<&BindGroupLayout>; 5] = [None; 5];
-    slots[0] = Some(&cam_bgl);
-
-    if matches!(shader, Shader::PostProcess { .. }) {
-        slots[1] = Some(&pp_bgl);
-    } else {
-        if shader.needs_bgl(HBGL::MODEL) {
-            slots[1] = Some(&mdl_bgl);
-            slots[2] = Some(&mat_bgl);
-        }
-        if shader.needs_bgl(HBGL::LIGHT) {
-            slots[3] = Some(&lgt_bgl);
-        }
+impl RuntimeShader {
+    pub fn solid_pipeline(&self) -> &RenderPipeline {
+        &self.pipeline
     }
 
-    let last = slots.iter().rposition(|s| s.is_some()).unwrap_or(0);
-    let fixed: Vec<&BindGroupLayout> = (0..=last).map(|i| slots[i].unwrap_or(&empty_bgl)).collect();
+    pub fn shadow_pipeline(&self) -> Option<&RenderPipeline> {
+        self.shadow_pipeline.as_ref()
+    }
 
-    let desc = PipelineLayoutDescriptor {
-        label: Some(&layout_name),
-        bind_group_layouts: &fixed,
-        push_constant_ranges: &shader.push_constant_ranges(),
+    pub fn pipeline(&self, stage: RenderPassType) -> Option<&RenderPipeline> {
+        match stage {
+            RenderPassType::Color => Some(&self.pipeline),
+            RenderPassType::Shadow => self.shadow_pipeline.as_ref(),
+        }
+    }
+}
+
+#[macro_export]
+macro_rules! must_pipeline {
+    ($name:ident = $shader:expr, $pass_type:expr => $exit_strat:tt) => {
+        let Some($name) = $shader.pipeline($pass_type) else {
+            ::syrillian_utils::debug_panic!(
+                "A 3D Shader was instantiated without a Shadow Pipeline Variant"
+            );
+            ::log::error!("A 3D Shader was instantiated without a Shadow Pipeline Variant");
+            $exit_strat;
+        };
     };
-    device.create_pipeline_layout(&desc)
 }

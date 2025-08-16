@@ -35,7 +35,7 @@
 //! }
 //!
 //! impl Drawable for Something {
-//!     fn draw(&self, _world: &mut World, ctx: &DrawCtx) {
+//!     fn draw(&self, _world: &World, ctx: &DrawCtx) {
 //!         let unit_square = ctx.frame.cache.mesh_unit_square();
 //!         let shader = ctx.frame.cache.shader(HShader::DIM3);
 //!         let material = ctx.frame.cache.material(self.material);
@@ -53,6 +53,7 @@ pub mod renderer;
 pub mod state;
 pub(crate) mod uniform;
 pub mod lights;
+pub(crate) mod render_data;
 
 pub use cache::*;
 pub use context::*;

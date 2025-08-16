@@ -136,7 +136,7 @@ impl<S: AppState> ApplicationHandler for App<S> {
                 }
 
                 renderer.update_world(world);
-                if !renderer.render_world(world) {
+                if !renderer.render_frame(world) {
                     event_loop.exit();
                 }
 

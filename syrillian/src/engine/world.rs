@@ -290,7 +290,7 @@ impl World {
     /// If you're using the App runtime, this will be handled for you. Only call this function
     /// if you are trying to use a detached world context.
     pub fn initialize_runtime(&mut self, renderer: &Renderer) {
-        self.lights.init(&renderer);
+        self.lights.init(&renderer, &self.assets);
         let world_ptr: *mut World = self;
         unsafe {
             for (id, obj) in &mut self.objects {

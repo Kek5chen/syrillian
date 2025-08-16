@@ -88,7 +88,7 @@ impl<DIM: TextDim + 'static> Drawable for Text<DIM> {
         self.text.update(world, parent, renderer, outer_transform)
     }
 
-    fn draw(&self, _world: &mut World, ctx: &DrawCtx) {
+    fn draw(&self, _world: &World, ctx: &DrawCtx) {
         self.text.draw(&ctx);
     }
 }

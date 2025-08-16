@@ -5,9 +5,9 @@ use crate::drawables::text::glyph::{
 };
 use crate::drawables::{BoneData, MeshUniformIndex};
 use crate::rendering::uniform::ShaderUniform;
-use crate::rendering::{AssetCache, DrawCtx, Renderer};
+use crate::rendering::{AssetCache, DrawCtx, RenderPassType, Renderer};
 use crate::utils::hsv_to_rgb;
-use crate::{ensure_aligned, World};
+use crate::{ensure_aligned, must_pipeline, World};
 use log::error;
 use nalgebra::{Matrix4, Vector2, Vector3};
 use std::marker::PhantomData;
@@ -170,6 +170,10 @@ impl<DIM: TextDim> TextLayouter<DIM> {
     }
 
     pub fn draw(&self, ctx: &DrawCtx) {
+        if DIM::shader() != HShader::TEXT_3D && ctx.pass_type == RenderPassType::Shadow {
+            return;
+        }
+
         let cache: &AssetCache = &ctx.frame.cache;
         let pass: &RwLock<RenderPass> = &ctx.pass;
 
@@ -187,8 +191,9 @@ impl<DIM: TextDim> TextLayouter<DIM> {
         let material = cache.material(font.atlas());
 
         let mut pass = pass.write().unwrap();
+        must_pipeline!(pipeline = shader, ctx.pass_type => return);
 
-        pass.set_pipeline(&shader.pipeline);
+        pass.set_pipeline(pipeline);
         pass.set_vertex_buffer(0, render_data.glyph_vbo.slice(..));
         pass.set_push_constants(
             ShaderStages::VERTEX_FRAGMENT,
@@ -202,14 +207,15 @@ impl<DIM: TextDim> TextLayouter<DIM> {
 
         #[cfg(debug_assertions)]
         if ctx.frame.debug.text_geometry {
-            self.draw_debug_edges(cache, &mut pass);
+            self.draw_debug_edges(cache, &mut pass, ctx.pass_type);
         }
     }
 
     #[cfg(debug_assertions)]
-    fn draw_debug_edges(&self, cache: &AssetCache, pass: &mut RenderPass) {
+    fn draw_debug_edges(&self, cache: &AssetCache, pass: &mut RenderPass, pass_type: RenderPassType) {
         let shader = cache.shader(DIM::debug_shader());
-        pass.set_pipeline(&shader.pipeline);
+        must_pipeline!(pipeline = shader, pass_type => return);
+        pass.set_pipeline(pipeline);
 
         pass.set_push_constants(
             ShaderStages::VERTEX_FRAGMENT,

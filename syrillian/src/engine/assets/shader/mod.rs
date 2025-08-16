@@ -8,13 +8,15 @@ use crate::assets::HBGL;
 use crate::drawables::text::text_layouter::TextPushConstants;
 use crate::engine::assets::generic_store::{HandleName, Store, StoreDefaults, StoreType};
 use crate::engine::assets::{HShader, StoreTypeFallback, StoreTypeName, H};
+use crate::rendering::AssetCache;
 use crate::utils::sizes::VEC2_SIZE;
 use crate::{store_add_checked, store_add_checked_many};
 use std::error::Error;
 use std::fs;
 use std::path::Path;
 use wgpu::{
-    PolygonMode, PrimitiveTopology, PushConstantRange, ShaderStages, VertexAttribute,
+    BindGroupLayout, Device, PipelineLayout, PipelineLayoutDescriptor, PolygonMode,
+    PrimitiveTopology, PushConstantRange, ShaderStages, VertexAttribute,
     VertexBufferLayout, VertexFormat, VertexStepMode,
 };
 
@@ -37,7 +39,7 @@ impl ShaderCode {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum PipelineStage {
     Default,
     PostProcess,
@@ -525,6 +527,10 @@ impl Shader {
         matches!(self, Shader::Custom { .. })
     }
 
+    pub fn is_post_process(&self) -> bool {
+        matches!(self, Shader::PostProcess { .. })
+    }
+
     pub fn gen_code(&self) -> String {
         ShaderGen::new(self).generate()
     }
@@ -554,5 +560,84 @@ impl Shader {
         }
 
         false
+    }
+
+    pub(crate) fn solid_layout(&self, device: &Device, cache: &AssetCache) -> PipelineLayout {
+        let layout_name = format!("{} Pipeline Layout", self.name());
+
+        let cam_bgl = cache.bgl_render();
+        let mdl_bgl = cache.bgl_model();
+        let mat_bgl = cache.bgl_material();
+        let lgt_bgl = cache.bgl_light();
+        let sdw_bgl = cache.bgl_shadow();
+        let pp_bgl = cache.bgl_post_process();
+        let empty_bgl = cache.bgl_empty();
+
+        let mut slots: [Option<&BindGroupLayout>; 6] = [None; 6];
+        slots[0] = Some(&cam_bgl);
+
+        if self.is_post_process() {
+            slots[1] = Some(&pp_bgl);
+        } else {
+            if self.needs_bgl(HBGL::MODEL) {
+                slots[1] = Some(&mdl_bgl);
+                slots[2] = Some(&mat_bgl);
+            }
+            if self.needs_bgl(HBGL::LIGHT) {
+                slots[3] = Some(&lgt_bgl);
+                slots[4] = Some(&sdw_bgl);
+            }
+        }
+
+        let last = slots.iter().rposition(|s| s.is_some()).unwrap_or(0);
+        let fixed: Vec<&BindGroupLayout> =
+            (0..=last).map(|i| slots[i].unwrap_or(&empty_bgl)).collect();
+
+        self.layout_with(device, &layout_name, &fixed)
+    }
+
+    pub(crate) fn shadow_layout(&self, device: &Device, cache: &AssetCache) -> Option<PipelineLayout> {
+        if self.is_post_process() {
+            return None;
+        }
+
+        let layout_name = format!("{} Shadow Pipeline Layout", self.name());
+
+        let cam_bgl = cache.bgl_render();
+        let mdl_bgl = cache.bgl_model();
+        let mat_bgl = cache.bgl_material();
+        let lgt_bgl = cache.bgl_light();
+        let empty_bgl = cache.bgl_empty();
+
+        let mut slots: [Option<&BindGroupLayout>; 6] = [None; 6];
+        slots[0] = Some(&cam_bgl);
+
+        if self.needs_bgl(HBGL::MODEL) {
+            slots[1] = Some(&mdl_bgl);
+            slots[2] = Some(&mat_bgl);
+        }
+        if self.needs_bgl(HBGL::LIGHT) {
+            slots[3] = Some(&lgt_bgl);
+        }
+
+        let last = slots.iter().rposition(|s| s.is_some()).unwrap_or(0);
+        let fixed: Vec<&BindGroupLayout> =
+            (0..=last).map(|i| slots[i].unwrap_or(&empty_bgl)).collect();
+
+        Some(self.layout_with(device, &layout_name, &fixed))
+    }
+
+    fn layout_with(
+        &self,
+        device: &Device,
+        layout_name: &str,
+        fixed_bgls: &[&BindGroupLayout],
+    ) -> PipelineLayout {
+        let desc = PipelineLayoutDescriptor {
+            label: Some(&layout_name),
+            bind_group_layouts: &fixed_bgls,
+            push_constant_ranges: &self.push_constant_ranges(),
+        };
+        device.create_pipeline_layout(&desc)
     }
 }

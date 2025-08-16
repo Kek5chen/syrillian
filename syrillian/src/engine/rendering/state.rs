@@ -84,9 +84,10 @@ impl State {
                 label: Some("Renderer Hardware"),
                 required_features: Features::default()
                     | Features::POLYGON_MODE_LINE
-                    | Features::PUSH_CONSTANTS,
+                    | Features::PUSH_CONSTANTS
+                    | Features::ADDRESS_MODE_CLAMP_TO_BORDER,
                 required_limits: Limits {
-                    max_bind_groups: 5,
+                    max_bind_groups: 6,
                     max_push_constant_size: 128,
                     ..Limits::default()
                 },

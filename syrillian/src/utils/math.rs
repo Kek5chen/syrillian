@@ -1,12 +1,26 @@
 use nalgebra::{Matrix3, Matrix4, RealField, Rotation3, SimdRealField, UnitQuaternion, Vector3};
 use num_traits::Float;
 
+pub const VECTOR3_ID: Vector3<f32> = Vector3::new(0.0, 0.0, 0.0);
+#[rustfmt::skip]
+pub const MATRIX4_ID: Matrix4<f32> = Matrix4::new(
+    1.0, 0.0, 0.0, 0.0, 
+    0.0, 1.0, 0.0, 0.0, 
+    0.0, 0.0, 1.0, 0.0, 
+    0.0, 0.0, 0.0, 1.0,
+);
+
 pub trait ExtraMatrixMath {
     fn decompose(self) -> (Vector3<f32>, UnitQuaternion<f32>, Vector3<f32>);
 }
 
 pub fn matrix_to_quaternion(matrix: Matrix3<f32>) -> UnitQuaternion<f32> {
-    UnitQuaternion::from_rotation_matrix(&Rotation3::from_matrix_eps(&matrix, f32::EPSILON, 1000, Rotation3::identity()))
+    UnitQuaternion::from_rotation_matrix(&Rotation3::from_matrix_eps(
+        &matrix,
+        f32::EPSILON,
+        1000,
+        Rotation3::identity(),
+    ))
 }
 
 fn decompose_mat3(matrix: Matrix4<f32>) -> (Vector3<f32>, UnitQuaternion<f32>, Vector3<f32>) {

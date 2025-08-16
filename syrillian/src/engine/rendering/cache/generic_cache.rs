@@ -62,6 +62,10 @@ impl<T: CacheType> Cache<T> {
         }
     }
 
+    pub fn store(&self) -> &Store<T> {
+        &self.store
+    }
+
     pub fn try_get(&self, h: H<T>, cache: &AssetCache) -> Option<Arc<T::Hot>> {
         self.data
             .entry(h.into())

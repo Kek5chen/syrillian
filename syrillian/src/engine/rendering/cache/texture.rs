@@ -1,7 +1,7 @@
 use crate::engine::assets::Texture as CpuTexture;
 use crate::engine::rendering::cache::{AssetCache, CacheType};
 use wgpu::util::{DeviceExt, TextureDataOrder};
-use wgpu::{Device, Queue, Texture as WgpuTexture, TextureAspect, TextureView, TextureViewDescriptor, TextureViewDimension};
+use wgpu::{Device, Queue, Texture as WgpuTexture, TextureView};
 
 #[derive(Debug)]
 pub struct GpuTexture {
@@ -23,17 +23,7 @@ impl CacheType for CpuTexture {
             ),
         };
 
-        let view = texture.create_view(&TextureViewDescriptor {
-            label: Some("Texture View"),
-            format: Some(self.format),
-            dimension: Some(TextureViewDimension::D2),
-            aspect: TextureAspect::All,
-            base_mip_level: 0,
-            mip_level_count: None,
-            base_array_layer: 0,
-            array_layer_count: None,
-            usage: None,
-        });
+        let view = texture.create_view(&self.view_desc());
 
         GpuTexture { texture, view }
     }

@@ -12,12 +12,12 @@ use std::sync::Arc;
 use wgpu::BindGroupLayout;
 
 pub struct AssetCache {
-    meshes: Cache<Mesh>,
-    shaders: Cache<Shader>,
-    textures: Cache<Texture>,
-    materials: Cache<Material>,
-    bgls: Cache<BGL>,
-    fonts: Cache<Font>,
+    pub meshes: Cache<Mesh>,
+    pub shaders: Cache<Shader>,
+    pub textures: Cache<Texture>,
+    pub materials: Cache<Material>,
+    pub bgls: Cache<BGL>,
+    pub fonts: Cache<Font>,
 }
 
 impl AssetCache {
@@ -104,6 +104,12 @@ impl AssetCache {
         self.bgls
             .try_get(HBGL::LIGHT, self)
             .expect("Light is a default layout")
+    }
+
+    pub fn bgl_shadow(&self) -> Arc<BindGroupLayout> {
+        self.bgls
+            .try_get(HBGL::SHADOW, self)
+            .expect("Shadow is a default layout")
     }
 
     pub fn bgl_material(&self) -> Arc<BindGroupLayout> {

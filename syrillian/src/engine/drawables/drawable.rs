@@ -19,7 +19,7 @@ pub trait Drawable: Any {
     ) {}
     fn draw(
         &self,
-        world: &mut World,
+        world: &World,
         ctx: &DrawCtx,
     );
 }

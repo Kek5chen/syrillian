@@ -2,7 +2,7 @@ use crate::assets::HShader;
 use crate::core::GameObjectId;
 use crate::drawables::Drawable;
 use crate::rendering::{DrawCtx, Renderer};
-use crate::{ensure_aligned, World};
+use crate::{ensure_aligned, must_pipeline, World};
 use log::warn;
 use nalgebra::{Matrix4, Point3, Vector3};
 use rapier3d::geometry::Ray;
@@ -121,7 +121,7 @@ impl Drawable for CameraDebug {
         self.dirty = false;
     }
 
-    fn draw(&self, _world: &mut World, ctx: &DrawCtx) {
+    fn draw(&self, _world: &World, ctx: &DrawCtx) {
         if self.rays.is_empty() || !ctx.frame.debug.rays {
             return;
         }
@@ -141,7 +141,9 @@ impl Drawable for CameraDebug {
         pass.set_vertex_buffer(0, ray_data.slice(..));
 
         let shader = ctx.frame.cache.shader(HShader::DEBUG_RAYS);
-        pass.set_pipeline(&shader.pipeline);
+        must_pipeline!(pipeline = shader, ctx.pass_type => return);
+
+        pass.set_pipeline(pipeline);
 
         pass.draw(0..2, 0..self.rays.len() as u32);
     }

@@ -1,8 +1,8 @@
 use crate::components::Component;
-use crate::core::{GameObjectId, Transform};
+use crate::core::GameObjectId;
 use crate::utils::FloatMathExt;
-use crate::{ensure_aligned, World};
-use nalgebra::{Matrix4, Perspective3, Point3, Vector2, Vector3, Vector4};
+use crate::World;
+use nalgebra::{Matrix4, Perspective3, Point3, Vector2, Vector4};
 use rapier3d::geometry::Ray;
 
 pub struct CameraComponent {
@@ -88,8 +88,8 @@ impl CameraComponent {
         let cam_to_world = self
             .parent()
             .transform
-            .get_global_transform_matrix()
-            .to_homogeneous();
+            .view_matrix_rigid()
+            .to_matrix();
 
         let dir_world = (cam_to_world * eye).xyz().normalize();
         let origin = cam_to_world.transform_point(&Point3::origin());
@@ -148,10 +148,6 @@ impl Component for CameraComponent {
         }
     }
 
-    fn init(&mut self, _world: &mut World) {
-        self.parent().transform.set_compound_pos_first(true);
-    }
-
     fn update(&mut self, world: &mut World) {
         let delta_time = world.delta_time().as_secs_f32();
 
@@ -178,36 +174,3 @@ fn add_debug_drawable(_parent: GameObjectId) {
     }
 }
 
-#[repr(C)]
-#[derive(Default, Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct CameraUniform {
-    pos: Vector3<f32>,
-    _padding: u32,
-    view_mat: Matrix4<f32>,
-    projection_mat: Matrix4<f32>,
-    pub proj_view_mat: Matrix4<f32>,
-}
-
-ensure_aligned!(CameraUniform { pos, view_mat, projection_mat, proj_view_mat }, align <= 16 * 13 => size);
-
-impl CameraUniform {
-    pub fn empty() -> Self {
-        CameraUniform {
-            pos: Vector3::zeros(),
-            _padding: 0,
-            view_mat: Matrix4::identity(),
-            projection_mat: Matrix4::identity(),
-            proj_view_mat: Matrix4::identity(),
-        }
-    }
-
-    pub fn update(&mut self, proj_matrix: &Perspective3<f32>, cam_transform: &Transform) {
-        self.pos = cam_transform.position();
-        self.view_mat = cam_transform
-            .get_global_transform_matrix_ext(true)
-            .inverse()
-            .to_homogeneous();
-        self.projection_mat = proj_matrix.to_homogeneous();
-        self.proj_view_mat = self.projection_mat * self.view_mat;
-    }
-}

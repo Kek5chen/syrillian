@@ -12,6 +12,7 @@ pub struct Texture {
     pub format: TextureFormat,
     pub data: Option<Vec<u8>>,
     pub view_formats: [TextureFormat; 1],
+    pub array_layers: u32,
 }
 
 impl H<Texture> {
@@ -40,20 +41,59 @@ impl Texture {
         diffuse
     }
 
+    pub fn new_2d_shadow_map_array(capacity: u32, width: u32, height: u32) -> Self {
+        Self {
+            width,
+            height,
+            format: TextureFormat::Depth32Float,
+            data: None,
+            view_formats: [TextureFormat::Depth32Float],
+            array_layers: capacity,
+        }
+    }
+
     pub(crate) fn desc(&self) -> TextureDescriptor<'_> {
+        let layers = self.array_layers.max(1);
+        let usage = if layers > 1 {
+            TextureUsages::TEXTURE_BINDING | TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_SRC | TextureUsages::COPY_DST
+        } else {
+            TextureUsages::TEXTURE_BINDING | TextureUsages::RENDER_ATTACHMENT
+        };
+
         TextureDescriptor {
             label: None,
             size: Extent3d {
                 width: self.width,
                 height: self.height,
-                depth_or_array_layers: 1,
+                depth_or_array_layers: layers,
             },
             mip_level_count: 1,
             sample_count: 1,
             dimension: TextureDimension::D2,
             format: self.format,
-            usage: TextureUsages::TEXTURE_BINDING,
+            usage,
             view_formats: &self.view_formats,
+        }
+    }
+
+    pub fn view_desc(&self) -> wgpu::TextureViewDescriptor<'_> {
+        use wgpu::{TextureAspect, TextureViewDimension};
+        let dimension = if self.array_layers > 1 {
+            TextureViewDimension::D2Array
+        } else {
+            TextureViewDimension::D2
+        };
+
+        wgpu::TextureViewDescriptor {
+            label: Some("Texture View"),
+            format: Some(self.format),
+            dimension: Some(dimension),
+            aspect: TextureAspect::All,
+            base_mip_level: 0,
+            mip_level_count: None,
+            base_array_layer: 0,
+            array_layer_count: None,
+            usage: None,
         }
     }
 
@@ -80,6 +120,7 @@ impl Texture {
             format: TextureFormat::Bgra8UnormSrgb,
             data: Some(data),
             view_formats: [TextureFormat::Bgra8UnormSrgb],
+            array_layers: 1,
         };
 
         Ok(tex)
@@ -92,6 +133,7 @@ impl Texture {
             format,
             data: Some(pixels),
             view_formats: [format],
+            array_layers: 1,
         }
     }
 }
@@ -148,6 +190,19 @@ impl StoreType for Texture {
 impl StoreTypeFallback for Texture {
     fn fallback() -> H<Self> {
         HTexture::FALLBACK_DIFFUSE
+    }
+}
+
+impl Texture {
+    pub fn new_2d_shadow_array(capacity: u32, width: u32, height: u32) -> Self {
+        Texture {
+            width,
+            height,
+            format: TextureFormat::Depth32Float,
+            data: None,
+            view_formats: [TextureFormat::Depth32Float],
+            array_layers: capacity.max(1),
+        }
     }
 }
 

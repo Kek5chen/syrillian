@@ -17,15 +17,17 @@ impl H<BGL> {
     pub(super) const MODEL_ID: u32 = 1;
     pub(super) const MATERIAL_ID: u32 = 2;
     pub(super) const LIGHT_ID: u32 = 3;
-    pub(super) const POST_PROCESS_ID: u32 = 4;
-    pub(super) const EMPTY_ID: u32 = 5;
+    pub(super) const SHADOW_ID: u32 = 4;
+    pub(super) const POST_PROCESS_ID: u32 = 5;
+    pub(super) const EMPTY_ID: u32 = 6;
 
-    const MAX_BUILTIN_ID: u32 = 5;
+    const MAX_BUILTIN_ID: u32 = 6;
 
     pub const RENDER: HBGL = HBGL::new(Self::RENDER_ID);
     pub const MODEL: HBGL = HBGL::new(Self::MODEL_ID);
     pub const MATERIAL: HBGL = HBGL::new(Self::MATERIAL_ID);
     pub const LIGHT: HBGL = HBGL::new(Self::LIGHT_ID);
+    pub const SHADOW: HBGL = HBGL::new(Self::SHADOW_ID);
     pub const POST_PROCESS: HBGL = HBGL::new(Self::POST_PROCESS_ID);
     pub const EMPTY: HBGL = HBGL::new(Self::EMPTY_ID);
 }
@@ -41,6 +43,7 @@ impl StoreType for BGL {
             HBGL::MODEL_ID => HandleName::Static("Model Bind Group Layout"),
             HBGL::MATERIAL_ID => HandleName::Static("Material Bind Group Layout"),
             HBGL::LIGHT_ID => HandleName::Static("Light Bind Group Layout"),
+            HBGL::SHADOW_ID => HandleName::Static("Shadow Bind Group Layout"),
             HBGL::POST_PROCESS_ID => HandleName::Static("Post Process Bind Group Layout"),
             _ => HandleName::Id(handle),
         }
@@ -142,6 +145,25 @@ const LIGHT_ENTRIES: [BindGroupLayoutEntry; 2] = [
     },
 ];
 
+const SHADOW_ENTRIES: [BindGroupLayoutEntry; 2] = [
+    BindGroupLayoutEntry {
+        binding: 0,
+        visibility: ShaderStages::FRAGMENT,
+        ty: BindingType::Texture {
+            sample_type: TextureSampleType::Depth,
+            view_dimension: TextureViewDimension::D2Array,
+            multisampled: false,
+        },
+        count: None,
+    },
+    BindGroupLayoutEntry {
+        binding: 1,
+        visibility: ShaderStages::FRAGMENT,
+        ty: BindingType::Sampler(SamplerBindingType::Comparison),
+        count: None,
+    },
+];
+
 const PP_ENTRIES: [BindGroupLayoutEntry; 2] = [
     BindGroupLayoutEntry {
         binding: 0,
@@ -196,6 +218,15 @@ impl StoreDefaults for BGL {
             BGL {
                 label: HBGL::LIGHT.ident(),
                 entries: LIGHT_ENTRIES.to_vec()
+            }
+        );
+
+        store_add_checked!(
+            store,
+            HBGL::SHADOW_ID,
+            BGL {
+                label: HBGL::SHADOW.ident(),
+                entries: SHADOW_ENTRIES.to_vec()
             }
         );
 

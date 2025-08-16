@@ -9,8 +9,8 @@ use std::fmt::{Debug, Display, Formatter};
 use std::mem;
 use std::sync::RwLock;
 
-type Ref<'a, T> = MapRef<'a, AssetKey, T>;
-type RefMut<'a, T> = MapRefMut<'a, AssetKey, T>;
+pub type Ref<'a, T> = MapRef<'a, AssetKey, T>;
+pub type RefMut<'a, T> = MapRefMut<'a, AssetKey, T>;
 
 pub struct Store<T: StoreType> {
     data: DashMap<AssetKey, T>,
@@ -203,6 +203,12 @@ impl<T: StoreTypeName> Store<T> {
             .iter()
             .find(|e| e.value().name() == name)
             .map(|e| e.key().clone().into())
+    }
+}
+
+impl<T: StoreType> AsRef<Store<T>> for Store<T> {
+    fn as_ref(&self) -> &Store<T> {
+        self
     }
 }
 

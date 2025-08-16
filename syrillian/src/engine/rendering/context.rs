@@ -12,8 +12,15 @@ pub struct FrameCtx {
     pub debug: crate::rendering::DebugRenderer,
 }
 
+#[derive(Copy, Clone, Eq, PartialEq)]
+pub enum RenderPassType {
+    Color,
+    Shadow,
+}
+
 pub struct DrawCtx<'a> {
     pub frame: &'a FrameCtx,
 
     pub pass: RwLock<RenderPass<'a>>,
+    pub pass_type: RenderPassType,
 }

@@ -1,5 +1,5 @@
 use crate::core::GameObjectId;
-use nalgebra::{Affine3, Scale3, Translation3, UnitQuaternion, Vector3};
+use nalgebra::{Affine3, Isometry3, Scale3, Translation3, UnitQuaternion, Vector3};
 use num_traits::AsPrimitive;
 use slotmap::Key;
 
@@ -10,7 +10,7 @@ use slotmap::Key;
 #[repr(C)]
 pub struct Transform {
     pub(crate) owner: GameObjectId,
-    
+
     pos: Vector3<f32>,
     rot: UnitQuaternion<f32>,
     scale: Vector3<f32>,
@@ -46,7 +46,7 @@ impl Transform {
     pub fn new(owner: GameObjectId) -> Self {
         Transform {
             owner,
-            
+
             pos: Vector3::zeros(),
             rot: UnitQuaternion::identity(),
             scale: Vector3::new(1.0, 1.0, 1.0),
@@ -77,7 +77,8 @@ impl Transform {
 
     /// Returns the global position of the transform.
     pub fn position(&self) -> Vector3<f32> {
-        let mat = self.get_global_transform_matrix().to_homogeneous();
+        let mat = self.get_global_transform_matrix();
+        let mat = mat.matrix();
         Vector3::new(mat.m14, mat.m24, mat.m34)
     }
 
@@ -107,6 +108,18 @@ impl Transform {
             mat *= parent.transform.compound_mat;
         }
         mat
+    }
+
+    /// Global rigid transform (rotation+translation only), ignoring scale.
+    pub fn rigid_global_isometry(&self) -> Isometry3<f32> {
+        let p = self.position();
+        let r = self.rotation();
+        Isometry3::from_parts(Translation3::from(p), r)
+    }
+
+    /// View matrix for cameras/lights: inverse of the rigid global isometry.
+    pub fn view_matrix_rigid(&self) -> Isometry3<f32> {
+        self.rigid_global_isometry().inverse()
     }
 
     /// Returns the global model matrix for this transform.
@@ -193,15 +206,18 @@ impl Transform {
     /// This will do the transformation to quaternions for you, but it's recommended to use quaternions.
     pub fn set_euler_rotation(
         &mut self,
+        roll: impl AsPrimitive<f32>,
         pitch: impl AsPrimitive<f32>,
         yaw: impl AsPrimitive<f32>,
-        roll: impl AsPrimitive<f32>,
     ) {
         let parent_global_rotation = self.get_global_rotation_ext(false);
-        let local_rotation_change = parent_global_rotation.rotation_to(
-            &UnitQuaternion::from_euler_angles(pitch.as_().to_degrees(), yaw.as_().to_degrees(), roll.as_().to_degrees()),
+        let target = UnitQuaternion::from_euler_angles(
+            roll.as_().to_radians(),
+            pitch.as_().to_radians(),
+            yaw.as_().to_radians(),
         );
 
+        let local_rotation_change = parent_global_rotation.rotation_to(&target);
         self.set_local_rotation(local_rotation_change);
     }
 
@@ -232,7 +248,9 @@ impl Transform {
 
     /// Sets the local scale using three independent factors.
     pub fn set_nonuniform_local_scale(&mut self, scale: Vector3<f32>) {
-        self.scale = scale;
+        self.scale.x = scale.x.abs().max(f32::EPSILON);
+        self.scale.y = scale.y.abs().max(f32::EPSILON);
+        self.scale.z = scale.z.abs().max(f32::EPSILON);
         self.recalculate_scale_matrix();
     }
 
@@ -293,24 +311,18 @@ impl Transform {
         self.recalculate_combined_matrix()
     }
 
-    pub fn set_compound_pos_first(&mut self, state: bool) {
-        self.compound_pos_first = state;
+    fn recalculate_combined_matrix(&mut self) {
+        self.compound_mat = Affine3::from_matrix_unchecked(
+            self.pos_mat.to_homogeneous()
+                * self.rot.to_homogeneous()
+                * self.scale_mat.to_homogeneous(),
+        );
+
+        debug_assert_ne!(0.0, self.compound_mat.matrix().determinant());
     }
 
-    fn recalculate_combined_matrix(&mut self) {
-        if self.compound_pos_first {
-            self.compound_mat = Affine3::from_matrix_unchecked(
-                self.pos_mat.to_homogeneous()
-                    * self.rot.to_homogeneous()
-                    * self.scale_mat.to_homogeneous(),
-            );
-        } else {
-            self.compound_mat = Affine3::from_matrix_unchecked(
-                self.rot.to_homogeneous()
-                    * self.pos_mat.to_homogeneous()
-                    * self.scale_mat.to_homogeneous(),
-            );
-        }
+    pub fn translation(&self) -> &Translation3<f32> {
+        &self.pos_mat
     }
 
     /// Returns a reference to the combined transformation matrix.

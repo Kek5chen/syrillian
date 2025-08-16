@@ -234,6 +234,6 @@ impl ModelUniform {
     }
 
     pub fn update(&mut self, object: GameObjectId, outer_transform: &Matrix4<f32>) {
-        self.model_mat = outer_transform * object.transform.full_matrix().to_homogeneous();
+        self.model_mat = outer_transform * object.transform.full_matrix().matrix();
     }
 }

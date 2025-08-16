@@ -5,7 +5,7 @@ use crate::components::{Component, RigidBodyComponent};
 use crate::core::GameObjectId;
 use crate::drawables::MeshRenderer;
 use crate::engine::assets::Mesh;
-use crate::World;
+use crate::{must_pipeline, World};
 use log::{trace, warn};
 use nalgebra::{Point3, Vector3};
 use rapier3d::prelude::*;
@@ -436,7 +436,9 @@ fn draw_collider_edges(
     const COLOR: Vector4<f32> = Vector4::new(0.0, 1.0, 0.2, 1.0);
 
     let shader = ctx.frame.cache.shader(HShader::DEBUG_EDGES);
-    pass.set_pipeline(&shader.pipeline);
+    must_pipeline!(pipeline = shader, ctx.pass_type => return);
+
+    pass.set_pipeline(pipeline);
     pass.set_push_constants(ShaderStages::FRAGMENT, 0, bytemuck::bytes_of(&COLOR));
     pass.set_bind_group(1, model_uniform.bind_group(), &[]);
 
