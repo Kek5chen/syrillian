@@ -40,7 +40,7 @@ impl LightUniform {
             direction: Vector3::new(0.0, -1.0, 0.0),
             range: 10.0,
             color: Vector3::new(1.0, 1.0, 1.0),
-            intensity: 1.0,
+            intensity: 10.0,
             inner_angle: 0.0,
             outer_angle: 0.0,
             type_id: LightType::Point as u32,

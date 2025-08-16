@@ -1,179 +1,281 @@
 const PI: f32 = 3.14159265359;
 const AMBIENT_STRENGTH: f32 = 0.1;
 
+fn saturate3(v: vec3<f32>) -> vec3<f32> { return clamp(v, vec3<f32>(0.0), vec3<f32>(1.0)); }
+fn safe_rsqrt(x: f32) -> f32 { return inverseSqrt(max(x, 1e-8)); }
+fn safe_normalize(v: vec3<f32>) -> vec3<f32> { return v * safe_rsqrt(dot(v, v)); }
+
+// derive ggx roughness in [~0.045, 1] from blinn-phong shininess exponent.
+fn shininess_to_roughness(n: f32) -> f32 {
+    let a = sqrt(2.0 / (n + 2.0));
+    return clamp(a, 0.045, 1.0);
+}
+
+// orthonormalize t against n to build a stable tbn basis
+fn ortho_tangent(T: vec3<f32>, N: vec3<f32>) -> vec3<f32> {
+    return safe_normalize(T - N * dot(N, T));
+}
+
+// fetch tangent-space normal and bring it to world space with a proper tbn
+fn normal_from_map(
+    tex: texture_2d<f32>, samp: sampler, uv: vec2<f32>,
+    Nw: vec3<f32>, Tw: vec3<f32>, Bw: vec3<f32>
+) -> vec3<f32> {
+    let n_ts = textureSample(tex, samp, uv).xyz * 2.0 - 1.0; // [-1..1]
+    let T = ortho_tangent(safe_normalize(Tw), safe_normalize(Nw));
+    let B = safe_normalize(cross(Nw, T)) * sign(dot(Bw, cross(Nw, T))); // preserve handedness
+    let TBN = mat3x3<f32>(T, B, safe_normalize(Nw));
+    return safe_normalize(TBN * n_ts);
+}
+
+// ---------- Microfacet (GGX) BRDF ----------
+fn D_ggx(NdotH: f32, a: f32) -> f32 {
+    let a2 = a*a;
+    let d = NdotH*NdotH*(a2 - 1.0) + 1.0;
+    return a2 / (PI * d * d);
+}
+
+fn V_smith_ggx_correlated(NdotV: f32, NdotL: f32, a: f32) -> f32 {
+    let a2 = a*a;
+    let gv = NdotL * sqrt((NdotV * (1.0 - a2)) + a2);
+    let gl = NdotV * sqrt((NdotL * (1.0 - a2)) + a2);
+    return 0.5 / (gv + gl + 1e-7); // Vis = G/(4 NdotV NdotL)
+}
+
+fn fresnel_schlick(cosTheta: f32, F0: vec3<f32>) -> vec3<f32> {
+    return F0 + (vec3<f32>(1.0) - F0) * pow(1.0 - cosTheta, 5.0);
+}
+
+// Simple energy split: kd = (1 - average(F)) for dielectrics (no metalness param yet)
+fn diffuse_lambert(base: vec3<f32>) -> vec3<f32> {
+    return base / PI;
+}
+
+// ACES Filmic tonemapping (linear → linear)
+fn RRTAndODTFit(v: vec3<f32>) -> vec3<f32> {
+    let a = v * (v + 0.0245786) - 0.000090537;
+    let b = v * (0.983729 * v + 0.4329510) + 0.238081;
+    return a / b;
+}
+
+// Filmic tonemap
+fn tonemap_ACES(color: vec3<f32>) -> vec3<f32> {
+    let ACES_IN = mat3x3<f32>(
+        0.59719, 0.35458, 0.04823,
+        0.07600, 0.90834, 0.01566,
+        0.02840, 0.13383, 0.83777
+    );
+    let ACES_OUT = mat3x3<f32>(
+        1.60475, -0.53108, -0.07367,
+       -0.10208,  1.10813, -0.00605,
+       -0.00327, -0.07276,  1.07602
+    );
+    let v = ACES_IN * color;
+    let r = RRTAndODTFit(v);
+    return saturate3(ACES_OUT * r);
+}
+
+// Lottes "Neutral" tonemap (linear in -> linear out)
+fn tonemap_neutral(x: vec3<f32>) -> vec3<f32> {
+    let A = 0.22;
+    let B = 0.30;
+    let C = 0.10;
+    let D = 0.20;
+    let E = 0.01;
+    let F = 0.30;
+    let exposure = 1.0;
+    let v = x * exposure;
+    let y = ((v * (A * v + C * B) + D * E) / (v * (A * v + B) + D * F)) - (E / F);
+    return clamp(y, vec3<f32>(0.0), vec3<f32>(1.0));
+}
 fn calculate_attenuation(distance: f32, radius: f32) -> f32 {
     if radius <= 0.0 { return 1.0; }
-
-    // Simple linear falloff
-    //return clamp(1.0 - distance / radius, 0.0, 1.0);
-
-    // Cubic Falloff is cooler
-    let attenuation = 1.0 / (1.0 + 0.1 * distance + 0.01 * distance * distance);
-    return clamp(attenuation, 0.0, 1.0);
+    let att = 1.0 / (1.0 + 0.09 * distance + 0.032 * distance * distance);
+    return clamp(att, 0.0, 1.0);
 }
 
-fn calculate_specular(
-    light_dir: vec3<f32>,
-    view_dir: vec3<f32>,
-    world_normal: vec3<f32>,
-    shininess: f32
-) -> f32 {
-    let half_dir = normalize(light_dir + view_dir);
-    let spec_angle = dot(world_normal, half_dir);
-    
-    let spec_power = pow(saturate(spec_angle), shininess);
-    return spec_power;
+fn shadow_visibility_spot(in_pos: vec3<f32>, N: vec3<f32>, L: vec3<f32>, light: Light) -> f32 {
+    if (light.shadow_map_id == 0xffffffffu) { return 1.0; }
+
+    let world_pos_bias = in_pos + N * 0.002;
+    let uvz = spot_shadow_uvz(light, world_pos_bias);
+    if !(all(uvz >= vec3<f32>(0.0)) && all(uvz <= vec3<f32>(1.0))) {
+        return 1.0;
+    }
+
+    let slope = 1.0 - max(dot(N, L), 0.0);
+    let bias  = 0.0001 * slope;
+    let layer = f32(light.shadow_map_id);
+    return pcf_3x3(shadow_maps, shadow_sampler, vec4<f32>(uvz.xy, uvz.z - bias, layer));
 }
 
-fn get_normal_from_map(
-    tex: texture_2d<f32>,
-    samp: sampler,
-    uv: vec2<f32>,
-    world_norm: vec3<f32>,
-    world_tan: vec3<f32>,
-    world_bitan: vec3<f32>
+fn eval_spot(
+    in_pos: vec3<f32>, N: vec3<f32>, V: vec3<f32>,
+    base: vec3<f32>, F0: vec3<f32>, a: f32, light: Light
 ) -> vec3<f32> {
-    let tangent_normal = textureSample(tex, samp, uv).xyz;
-    let unpacked_normal = normalize(tangent_normal * 2.0 - 1.0);
-
-    let tbn = mat3x3<f32>(
-        normalize(world_tan),
-        normalize(world_bitan),
-        normalize(world_norm)
-    );
-
-    return normalize(tbn * unpacked_normal);
-}
-
-fn spot_light(in: FInput, light: Light, world_normal: vec3<f32>, view_dir: vec3<f32>, base_color: vec3<f32>) -> vec3<f32> {
-    // Vector from fragment to light
-    var L = light.position - in.position;
+    var L = light.position - in_pos;
     let dist = length(L);
-    L = L / dist;
+    L = L / max(dist, 1e-6);
 
-    // Lambert
-    let NdotL = max(dot(world_normal, L), 0.0);
-    if NdotL <= 0.0 { return vec3<f32>(0.0); }
+    let NdotL = saturate(dot(N, L));
+    if (NdotL <= 0.0) { return vec3<f32>(0.0); }
 
-    // Spotlight cone factor using cos angles to avoid acos
+    // Smooth spot cone
     let inner = min(light.inner_angle, light.outer_angle);
     let outer = max(light.inner_angle, light.outer_angle);
     let cosInner = cos(inner);
     let cosOuter = cos(outer);
-
-    // dir_to_frag is from light to fragment
-    let dir_to_frag = normalize(in.position - light.position);
-    let cosTheta = dot(normalize(light.direction), dir_to_frag);
-
-    // Smooth penumbra from outer (0) to inner (1)
+    let dir_to_frag = safe_normalize(in_pos - light.position);
+    let cosTheta = dot(safe_normalize(light.direction), dir_to_frag);
     let spot = smoothstep(cosOuter, cosInner, cosTheta);
 
-    // Range falloff with a soft edge near the limit
-    let range_fade = 1.0 - smoothstep(light.range * 0.85, light.range, dist);
+    // Distance falloff
+    let range_fade  = 1.0 - smoothstep(light.range * 0.85, light.range, dist);
     let attenuation = calculate_attenuation(dist, light.range) * range_fade * spot;
 
-    let radiance = light.color * light.intensity * attenuation;
+    // Microfacet
+    let NdotV = saturate(dot(N, V));
+    let H     = safe_normalize(V + L);
+    let NdotH = saturate(dot(N, H));
+    let LdotH = saturate(dot(L, H));
 
-    // Diffuse
-    var lit_color = base_color * NdotL * radiance;
+    let D  = D_ggx(NdotH, a);
+    let Vis= V_smith_ggx_correlated(NdotV, NdotL, a);
+    let F  = fresnel_schlick(LdotH, F0);
 
-    // Specular
-    let spec = calculate_specular(L, view_dir, world_normal, material.shininess);
-    lit_color = lit_color + spec * radiance;
+    // Specular (Cook-Torrance)
+    let spec = (F * (D * Vis)) * NdotL;
 
-    if (light.shadow_map_id != 0xffffffffu) {
-        let uvz = spot_shadow_uvz(light, in.position);
-        if (all(uvz >= vec3<f32>(0.0)) && all(uvz <= vec3<f32>(1.0))) {
-            let slope = 1.0 - max(dot(world_normal, L), 0.0);
-            let bias  = 0.0000 + 0.0001 * slope;
-            let layer = f32(light.shadow_map_id);
-            let vis   = pcf_3x3(shadow_maps, shadow_sampler, vec4<f32>(uvz.xy, uvz.z - bias, layer));
-            lit_color *= vis;
-        }
-    }
+    // Diffuse energy conservation: kd = 1 - average(F) (no metalness yet, but gonna start going PBR soon)
+    let ks = (F.x + F.y + F.z) / 3.0;
+    let kd = (1.0 - ks);
+    let diff = diffuse_lambert(base) * kd * NdotL;
 
-    return lit_color;
+    // Shadowing
+    let vis = shadow_visibility_spot(in_pos, N, L, light);
+
+    let radiance = light.color * (light.intensity * attenuation) * vis;
+    return (diff + spec) * radiance;
 }
 
-fn point_light(in: FInput, light: Light, world_normal: vec3<f32>, view_dir: vec3<f32>, base_color: vec3<f32>) -> vec3<f32> {
-    // Vector from fragment to light
-    var L = light.position - in.position;
+fn eval_point(
+    in_pos: vec3<f32>, N: vec3<f32>, V: vec3<f32>,
+    base: vec3<f32>, F0: vec3<f32>, a: f32, light: Light
+) -> vec3<f32> {
+    var L = light.position - in_pos;
     let dist = length(L);
     L = L / max(dist, 1e-6);
 
-    // Lambert
-    let NdotL = max(dot(world_normal, L), 0.0);
-    if NdotL <= 0.0 { return vec3<f32>(0.0); }
+    let NdotL = saturate(dot(N, L));
+    if (NdotL <= 0.0) { return vec3<f32>(0.0); }
 
-    let range_fade = 1.0 - smoothstep(light.range * 0.85, light.range, dist);
+    let range_fade  = 1.0 - smoothstep(light.range * 0.85, light.range, dist);
     let attenuation = calculate_attenuation(dist, light.range) * range_fade;
-    let radiance = light.color * light.intensity * attenuation;
 
-    // Diffuse
-    var lit_color = base_color * NdotL * radiance;
+    let NdotV = saturate(dot(N, V));
+    let H     = safe_normalize(V + L);
+    let NdotH = saturate(dot(N, H));
+    let LdotH = saturate(dot(L, H));
 
-    let spec = calculate_specular(L, view_dir, world_normal, material.shininess);
-    lit_color = lit_color + spec * radiance;
+    let D  = D_ggx(NdotH, a);
+    let Vis= V_smith_ggx_correlated(NdotV, NdotL, a);
+    let F  = fresnel_schlick(LdotH, F0);
 
-    return lit_color;
+    let ks = (F.x + F.y + F.z) / 3.0;
+    let kd = (1.0 - ks);
+    let diff = diffuse_lambert(base) * kd * NdotL;
+    let spec = (F * (D * Vis)) * NdotL;
+
+    let radiance = light.color * (light.intensity * attenuation);
+    return (diff + spec) * radiance;
 }
 
-fn sun_light(in: FInput, light: Light, world_normal: vec3<f32>, view_dir: vec3<f32>, base_color: vec3<f32>) -> vec3<f32> {
-    let light_dot = clamp(dot(world_normal, light.direction), 0.0, 1.0);
-    let color = base_color * light_dot * light.intensity;
+fn eval_sun(
+    _in_pos: vec3<f32>, N: vec3<f32>, V: vec3<f32>,
+    base: vec3<f32>, F0: vec3<f32>, a: f32, light: Light
+) -> vec3<f32> {
+    let L = safe_normalize(light.direction);
+    let NdotL = saturate(dot(N, L));
+    if (NdotL <= 0.0) { return vec3<f32>(0.0); }
 
-    return color;
+    let NdotV = saturate(dot(N, V));
+    let H     = safe_normalize(V + L);
+    let NdotH = saturate(dot(N, H));
+    let LdotH = saturate(dot(L, H));
+
+    let D  = D_ggx(NdotH, a);
+    let Vis= V_smith_ggx_correlated(NdotV, NdotL, a);
+    let F  = fresnel_schlick(LdotH, F0);
+
+    let ks = (F.x + F.y + F.z) / 3.0;
+    let kd = (1.0 - ks);
+    let diff = diffuse_lambert(base) * kd * NdotL;
+    let spec = (F * (D * Vis)) * NdotL;
+
+    let radiance = light.color * light.intensity;
+    return (diff + spec) * radiance;
 }
 
 @fragment
 fn fs_main(in: FInput) -> @location(0) vec4<f32> {
-    // Color
-    var base_color: vec4<f32>;
+    // Base color (linear)
+    var base_rgba: vec4<f32>;
     if material.use_diffuse_texture != 0u {
-        base_color = textureSample(t_diffuse, s_diffuse, in.uv);
+        base_rgba = textureSample(t_diffuse, s_diffuse, in.uv);
     } else {
-        base_color = vec4<f32>(material.diffuse, 1.0);
+        base_rgba = vec4<f32>(material.diffuse, 1.0);
     }
 
-    // Discard Alpha
-    if base_color.a < 0.1 {
-        discard;
-    }
+    // Alpha test
+    if (base_rgba.a < 0.01) { discard; }
 
-    // Normal
-    var world_normal: vec3<f32>;
+    // World normal
+    var N: vec3<f32>;
     if material.use_normal_texture != 0u {
-        world_normal = get_normal_from_map(
-            t_normal, s_normal, in.uv,
-            in.normal, in.tangent, in.bitangent
-        );
+        N = normal_from_map(t_normal, s_normal, in.uv, in.normal, in.tangent, in.bitangent);
     } else {
-        world_normal = normalize(in.normal);
+        N = safe_normalize(in.normal);
     }
 
-    // Lighting
-    let view_dir = normalize(camera.position - in.position);
+    let V = safe_normalize(camera.position - in.position);   // to viewer
+    let base = saturate3(base_rgba.rgb);
 
-    var lit_color = base_color.rgb * AMBIENT_STRENGTH;
+    // convert blinn-phong shininess to ggx roughness (until pbr)
+    let roughness = shininess_to_roughness(material.shininess);
+    let a = roughness * roughness;
 
+    // dielectric f0 (constant 4% reflectance). when adding metalness later, tint f0 by base.
+    let F0 = vec3<f32>(0.04);
+
+    // start with a dim ambient term (energy‑aware)
+    var Lo = base * (AMBIENT_STRENGTH * (1.0 - 0.04)); // tiny spec energy loss
+
+    // Lights
     let count = light_count;
     for (var i: u32 = 0u; i < count; i = i + 1u) {
-        let light = lights[i];
-
-        if light.type_id == LIGHT_TYPE_POINT {
-            lit_color = lit_color + point_light(in, light, world_normal, view_dir, base_color.xyz);
-        } else if light.type_id == LIGHT_TYPE_SUN {
-            lit_color = lit_color + sun_light(in, light, world_normal, view_dir, base_color.xyz);
-        } else if light.type_id == LIGHT_TYPE_SPOT {
-            lit_color = lit_color + spot_light(in, light, world_normal, view_dir, base_color.xyz);
+        let Ld = lights[i];
+        if (Ld.type_id == LIGHT_TYPE_POINT) {
+            Lo += eval_point(in.position, N, V, base, F0, a, Ld);
+        } else if (Ld.type_id == LIGHT_TYPE_SUN) {
+            Lo += eval_sun(in.position, N, V, base, F0, a, Ld);
+        } else if (Ld.type_id == LIGHT_TYPE_SPOT) {
+            Lo += eval_spot(in.position, N, V, base, F0, a, Ld);
         }
     }
 
-    let final_color = vec4(lit_color, base_color.a * material.opacity);
 
-    return final_color;
+    // filmic tonemapping
+    //let color_tm = tonemap_ACES(Lo);
+
+    // neutral tonemap
+    let color_tm = tonemap_neutral(Lo);
+
+    // raw
+    //let color_tm = Lo;
+
+    // output linear. if swapchain is srgb, the hw will gamma‑encode.
+    return vec4<f32>(color_tm, base_rgba.a * material.opacity);
 }
-
 
 
 // Shadow stuff

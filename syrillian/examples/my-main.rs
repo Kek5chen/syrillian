@@ -182,6 +182,7 @@ impl AppState for MyMain {
 
         self.light1 = spot.add_component::<SpotLightComponent>();
         self.light1.set_color(world, 1.0, 0.2, 0.2);
+        self.light1.set_intensity(world, 1000.);
         self.light1.set_inner_angle(world, 20.);
         self.light1.set_outer_angle(world, 30.);
 
@@ -191,6 +192,7 @@ impl AppState for MyMain {
 
         self.light2 = spot.add_component::<SpotLightComponent>();
         self.light2.set_color(world, 0.2, 0.2, 1.0);
+        self.light2.set_intensity(world, 1000.);
         self.light2.set_inner_angle(world, 20.);
         self.light2.set_outer_angle(world, 30.);
 
