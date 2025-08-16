@@ -121,7 +121,7 @@ fn vs_main(@builtin(vertex_index) vid: u32, @builtin(instance_index) iid: u32) -
     }
 
     out.position = vec4(light.position + offset, 1.0);
-    out.color = vec4(1.0, 1.0, 1.0, alpha);
+    out.color = vec4(light.color, alpha);
 
     out.position = camera.view_proj_mat * out.position;
 
