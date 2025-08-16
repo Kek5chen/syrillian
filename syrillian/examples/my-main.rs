@@ -17,7 +17,7 @@ use syrillian::assets::{Material, Shader};
 use syrillian::components::{CRef, Collider3D, FirstPersonCameraController, PointLightComponent, RigidBodyComponent, RopeComponent, RotateComponent, SpotLightComponent, SpringComponent};
 use syrillian::core::{GameObjectExt, GameObjectId};
 use syrillian::drawables::text::glyph::TextAlignment;
-use syrillian::drawables::{Text2D, Text3D};
+use syrillian::drawables::Text3D;
 use syrillian::prefabs::first_person_player::FirstPersonPlayerPrefab;
 use syrillian::prefabs::prefab::Prefab;
 use syrillian::prefabs::CubePrefab;
@@ -65,8 +65,14 @@ impl AppState for MyMain {
         world.input.set_quit_on_escape(true);
 
         world.spawn(&City);
+
         self.player = world.spawn(&FirstPersonPlayerPrefab);
         self.player_rb = self.player.get_component::<RigidBodyComponent>().unwrap();
+
+        // or freecam if you want
+        // self.player = world.new_camera();
+        // self.player.add_component::<FreecamController>();
+
         self.player.at(0.0, 20.0, 0.0);
 
         let shader = Shader::new_fragment("Funky Shader", SHADER1).store(world);
@@ -129,15 +135,15 @@ impl AppState for MyMain {
 
         big_cube_right.at(-100.0, 10.0, 200.0).scale(100.);
 
-        {
-            let mut text = world.new_object("Text");
-            let mut text2d = Text2D::new("Meow".to_string(), "Arial".to_string(), 50., None);
-            text2d.set_position(0., 50.);
-            text2d.text_mut().rainbow_mode(true);
-
-            text.set_drawable(text2d);
-            world.add_child(text);
-        }
+        // {
+        //     let mut text = world.new_object("Text");
+        //     let mut text2d = Text2D::new("Meow".to_string(), "Arial".to_string(), 50., None);
+        //     text2d.set_position(0., 50.);
+        //     text2d.text_mut().rainbow_mode(true);
+        //
+        //     text.set_drawable(text2d);
+        //     world.add_child(text);
+        // }
 
         {
             let mut text = world.new_object("Text 3D");
@@ -208,11 +214,14 @@ impl AppState for MyMain {
         renderer: &mut syrillian::rendering::renderer::Renderer,
     ) -> Result<(), Box<dyn Error>> {
         if world.input.is_key_down(KeyCode::KeyL) {
-            let mut collider = self.player.get_component::<Collider3D>().unwrap();
+            let mode = renderer.debug.next_mode();
+
+            let Some(mut collider) = self.player.get_component::<Collider3D>() else {
+                return Ok(());
+            };
             if collider.is_debug_render_enabled() {
                 collider.set_debug_render(false);
             } else {
-                let mode = renderer.debug.next_mode();
                 if mode == 0 {
                     collider.set_debug_render(true);
                 }
