@@ -91,8 +91,17 @@ pub trait Light: Component {
     }
 
     fn set_color_vec(&mut self, world: &mut World, color: &Vector3<f32>) {
-        let light = self.data_mut(world);
-        light.color = color.simd_clamp(Vector3::new(0., 0., 0.), Vector3::new(1., 1., 1.));
+        self.data_mut(world).color = color.simd_clamp(Vector3::new(0., 0., 0.), Vector3::new(1., 1., 1.));
+    }
+
+    fn set_inner_angle(&self, world: &mut World, angle: f32) {
+        let rad = angle.clamp(f32::EPSILON, 45. - f32::EPSILON).to_radians();
+        self.data_mut(world).inner_angle = rad;
+    }
+
+    fn set_outer_angle(&self, world: &mut World, angle: f32) {
+        let rad = angle.clamp(f32::EPSILON, 45. - f32::EPSILON).to_radians();
+        self.data_mut(world).outer_angle = rad;
     }
 }
 

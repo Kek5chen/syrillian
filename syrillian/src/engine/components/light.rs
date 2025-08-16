@@ -22,6 +22,7 @@ pub struct LightComponent<L: LightTypeTrait + 'static> {
     target_outer_angle: f32,
     pub inner_angle_t: f32,
     pub outer_angle_t: f32,
+    pub tween_enabled: bool,
 
     light_type: PhantomData<L>,
 }
@@ -79,6 +80,7 @@ impl<L: LightTypeTrait + 'static> Component for LightComponent<L> {
             target_outer_angle: DEFAULT_OUTER_ANGLE,
             inner_angle_t: 1.0,
             outer_angle_t: 1.0,
+            tween_enabled: false,
             light_type: PhantomData,
         }
     }
@@ -93,8 +95,10 @@ impl<L: LightTypeTrait + 'static> Component for LightComponent<L> {
         data.position = self.parent.transform.position();
         data.direction = self.parent.transform.forward();
 
-        data.outer_angle = data.outer_angle.lerp(self.target_outer_angle, self.outer_angle_t * delta);
-        data.inner_angle = data.inner_angle.lerp(self.target_inner_angle, self.inner_angle_t * delta);
+        if self.tween_enabled {
+            data.outer_angle = data.outer_angle.lerp(self.target_outer_angle, self.outer_angle_t * delta);
+            data.inner_angle = data.inner_angle.lerp(self.target_inner_angle, self.inner_angle_t * delta);
+        }
 
         data.view_mat = self.parent.transform.view_matrix_rigid().to_matrix();
     }

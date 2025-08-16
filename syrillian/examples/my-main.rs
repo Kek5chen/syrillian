@@ -21,6 +21,7 @@ use syrillian::drawables::{Text2D, Text3D};
 use syrillian::prefabs::first_person_player::FirstPersonPlayerPrefab;
 use syrillian::prefabs::prefab::Prefab;
 use syrillian::prefabs::CubePrefab;
+use syrillian::rendering::lights::Light;
 use syrillian::utils::frame_counter::FrameCounter;
 use syrillian::SyrillianApp;
 use syrillian::{AppState, World};
@@ -40,7 +41,8 @@ struct MyMain {
     player_rb: CRef<RigidBodyComponent>,
     picked_up: Option<GameObjectId>,
     text3d: GameObjectId,
-    light: CRef<SpotLightComponent>,
+    light1: CRef<SpotLightComponent>,
+    light2: CRef<SpotLightComponent>,
 }
 
 impl Default for MyMain {
@@ -51,7 +53,8 @@ impl Default for MyMain {
             player_rb: CRef::null(),
             picked_up: None,
             text3d: GameObjectId::null(),
-            light: CRef::null(),
+            light1: CRef::null(),
+            light2: CRef::null(),
         }
     }
 }
@@ -175,9 +178,21 @@ impl AppState for MyMain {
         // world.spawn(&SunPrefab);
         let mut spot = world
             .new_object("Spot");
-        spot.at(5., 5., -5.).transform.set_euler_rotation(0., 90., 0.);
+        spot.at(5., 5., -5.).transform.set_euler_rotation(0., 80., 0.);
 
-        self.light = spot.add_component::<SpotLightComponent>();
+        self.light1 = spot.add_component::<SpotLightComponent>();
+        self.light1.set_color(world, 1.0, 0.2, 0.2);
+        self.light1.set_inner_angle(world, 20.);
+        self.light1.set_outer_angle(world, 30.);
+
+        let mut spot = world
+            .new_object("Spot 2");
+        spot.at(5., 5., -10.).transform.set_euler_rotation(0., 100., 0.);
+
+        self.light2 = spot.add_component::<SpotLightComponent>();
+        self.light2.set_color(world, 0.2, 0.2, 1.0);
+        self.light2.set_inner_angle(world, 20.);
+        self.light2.set_outer_angle(world, 30.);
 
         world.print_objects();
 
@@ -233,8 +248,6 @@ impl AppState for MyMain {
         }
 
         self.do_raycast_test(world);
-
-        self.light.set_inner_angle_tween_target(world.time().as_secs_f32().sin() * 2. - 1. + 30.);
 
         Ok(())
     }
