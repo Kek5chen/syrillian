@@ -71,16 +71,21 @@ impl GameObject {
             let pos_opt = parent
                 .children
                 .iter()
-                .find_position(|other| self.id.0 == other.0)
+                .find_position(|other| self.id == **other)
                 .map(|(id, _)| id);
             if let Some(pos) = pos_opt {
                 parent.children.remove(pos);
+            }
+        } else {
+            let world = World::instance();
+            if let Some(pos) = world.children.iter().find_position(|other| self.id == **other) {
+                world.children.remove(pos.0);
             }
         }
     }
 
     pub fn add_child(&mut self, mut child: GameObjectId) {
-        // if child had a parent, remove it from there
+        // unlink from previous parent or world
         child.unlink();
 
         self.children.push(child);
@@ -233,7 +238,7 @@ impl ModelUniform {
         }
     }
 
-    pub fn update(&mut self, object: GameObjectId, outer_transform: &Matrix4<f32>) {
-        self.model_mat = outer_transform * object.transform.full_matrix().matrix();
+    pub fn update(&mut self, transform: &Matrix4<f32>) {
+        self.model_mat = *transform;
     }
 }
