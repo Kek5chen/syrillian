@@ -1,12 +1,13 @@
-use crate::assets::id_from_atlas;
-use font_kit::font::Font;
+use crate::drawables::text::msdf_atlas::GlyphAtlasEntry;
+use crate::rendering::{AssetCache, FontAtlas};
 use nalgebra::Vector2;
+use wgpu::Queue;
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct GlyphVertex {
-    pos: Vector2<f32>,
-    atlas_uv: Vector2<f32>,
+    pos: [f32; 2],
+    uv: [f32; 2],
 }
 
 #[repr(C)]
@@ -16,112 +17,93 @@ pub struct GlyphRenderData {
 }
 
 #[derive(Debug, Copy, Clone)]
-pub enum TextAlignment {
-    Left,
-    Right,
-    Center,
-}
-
-impl GlyphVertex {
-    pub const fn new(pos: Vector2<f32>, atlas_uv: Vector2<f32>) -> Self {
-        Self { pos, atlas_uv }
-    }
-}
+pub enum TextAlignment { Left, Right, Center }
 
 impl GlyphRenderData {
-    pub fn new(offset: &Vector2<f32>, atlas_len: u32, glyph: char) -> Self {
-        let atlas_id = id_from_atlas(glyph);
-        let atlas_len = atlas_len as f32;
-        let atlas_base = Vector2::new(atlas_id.x as f32, atlas_id.y as f32 + 1.);
+    fn from_entry(origin_em: Vector2<f32>, entry: &GlyphAtlasEntry) -> Self {
+        let l = origin_em.x + entry.plane_min[0];
+        let r = origin_em.x + entry.plane_max[0];
+        let b = origin_em.y + entry.plane_min[1];
+        let t = origin_em.y + entry.plane_max[1];
 
-        let atlas_top_left = (atlas_base + Vector2::new(0.0, -1.0)) / atlas_len;
-        let atlas_top_right = (atlas_base + Vector2::new(1.0, -1.0)) / atlas_len;
-        let atlas_bottom_right = (atlas_base + Vector2::new(1.0, 0.0)) / atlas_len;
-        let atlas_bottom_left = atlas_base / atlas_len;
+        let uv_min = entry.uv_min;
+        let uv_max = entry.uv_max;
 
-        let pos_top_left = Vector2::new(offset.x, offset.y + 1.);
-        let pos_top_right = Vector2::new(offset.x + 1., offset.y + 1.);
-        let pos_bottom_left = Vector2::new(offset.x, offset.y);
-        let pos_bottom_right = Vector2::new(offset.x + 1., offset.y);
-
-        let top_left = GlyphVertex::new(pos_top_left, atlas_top_left);
-        let top_right = GlyphVertex::new(pos_top_right, atlas_top_right);
-        let bottom_left = GlyphVertex::new(pos_bottom_left, atlas_bottom_left);
-        let bottom_right = GlyphVertex::new(pos_bottom_right, atlas_bottom_right);
+        let v_tl = GlyphVertex { pos: [l, t], uv: [uv_min[0], uv_min[1]] };
+        let v_tr = GlyphVertex { pos: [r, t], uv: [uv_max[0], uv_min[1]] };
+        let v_bl = GlyphVertex { pos: [l, b], uv: [uv_min[0], uv_max[1]] };
+        let v_br = GlyphVertex { pos: [r, b], uv: [uv_max[0], uv_max[1]] };
 
         Self {
             triangles: [
-                [top_left, bottom_left, top_right],
-                [top_right, bottom_left, bottom_right],
-            ],
+                [v_tl, v_bl, v_tr],
+                [v_tr, v_bl, v_br],
+            ]
         }
     }
 }
 
-fn align_glyph_geometry(
-    glyph_bounds: &mut [GlyphRenderData],
-    alignment: TextAlignment,
-    row_widths: &[(usize, f32)],
-) {
-    let offset = match alignment {
-        TextAlignment::Left => return,
-        TextAlignment::Right => -1.,
-        TextAlignment::Center => -0.5,
+fn align_lines(glyphs: &mut [GlyphRenderData], alignment: TextAlignment, rows: &[(usize, f32)]) {
+    let shift = |w: f32| match alignment {
+        TextAlignment::Left => 0.0,
+        TextAlignment::Center => -0.5 * w,
+        TextAlignment::Right => -w,
     };
-
-    let mut glyphs = glyph_bounds.iter_mut();
-    for (items, width) in row_widths {
-        for _ in 0..*items {
-            let Some(glyph) = glyphs.next() else {
-                if cfg!(debug_assertions) {
-                    panic!("Glyphs ran out before row members did");
+    let mut it = glyphs.iter_mut();
+    for &(count, width_em) in rows {
+        let dx = shift(width_em);
+        for _ in 0..count {
+            if let Some(g) = it.next() {
+                for tri in g.triangles.iter_mut() {
+                    for v in tri {
+                        v.pos[0] += dx;
+                    }
                 }
-                return;
-            };
-
-            for triangle in glyph.triangles.iter_mut().flatten() {
-                triangle.pos.x += offset * width;
             }
         }
     }
 }
 
 pub fn generate_glyph_geometry_stream(
+    cache: &AssetCache,
+    queue: &Queue,
     text: &str,
-    font: &Font,
+    atlas: &FontAtlas,
     alignment: TextAlignment,
-    atlas_len: u32,
+    line_height_mul: f32,
 ) -> Vec<GlyphRenderData> {
-    if text.is_empty() {
-        return vec![];
-    }
+    if text.is_empty() { return vec![]; }
 
-    let mut glyph_bounds: Vec<GlyphRenderData> = Vec::new();
-    let mut offset = Vector2::zeros();
+    let metrics = atlas.metrics();
+    let baseline_dy = (metrics.ascent_em + metrics.descent_em + metrics.line_gap_em) * line_height_mul;
 
-    let mut row_widths: Vec<(usize, f32)> = Vec::new();
-    let mut width: f32 = 0.0;
-    let mut row_characters: usize = 0;
-    for character in text.chars() {
-        if character == '\n' {
-            offset = Vector2::new(0.0, offset.y - 1.0);
-            row_widths.push((row_characters, width));
-            row_characters = 0;
-            width = 0.0;
+    atlas.ensure_glyphs(cache, text.chars(), queue);
+
+    let mut quads = Vec::new();
+    let mut row_data = Vec::<(usize, f32)>::new();
+    let mut cursor = Vector2::new(0.0f32, 0.0f32);
+    let mut row_glyphs = 0usize;
+    let mut row_width_em = 0.0f32;
+
+    for ch in text.chars() {
+        if ch == '\n' {
+            row_data.push((row_glyphs, row_width_em));
+            cursor.x = 0.0;
+            cursor.y -= baseline_dy;
+            row_glyphs = 0;
+            row_width_em = 0.0;
             continue;
         }
 
-        let glyph_id = font.glyph_for_char(character).unwrap();
-        let glyph_size = font.advance(glyph_id).unwrap() / 2048.;
-        glyph_bounds.push(GlyphRenderData::new(&offset, atlas_len, character));
-
-        offset.x += glyph_size.x();
-        width = width.max(offset.x);
-        row_characters += 1;
+        if let Some(entry) = atlas.entry(ch).or_else(|| atlas.entry(' ')) {
+            quads.push(GlyphRenderData::from_entry(cursor, &entry));
+            cursor.x += entry.advance_em;
+            row_width_em = row_width_em.max(cursor.x);
+            row_glyphs += 1;
+        }
     }
-    row_widths.push((row_characters, width));
+    row_data.push((row_glyphs, row_width_em));
+    align_lines(&mut quads, alignment, &row_data);
 
-    align_glyph_geometry(&mut glyph_bounds, alignment, &row_widths);
-
-    glyph_bounds
+    quads
 }

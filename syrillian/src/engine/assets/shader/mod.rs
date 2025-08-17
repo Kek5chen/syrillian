@@ -16,8 +16,8 @@ use std::fs;
 use std::path::Path;
 use wgpu::{
     BindGroupLayout, Device, PipelineLayout, PipelineLayoutDescriptor, PolygonMode,
-    PrimitiveTopology, PushConstantRange, ShaderStages, VertexAttribute,
-    VertexBufferLayout, VertexFormat, VertexStepMode,
+    PrimitiveTopology, PushConstantRange, ShaderStages, VertexAttribute, VertexBufferLayout,
+    VertexFormat, VertexStepMode,
 };
 
 #[derive(Debug, Clone)]
@@ -65,6 +65,7 @@ pub enum Shader {
         topology: PrimitiveTopology,
         vertex_buffers: &'static [VertexBufferLayout<'static>],
         push_constant_ranges: &'static [PushConstantRange],
+        shadow_transparency: bool,
     },
 }
 
@@ -190,7 +191,8 @@ impl StoreDefaults for Shader {
                 polygon_mode: PolygonMode::Fill,
                 topology: PrimitiveTopology::TriangleList,
                 vertex_buffers: TEXT_VBL,
-                push_constant_ranges: TEXT_PC
+                push_constant_ranges: TEXT_PC,
+                shadow_transparency: false,
             }
         );
 
@@ -203,7 +205,8 @@ impl StoreDefaults for Shader {
                 polygon_mode: PolygonMode::Fill,
                 topology: PrimitiveTopology::TriangleList,
                 vertex_buffers: TEXT_VBL,
-                push_constant_ranges: TEXT_PC
+                push_constant_ranges: TEXT_PC,
+                shadow_transparency: true,
             }
         );
 
@@ -225,7 +228,8 @@ impl StoreDefaults for Shader {
                     push_constant_ranges: &[PushConstantRange {
                         stages: ShaderStages::FRAGMENT,
                         range: 0..WGPU_VEC3_ALIGN as u32,
-                    }]
+                    }],
+                    shadow_transparency: false,
                 }
             );
 
@@ -256,6 +260,7 @@ impl StoreDefaults for Shader {
                     polygon_mode: PolygonMode::Line,
                     vertex_buffers: DEBUG_VERTEX_NORMALS_VBL,
                     push_constant_ranges: &[],
+                    shadow_transparency: false,
                 }
             );
 
@@ -291,6 +296,7 @@ impl StoreDefaults for Shader {
                     polygon_mode: PolygonMode::Line,
                     vertex_buffers: DEBUG_RAYS_VBL,
                     push_constant_ranges: &[],
+                    shadow_transparency: false,
                 }
             );
 
@@ -314,6 +320,7 @@ impl StoreDefaults for Shader {
                     topology: PrimitiveTopology::TriangleList,
                     vertex_buffers: DEBUG_TEXT,
                     push_constant_ranges: TEXT_PC,
+                    shadow_transparency: false,
                 }
             );
 
@@ -327,6 +334,7 @@ impl StoreDefaults for Shader {
                     topology: PrimitiveTopology::TriangleList,
                     vertex_buffers: DEBUG_TEXT,
                     push_constant_ranges: TEXT_PC,
+                    shadow_transparency: false,
                 }
             );
 
@@ -343,6 +351,7 @@ impl StoreDefaults for Shader {
                         stages: ShaderStages::VERTEX,
                         range: 0..4,
                     }],
+                    shadow_transparency: false,
                 }
             );
         }
@@ -531,6 +540,16 @@ impl Shader {
         matches!(self, Shader::PostProcess { .. })
     }
 
+    pub fn has_shadow_transparency(&self) -> bool {
+        matches!(
+            self,
+            Shader::Custom {
+                shadow_transparency: true,
+                ..
+            }
+        )
+    }
+
     pub fn gen_code(&self) -> String {
         ShaderGen::new(self).generate()
     }
@@ -543,6 +562,7 @@ impl Shader {
         let use_name = match bgl.id() {
             HBGL::MODEL_ID => "model",
             HBGL::LIGHT_ID => "light",
+            HBGL::SHADOW_ID => "shadow",
 
             HBGL::RENDER_ID => return true,
             _ => return false,
@@ -585,6 +605,8 @@ impl Shader {
             }
             if self.needs_bgl(HBGL::LIGHT) {
                 slots[3] = Some(&lgt_bgl);
+            }
+            if self.needs_bgl(HBGL::SHADOW) {
                 slots[4] = Some(&sdw_bgl);
             }
         }
@@ -596,7 +618,11 @@ impl Shader {
         self.layout_with(device, &layout_name, &fixed)
     }
 
-    pub(crate) fn shadow_layout(&self, device: &Device, cache: &AssetCache) -> Option<PipelineLayout> {
+    pub(crate) fn shadow_layout(
+        &self,
+        device: &Device,
+        cache: &AssetCache,
+    ) -> Option<PipelineLayout> {
         if self.is_post_process() {
             return None;
         }

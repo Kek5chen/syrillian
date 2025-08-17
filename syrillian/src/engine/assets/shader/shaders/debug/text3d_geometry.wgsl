@@ -1,13 +1,14 @@
 #use model
 
 struct GlyphIn {
-    @location(0) offset: vec2<f32>,
+    @location(0) pos_em: vec2<f32>,
 }
 
 struct PushConstants {
     text_pos: vec2<f32>,
+    em_scale: f32,
+    msdf_range_px: f32,
     color: vec3<f32>,
-    text_size: f32,
 }
 
 var<push_constant> pc: PushConstants;
@@ -16,13 +17,8 @@ var<push_constant> pc: PushConstants;
 
 @vertex
 fn vs_main(in: GlyphIn) -> @builtin(position) vec4<f32> {
-    var text_pos = pc.text_pos;
-    let glyph_offset = (in.offset * pc.text_size) / 100; // TODO: Magic number. I think this can be properly scaled
-    let vpos = vec4(text_pos.xy + glyph_offset, 0.0, 1.0);
-
-    let position = camera.view_proj_mat * model.transform * vpos;
-
-    return position;
+    let world_pos = vec4(pc.text_pos + in.pos_em * pc.em_scale, 0.0, 1.0);
+    return camera.view_proj_mat * model.transform * world_pos;
 }
 
 @fragment

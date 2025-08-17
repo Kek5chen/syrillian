@@ -1,19 +1,20 @@
 #use model
 
 struct GlyphIn {
-    @location(0) offset: vec2<f32>,
-    @location(1) atlas_uv: vec2<f32>
+    @location(0) pos_em: vec2<f32>,
+    @location(1) uv: vec2<f32>
 }
 
-struct GlyphOut {
+struct VOut {
     @builtin(position) position: vec4<f32>,
-    @location(0) atlas_uv: vec2<f32>,
+    @location(0) uv: vec2<f32>,
 }
 
 struct PushConstants {
     text_pos: vec2<f32>,
+    em_scale: f32,
+    msdf_range_px: f32,
     color: vec3<f32>,
-    text_size: f32,
 }
 
 var<push_constant> pc: PushConstants;
@@ -21,26 +22,27 @@ var<push_constant> pc: PushConstants;
 
 
 @vertex
-fn vs_main(in: GlyphIn) -> GlyphOut {
-    var out: GlyphOut;
-
-    let text_pos = pc.text_pos;
-    let glyph_offset = (in.offset * pc.text_size) / 100; // TODO: Magic number. I think this can be properly scaled
-    let vpos = vec4(text_pos.xy + glyph_offset, 0.0, 1.0);
-
-    out.position = camera.view_proj_mat * model.transform * vpos;
-    out.atlas_uv = in.atlas_uv;
-
+fn vs_main(in: GlyphIn) -> VOut {
+    var out: VOut;
+    let world_pos = vec4(pc.text_pos + in.pos_em * pc.em_scale, 0.0, 1.0);
+    out.position = camera.view_proj_mat * model.transform * world_pos;
+    out.uv = in.uv;
     return out;
 }
 
+fn median3(a: vec3<f32>) -> f32 {
+    return max(min(a.r, a.g), min(max(a.r, a.g), a.b));
+}
+
 @fragment
-fn fs_main(data: GlyphOut) -> @location(0) vec4<f32> {
-    let color = textureSample(t_diffuse, s_diffuse, data.atlas_uv);
+fn fs_main(in: VOut) -> @location(0) vec4<f32> {
+    let msdf = textureSample(t_diffuse, s_diffuse, in.uv).rgb;
+    let sig = median3(msdf);
+    var dist = (sig - 0.5) * pc.msdf_range_px;
 
-    if (color.a < 0.1) {
-        discard;
-    }
+    let w = max(fwidth(dist), 1e-4);
+    let alpha = smoothstep(-w, w, dist);
 
-    return vec4(pc.color, color.a);
+    if (alpha <= 0.01) { discard; }
+    return vec4(pc.color, alpha);
 }

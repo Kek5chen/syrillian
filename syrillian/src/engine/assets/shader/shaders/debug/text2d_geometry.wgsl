@@ -1,13 +1,14 @@
 #use model
 
 struct GlyphIn {
-    @location(0) offset: vec2<f32>,
+    @location(0) pos_em: vec2<f32>,
 }
 
 struct PushConstants {
     text_pos: vec2<f32>,
+    em_scale: f32,
+    msdf_range_px: f32,
     color: vec3<f32>,
-    text_size: f32,
 }
 
 var<push_constant> pc: PushConstants;
@@ -17,13 +18,12 @@ var<push_constant> pc: PushConstants;
 @vertex
 fn vs_main(in: GlyphIn) -> @builtin(position) vec4<f32> {
     let screen_size = vec2<f32>(system.screen);
-
-    let vertex_offset = in.offset * f32(pc.text_size); // dumb world-space glyph offset
-    let text_offset = vec2(vertex_offset.x, -vertex_offset.y) + pc.text_pos;
-    let vpos = model.transform * vec4(text_offset, 0.0, 1.0); // vertex pos in world space
-    let screen_pos = vec4((vpos.xy / screen_size - vec2(0.5, 0.5)) * vec2(2, -2), 0.0, 1.0);
-
-    return screen_pos;
+    let pos_em = vec2(in.pos_em.x, -in.pos_em.y);
+    let px = pc.text_pos + pos_em * pc.em_scale;
+    let vpos = model.transform * vec4(px, 0.0, 1.0);
+    let ndc = vec2( (vpos.x / screen_size.x) * 2.0 - 1.0,
+                    1.0 - (vpos.y / screen_size.y) * 2.0);
+    return vec4(ndc, 0.0, 1.0);
 }
 
 @fragment

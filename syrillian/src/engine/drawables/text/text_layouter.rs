@@ -1,4 +1,4 @@
-use crate::assets::{HFont, HShader, FONT_ATLAS_GRID_N};
+use crate::assets::{HFont, HShader};
 use crate::core::{GameObjectId, ModelUniform};
 use crate::drawables::text::glyph::{
     generate_glyph_geometry_stream, GlyphRenderData, TextAlignment,
@@ -25,9 +25,10 @@ pub struct TextRenderData {
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct TextPushConstants {
     position: Vector2<f32>,
-    padding: [u32; 2],
+    em_scale: f32,
+    msdf_range_px: f32,
     color: Vector3<f32>,
-    text_size: f32,
+    padding: u32,
 }
 
 ensure_aligned!(TextPushConstants { position, color }, align <= 16 * 2 => size);
@@ -62,7 +63,7 @@ pub struct TextLayouter<DIM> {
 }
 
 impl<DIM: TextDim> TextLayouter<DIM> {
-    pub fn new(text: String, font: HFont, text_size: f32) -> Self {
+    pub fn new(text: String, font: HFont, em_scale: f32) -> Self {
         Self {
             text,
             alignment: TextAlignment::Left,
@@ -73,10 +74,11 @@ impl<DIM: TextDim> TextLayouter<DIM> {
             font,
 
             pc: TextPushConstants {
-                text_size,
-                padding: [0; 2],
+                em_scale,
                 position: Vector2::zeros(),
                 color: Vector3::new(1., 1., 1.),
+                msdf_range_px: 4.0,
+                padding: 0,
             },
             rainbow_mode: false,
             translation: ModelUniform::empty(),
@@ -86,16 +88,16 @@ impl<DIM: TextDim> TextLayouter<DIM> {
         }
     }
 
-    pub fn setup(&mut self, renderer: &Renderer, world: &mut World) {
-        let Some(font) = world.assets.fonts.try_get(self.font) else {
-            return;
-        };
+    pub fn setup(&mut self, renderer: &Renderer, _world: &mut World) {
+        let Some(hot_font) = renderer.cache.font(self.font) else { return; };
 
         self.glyph_data = generate_glyph_geometry_stream(
+            &renderer.cache,
+            &renderer.state.queue,
             &self.text,
-            &font.inner,
+            &hot_font,
             TextAlignment::Left,
-            FONT_ATLAS_GRID_N,
+            1.0,
         );
 
         let device = &renderer.state.device;
@@ -128,7 +130,7 @@ impl<DIM: TextDim> TextLayouter<DIM> {
         }
 
         if self.text_dirty {
-            self.regenerate_geometry(world);
+            self.regenerate_geometry(renderer);
         }
 
         let render_data = self
@@ -226,19 +228,17 @@ impl<DIM: TextDim> TextLayouter<DIM> {
         pass.draw(0..self.glyph_data.len() as u32 * 6, 0..1);
     }
 
-    pub fn regenerate_geometry(&mut self, world: &World) {
-        let Some(font) = world.assets.fonts.try_get(self.font) else {
-            error!("Couldn't regenerate glyph geometry stream because font was missing");
-            return;
-        };
+    pub fn regenerate_geometry(&mut self, renderer: &Renderer) {
+        let Some(hot_font) = renderer.cache.font(self.font) else { return; };
 
-        let glyph_data = generate_glyph_geometry_stream(
+        self.glyph_data = generate_glyph_geometry_stream(
+            &renderer.cache,
+            &renderer.state.queue,
             &self.text,
-            &font.inner,
-            self.alignment,
-            FONT_ATLAS_GRID_N,
+            &hot_font,
+            TextAlignment::Left,
+            1.0,
         );
-        self.glyph_data = glyph_data;
     }
 
     pub fn set_text(&mut self, text: String) {
@@ -271,8 +271,8 @@ impl<DIM: TextDim> TextLayouter<DIM> {
         self.pc.color = color;
     }
 
-    pub const fn set_size(&mut self, text_size: f32) {
-        self.pc.text_size = text_size;
+    pub const fn set_size(&mut self, text_size_em: f32) {
+        self.pc.em_scale = text_size_em;
     }
 
     pub const fn rainbow_mode(&mut self, enabled: bool) {

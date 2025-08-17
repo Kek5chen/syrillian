@@ -1,4 +1,4 @@
-use crate::assets::Shader;
+use crate::assets::{Shader, HBGL};
 use crate::core::Vertex3D;
 use wgpu::{
     BlendState, ColorTargetState, ColorWrites, CompareFunction, DepthBiasState, DepthStencilState,
@@ -60,6 +60,7 @@ pub struct RenderPipelineBuilder<'a> {
     pub topology: PrimitiveTopology,
     pub vertex_buffers: &'a [VertexBufferLayout<'a>],
     pub is_custom: bool,
+    pub has_shadow_transparency: bool,
 }
 
 impl<'a> RenderPipelineBuilder<'a> {
@@ -115,6 +116,13 @@ impl<'a> RenderPipelineBuilder<'a> {
 
         let cull_mode = self.cull_mode();
 
+        let fragment = self.has_shadow_transparency.then(|| FragmentState {
+            module: self.module,
+            entry_point: None,
+            compilation_options: PipelineCompilationOptions::default(),
+            targets: &[],
+        });
+
         Some(RenderPipelineDescriptor {
             label: Some(&self.label),
             layout: Some(self.layout),
@@ -133,7 +141,7 @@ impl<'a> RenderPipelineBuilder<'a> {
             },
             depth_stencil: Some(SHADOW_DEPTH_STENCIL),
             multisample: MultisampleState::default(),
-            fragment: None,
+            fragment,
             multiview: None,
             cache: None,
         })
@@ -147,8 +155,14 @@ impl<'a> RenderPipelineBuilder<'a> {
         let name = shader.name();
         let polygon_mode = shader.polygon_mode();
         let topology = shader.topology();
-        let is_post_process = matches!(shader, Shader::PostProcess { .. });
-        let is_custom = matches!(shader, Shader::Custom { .. });
+        let is_post_process = shader.is_post_process();
+        let is_custom = shader.is_custom();
+        let has_shadow_transparency = shader.has_shadow_transparency();
+
+        debug_assert!(
+            !has_shadow_transparency || !shader.needs_bgl(HBGL::SHADOW),
+            "Cannot render shadow transparency while relying on shadows for rendering"
+        );
 
         let label = match shader {
             Shader::Default { .. } => format!("{name} Pipeline"),
@@ -168,6 +182,7 @@ impl<'a> RenderPipelineBuilder<'a> {
             module,
             is_post_process,
             is_custom,
+            has_shadow_transparency,
             polygon_mode,
             topology,
             vertex_buffers,

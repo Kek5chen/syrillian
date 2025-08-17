@@ -10,6 +10,7 @@ use nalgebra::{Matrix4, Vector2, Vector3};
 
 pub mod glyph;
 pub mod text_layouter;
+pub mod msdf_atlas;
 
 pub type Text3D = Text<ThreeD>;
 pub type Text2D = Text<TwoD>;

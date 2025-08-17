@@ -10,14 +10,14 @@ use nalgebra::Vector2;
 use pathfinder_geometry::transform2d::Transform2F;
 use pathfinder_geometry::vector::{Vector2F, Vector2I};
 use std::convert::Into;
-use std::sync::Mutex;
+use std::sync::Arc;
 
 #[derive(Debug)]
 pub struct Font {
-    pub(crate) inner: font_kit::font::Font,
-    family_name: String,
-    pub(crate) pregenerated_atlas: Mutex<Option<Canvas>>,
-    pub(crate) atlas_glyph_size: i32,
+    pub(crate) _inner: font_kit::font::Font, // TODO: Check if still needed
+    pub(crate) family_name: String,
+    pub(crate) font_bytes: Arc<Vec<u8>>,
+    pub(crate) _atlas_em_px: i32, // TODO: Check if still needed
 }
 
 impl StoreType for Font {
@@ -52,16 +52,14 @@ pub const DEFAULT_GLYPH_SIZE: i32 = 100;
 
 impl Font {
     /// The default atlas glyph size is 100 pixels
-    pub fn new(family_name: String, atlas_glyph_size: Option<i32>) -> Self {
-        let atlas_glyph_size = atlas_glyph_size.unwrap_or(DEFAULT_GLYPH_SIZE);
-        let font = find_font(family_name.clone());
-        let canvas = render_font_atlas(&font, atlas_glyph_size);
-
+    pub fn new(family_name: String, atlas_em_px: Option<i32>) -> Self {
+        let atlas_em_px = atlas_em_px.unwrap_or(DEFAULT_GLYPH_SIZE);
+        let (font, bytes) = find_font_and_bytes(family_name.clone());
         Self {
-            inner: font,
+            _inner: font,
             family_name,
-            pregenerated_atlas: Mutex::new(Some(canvas)),
-            atlas_glyph_size,
+            font_bytes: bytes,
+            _atlas_em_px: atlas_em_px,
         }
     }
 }
@@ -96,38 +94,47 @@ pub fn id_from_atlas(character: char) -> Vector2<u32> {
     Vector2::new(0, 0)
 }
 
-pub fn render_font_atlas(font: &font_kit::font::Font, glyph_size: i32) -> Canvas {
-    let point_size = glyph_size;
-    let point_size_f = point_size as f32;
-    let mut canvas = Canvas::new(Vector2I::splat(point_size * 10), Format::Rgba32);
-    for (y, row) in FONT_ATLAS_CHARS.iter().enumerate() {
-        for (x, ch) in row.iter().enumerate() {
-            let x = x as f32;
-            let y = y as f32 + 1.;
+pub fn render_font_atlas(font: &font_kit::font::Font, em_px: i32) -> Canvas {
+    let metrics = font.metrics();
+
+    let units = metrics.units_per_em as f32;
+    let scale = em_px as f32 / units;
+    let ascent_px = (metrics.ascent * scale).ceil();
+    let descent_px = (-metrics.descent * scale).ceil();
+    let line_px = ascent_px + descent_px;
+
+    let pad: i32 = ((em_px as f32) * 0.12).ceil() as i32;
+
+    let cell_w: i32 = em_px + 2 * pad;
+    let cell_h: i32 = (line_px as i32) + 2 * pad;
+
+    let width = cell_w * FONT_ATLAS_GRID_N as i32;
+    let height = cell_h * FONT_ATLAS_GRID_N as i32;
+
+    let mut canvas = Canvas::new(Vector2I::new(width, height), Format::Rgba32);
+
+    for (row, chars) in FONT_ATLAS_CHARS.iter().enumerate() {
+        for (col, ch) in chars.iter().enumerate() {
             let Some(glyph_id) = font.glyph_for_char(*ch) else {
-                warn!("Font {} is missing character {ch}", font.family_name());
+                warn!("Font {} is missing '{ch}'", font.family_name());
                 continue
             };
-            let Ok(origin) = font.origin(glyph_id) else {
-                warn!("Font {} is missing character {ch}", font.family_name());
-                continue;
-            };
 
-            let origin = origin * point_size_f;
+            let cell_x = (col as i32 * cell_w + pad) as f32;
+            let cell_y = (row as i32 * cell_h + pad) as f32;
 
-            let raster_result = font.rasterize_glyph(
+            let baseline_y = cell_y + ascent_px;
+
+            let transform = Transform2F::from_translation(Vector2F::new(cell_x, baseline_y));
+
+            if let Err(e) = font.rasterize_glyph(
                 &mut canvas,
                 glyph_id,
-                point_size_f,
-                Transform2F::from_translation(Vector2F::new(
-                    origin.x() + point_size_f * x + point_size_f / 8.,
-                    origin.y() + point_size_f * y - point_size_f / 8.,
-                )),
-                HintingOptions::Full(point_size_f),
+                em_px as f32,
+                transform,
+                HintingOptions::Full(em_px as f32),
                 RasterizationOptions::GrayscaleAa,
-            );
-
-            if let Err(e) = raster_result {
+            ) {
                 warn!("Font {} couldn't rasterize character {ch}: {e}", font.family_name());
             }
         }
@@ -142,31 +149,26 @@ pub fn render_font_atlas(font: &font_kit::font::Font, glyph_size: i32) -> Canvas
 
     assert_eq!(
         canvas.pixels.len(),
-        (10 * point_size * 10 * point_size * 4) as usize
+        canvas.stride * height as usize
     );
 
     canvas
 }
 
-fn find_font(family_name: String) -> font_kit::font::Font {
+fn find_font_and_bytes(family_name: String) -> (font_kit::font::Font, Arc<Vec<u8>>) {
     let target_family = FamilyName::Title(family_name);
-    let families = &[target_family, FamilyName::SansSerif];
+    let families = &[target_family.clone(), FamilyName::SansSerif];
+    let handle = SystemSource::new().select_best_match(families, &Properties::new()).unwrap();
 
-    let font = SystemSource::new()
-        .select_best_match(families, &Properties::new())
-        .unwrap()
-        .load()
-        .unwrap();
-
-    let target_name = match &families[0] {
-        FamilyName::Title(name) => name,
-        _ => unreachable!(),
+    // get raw bytes via handle
+    let font = handle.load().unwrap();
+    let bytes = match font.handle() {
+        Some(font_kit::handle::Handle::Memory { bytes, .. }) => bytes.clone(),
+        Some(font_kit::handle::Handle::Path { path, .. }) => {
+            Arc::new(std::fs::read(path).expect("read font file"))
+        }
+        None => panic!("font-kit did not expose a handle; cannot build MSDF"),
     };
 
-    let chosen_font = font.family_name();
-    if &chosen_font != target_name {
-        warn!("Didn't find Font {target_name:?}, fell back to {chosen_font:?}");
-    }
-
-    font
+    (font, bytes)
 }

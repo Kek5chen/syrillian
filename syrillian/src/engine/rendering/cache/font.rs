@@ -1,55 +1,52 @@
-use crate::assets::{render_font_atlas, Font, HMaterial, HTexture, Material, Texture};
+use crate::assets::{Font, HMaterial, HTexture, FONT_ATLAS_CHARS};
+use crate::drawables::text::msdf_atlas::{FontLineMetrics, GlyphAtlasEntry, MsdfAtlas};
 use crate::rendering::{AssetCache, CacheType};
 use crate::World;
+use std::sync::{Arc, RwLock};
 use wgpu::{Device, Queue};
 
 pub struct FontAtlas {
-    texture: HTexture,
-    material: HMaterial,
+    atlas: Arc<RwLock<MsdfAtlas>>,
 }
 
 impl CacheType for Font {
     type Hot = FontAtlas;
 
-    fn upload(&self, _device: &Device, _queue: &Queue, _cache: &AssetCache) -> Self::Hot {
-        let canvas = self
-            .pregenerated_atlas
-            .lock()
-            .unwrap()
-            .take()
-            .unwrap_or_else(|| render_font_atlas(&self.inner, self.atlas_glyph_size));
-
-        let texture = Texture::load_pixels(
-            canvas.pixels,
-            canvas.size.x() as u32,
-            canvas.size.y() as u32,
-            wgpu::TextureFormat::Bgra8UnormSrgb,
-        );
-
-        // FIXME: Somehow get a world into upload
+    fn upload(&self, _device: &Device, queue: &Queue, cache: &AssetCache) -> Self::Hot {
         let world = World::instance();
-        let texture = world.assets.textures.add(texture);
 
-        let material = Material::builder()
-            .name("Font Atlas".to_string())
-            .diffuse_texture(texture)
-            .build();
+        let mut msdf = MsdfAtlas::new(self.font_bytes.clone(), 1024, 16.0, 4.0, &world);
 
-        let material = world.assets.materials.add(material);
+        msdf.ensure_glyphs(cache, FONT_ATLAS_CHARS.iter().flatten().copied(), queue);
 
         FontAtlas {
-            texture,
-            material,
+            atlas: Arc::new(RwLock::new(msdf)),
         }
     }
 }
 
 impl FontAtlas {
-    pub const fn texture(&self) -> HTexture {
-        self.texture
+    pub fn atlas(&self) -> HMaterial {
+        self.atlas.read().unwrap().material()
     }
-
-    pub const fn atlas(&self) -> HMaterial {
-        self.material
+    pub fn texture(&self) -> HTexture {
+        self.atlas.read().unwrap().texture()
+    }
+    pub fn metrics(&self) -> FontLineMetrics {
+        self.atlas.read().unwrap().metrics()
+    }
+    pub fn ensure_glyphs(
+        &self,
+        cache: &AssetCache,
+        chars: impl IntoIterator<Item=char>,
+        queue: &Queue,
+    ) {
+        self.atlas
+            .write()
+            .unwrap()
+            .ensure_glyphs(cache, chars, queue)
+    }
+    pub fn entry(&self, ch: char) -> Option<GlyphAtlasEntry> {
+        self.atlas.read().unwrap().entry(ch)
     }
 }

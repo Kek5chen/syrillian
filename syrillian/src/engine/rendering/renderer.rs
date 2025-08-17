@@ -68,7 +68,7 @@ impl Default for DebugRenderer {
             colliders_edges: false,
             vertex_normals: DEBUG_BUILD,
             rays: DEBUG_BUILD,
-            text_geometry: false,
+            text_geometry: DEBUG_BUILD,
             light: DEBUG_BUILD,
         }
     }
