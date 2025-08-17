@@ -183,6 +183,21 @@ impl World {
         self.components.values_mut().for_each(|c| func(c, world))
     }
 
+    /// Runs possible physics update if the timestep time has elapsed yet
+    pub fn fixed_update(&mut self) {
+        while self.physics.last_update.elapsed() >= self.physics.timestep {
+            self.execute_component_func(Component::pre_fixed_update);
+
+            self.physics.last_update += self.physics.timestep;
+            self.physics.step();
+
+            self.execute_component_func(Component::fixed_update);
+        }
+
+        let rem = self.physics.last_update.elapsed();
+        self.physics.alpha = (rem.as_secs_f32() / self.physics.timestep.as_secs_f32()).clamp(0.0, 1.0);
+    }
+
     /// Updates all game objects and their components
     ///
     /// It will tick delta time and update all components
@@ -190,8 +205,6 @@ impl World {
     /// If you're using the App runtime, this will be handled for you. Only call this function
     /// if you are trying to use a detached world context.
     pub fn update(&mut self) {
-        self.tick_delta_time();
-
         self.execute_component_func(Component::update);
         self.execute_component_func(Component::late_update);
     }
@@ -201,14 +214,6 @@ impl World {
     /// If you're using the App runtime, this will be handled for you. Only call this function
     /// if you are trying to use a detached world context.
     pub fn post_update(&mut self) {
-        while self.physics.last_update.elapsed() >= self.physics.timestep {
-            self.physics.last_update += self.physics.timestep;
-            self.physics.step();
-        }
-
-        let rem = self.physics.last_update.elapsed();
-        self.physics.alpha = (rem.as_secs_f32() / self.physics.timestep.as_secs_f32()).clamp(0.0, 1.0);
-
         self.execute_component_func(Component::post_update);
     }
 
@@ -221,6 +226,7 @@ impl World {
             child.transform.clear_dirty();
         }
         self.input.next_frame();
+        self.tick_delta_time();
     }
 
     /// Finds a game object by its name

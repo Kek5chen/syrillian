@@ -94,6 +94,7 @@ impl<L: LightTypeTrait + 'static> Component for LightComponent<L> {
 
         data.position = self.parent.transform.position();
         data.direction = self.parent.transform.forward();
+        data.up = self.parent.transform.up();
 
         if self.tween_enabled {
             data.outer_angle = data.outer_angle.lerp(self.target_outer_angle, self.outer_angle_t * delta);

@@ -280,7 +280,13 @@ pub trait Component: Any {
     // Gets called when the component should update any state that's necessary for physics
     fn late_update(&mut self, world: &mut World) {}
 
+    // Gets called before physics are evolved
+    fn pre_fixed_update(&mut self, world: &mut World) {}
+
     // Gets called after physics have evolved
+    fn fixed_update(&mut self, world: &mut World) {}
+
+    // Gets called after all other updates are done
     fn post_update(&mut self, world: &mut World) {}
 
     // Gets called in preparation of drawing

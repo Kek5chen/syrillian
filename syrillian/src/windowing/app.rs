@@ -128,14 +128,16 @@ impl<S: AppState> ApplicationHandler for App<S> {
                     error!("Error happened when calling update function hook: {e}");
                 }
 
+                world.fixed_update();
                 world.update();
-                world.post_update();
 
                 if let Err(e) = self.state.late_update(world, renderer.window()) {
                     error!("Error happened when calling late update function hook: {e}");
                 }
 
                 renderer.update_world(world);
+                world.post_update();
+
                 if !renderer.render_frame(world) {
                     event_loop.exit();
                 }

@@ -281,12 +281,6 @@ fn fs_main(in: FInput) -> @location(0) vec4<f32> {
 
 
 // Shadow stuff
-fn stable_up(dir: vec3<f32>) -> vec3<f32> {
-    let y = vec3<f32>(0.0, 1.0, 0.0);
-    let x = vec3<f32>(1.0, 0.0, 0.0);
-    return select(y, x, abs(dot(normalize(dir), y)) > 0.99);
-}
-
 fn view_look_at_rh(pos: vec3<f32>, target_pos: vec3<f32>, up: vec3<f32>) -> mat4x4<f32> {
     let f = normalize(target_pos - pos);
     let s = normalize(cross(f, up));
@@ -313,7 +307,7 @@ fn proj_perspective(fovy: f32, near: f32, far: f32) -> mat4x4<f32> {
 }
 
 fn spot_shadow_uvz(light: Light, world_pos: vec3<f32>) -> vec3<f32> {
-    let up   = stable_up(light.direction);
+    let up   = light.up;
     let view = view_look_at_rh(light.position, light.position + light.direction, up);
 
     let fovy = max(0.001, 2.0 * max(light.inner_angle, light.outer_angle));

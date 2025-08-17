@@ -119,7 +119,7 @@ impl Component for Collider3D {
         }
     }
 
-    fn update(&mut self, _world: &mut World) {
+    fn fixed_update(&mut self, _world: &mut World) {
         let body_comp = (*self.parent).get_component::<RigidBodyComponent>();
         if let Some(body_comp) = body_comp {
             if self.linked_to_body.is_none() {

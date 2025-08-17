@@ -35,7 +35,7 @@ impl Component for RigidBodyComponent {
         }
     }
 
-    fn late_update(&mut self, _world: &mut World) {
+    fn pre_fixed_update(&mut self, _world: &mut World) {
         let rb = World::instance()
             .physics
             .rigid_body_set
@@ -53,7 +53,7 @@ impl Component for RigidBodyComponent {
         }
     }
 
-    fn post_update(&mut self, world: &mut World) {
+    fn fixed_update(&mut self, world: &mut World) {
         let rb = world
             .physics
             .rigid_body_set

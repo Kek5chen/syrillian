@@ -418,7 +418,7 @@ impl Renderer {
 
     fn update_render_data(&mut self, world: &mut World) -> Result<()> {
         self.update_view_camera_data(world)?;
-        self.update_system_data(world)?;
+        self.update_system_data(world);
         world.lights.update(self);
 
         Ok(())
@@ -461,7 +461,7 @@ impl Renderer {
             .upload_camera_data(&self.state.queue);
     }
 
-    fn update_system_data(&mut self, world: &World) -> Result<()> {
+    fn update_system_data(&mut self, world: &World) {
         let window_size = self.window.inner_size();
         let window_size = Vector2::new(window_size.width, window_size.height);
 
@@ -471,8 +471,6 @@ impl Renderer {
         system_data.delta_time = world.delta_time().as_secs_f32();
 
         self.render_data.upload_system_data(&self.state.queue);
-
-        Ok(())
     }
 
     fn prepare_shadow_pass<'a>(

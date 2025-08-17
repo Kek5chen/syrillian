@@ -53,7 +53,7 @@ impl Component for FirstPersonMovementController {
             .unwrap_or_default();
     }
 
-    fn post_update(&mut self, world: &mut World) {
+    fn update(&mut self, world: &mut World) {
         let mut rigid = match self.rigid_body.upgrade(world) {
             None => {
                 warn!("Rigid body not set!");

@@ -4,6 +4,7 @@ const LIGHT_TYPE_SPOT: u32 = 2;
 
 struct Light {
     position: vec3<f32>,
+    up: vec3<f32>,
     direction: vec3<f32>,
     range: f32,
     color: vec3<f32>,
