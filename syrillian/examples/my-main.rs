@@ -14,7 +14,10 @@ use std::error::Error;
 use syrillian::assets::scene_loader::SceneLoader;
 use syrillian::assets::{HMaterial, StoreType};
 use syrillian::assets::{Material, Shader};
-use syrillian::components::{CRef, Collider3D, FirstPersonCameraController, PointLightComponent, RigidBodyComponent, RopeComponent, RotateComponent, SpotLightComponent, SpringComponent};
+use syrillian::components::{
+    CRef, Collider3D, FirstPersonCameraController, PointLightComponent, RigidBodyComponent,
+    RopeComponent, RotateComponent, SpotLightComponent, SpringComponent,
+};
 use syrillian::core::{GameObjectExt, GameObjectId};
 use syrillian::drawables::text::glyph::TextAlignment;
 use syrillian::drawables::Text3D;
@@ -182,9 +185,10 @@ impl AppState for MyMain {
         }
 
         // world.spawn(&SunPrefab);
-        let mut spot = world
-            .new_object("Spot");
-        spot.at(5., 5., -5.).transform.set_euler_rotation(0., 80., 0.);
+        let mut spot = world.new_object("Spot");
+        spot.at(5., 5., -5.)
+            .transform
+            .set_euler_rotation(0., 80., 0.);
 
         self.light1 = spot.add_component::<SpotLightComponent>();
         self.light1.set_color(world, 1.0, 0.2, 0.2);
@@ -192,9 +196,10 @@ impl AppState for MyMain {
         self.light1.set_inner_angle(world, 20.);
         self.light1.set_outer_angle(world, 30.);
 
-        let mut spot = world
-            .new_object("Spot 2");
-        spot.at(5., 5., -10.).transform.set_euler_rotation(0., 100., 0.);
+        let mut spot = world.new_object("Spot 2");
+        spot.at(5., 5., -10.)
+            .transform
+            .set_euler_rotation(0., 100., 0.);
 
         self.light2 = spot.add_component::<SpotLightComponent>();
         self.light2.set_color(world, 0.2, 0.2, 1.0);
