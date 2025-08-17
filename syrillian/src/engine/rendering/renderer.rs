@@ -78,6 +78,7 @@ impl DebugRenderer {
     pub fn next_mode(&mut self) -> u32 {
         if self.mesh_edges {
             self.mesh_edges = false;
+            self.vertex_normals = false;
             self.colliders_edges = true;
             1
         } else if self.colliders_edges {
