@@ -5,14 +5,17 @@ use std::error::Error;
 use std::rc::Rc;
 
 use crate::assets::{HMaterial, HShader, HTexture, Material, Mesh, StoreType, Texture, H};
+use crate::components::SpotLightComponent;
 use crate::core::{Bones, GameObjectId, Vertex3D};
 use crate::drawables::MeshRenderer;
+use crate::rendering::lights::Light;
 use crate::utils::iter::{extend_data, interpolate_zeros};
 use crate::utils::ExtraMatrixMath;
 use crate::World;
 use itertools::{izip, Itertools};
 use log::warn;
 use nalgebra::{Matrix4, Vector2, Vector3};
+use russimp_ng::light::LightSourceType;
 use russimp_ng::material::{DataContent, MaterialProperty, PropertyTypeInfo, TextureType};
 use russimp_ng::node::Node;
 use russimp_ng::scene::{PostProcess, Scene};
@@ -49,6 +52,7 @@ impl SceneLoader {
         trace!("Mapped Material Indices for {path:?}");
 
         let root_object = Self::spawn_object(world, &scene, &root);
+        Self::load_lights(world, &scene, root_object);
         Ok(root_object)
     }
 
@@ -223,6 +227,29 @@ impl SceneLoader {
 
         Some(mesh)
     }
+
+    fn load_lights(world: &mut World, scene: &Scene, mut root: GameObjectId) {
+        for light in &scene.lights {
+            if light.light_source_type == LightSourceType::Spot {
+                let mut obj = world.new_object(&light.name);
+                let spot = obj.add_component::<SpotLightComponent>();
+                let data = spot.data_mut(world);
+
+                obj.transform.set_position(light.pos.x, light.pos.y, light.pos.z);
+                obj.transform.set_euler_rotation(light.direction.x, light.direction.y, light.direction.z);
+
+                dbg!(&light);
+
+                data.color = Vector3::new(light.color_diffuse.r, light.color_diffuse.g, light.color_diffuse.b);
+                data.inner_angle = light.angle_inner_cone;
+                data.outer_angle = light.angle_outer_cone;
+                data.range = light.attenuation_linear;
+                data.intensity = light.size.x;
+
+                root.add_child(obj);
+            }
+        }
+    }
 }
 
 fn load_first_from_node(scene: &Scene, node: &Node, iter: u32) -> Option<Mesh> {
@@ -319,7 +346,7 @@ where
         None => default(),
         Some(prop) => match &prop.data {
             PropertyTypeInfo::FloatArray(arr) => {
-                if arr.len() == 3 {
+                if arr.len() >= 3 {
                     Vector3::new(arr[0], arr[1], arr[2])
                 } else {
                     warn!(
