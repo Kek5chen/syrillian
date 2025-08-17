@@ -22,5 +22,6 @@ fn delta_time_advances() {
     let mut world = unsafe { World::new() };
     std::thread::sleep(Duration::from_millis(1));
     world.update();
+    world.next_frame();
     assert!(world.delta_time() > Duration::ZERO);
 }
