@@ -74,7 +74,8 @@ fn tonemap_ACES(color: vec3<f32>) -> vec3<f32> {
     let v = ACES_IN * color;
     let r = RRTAndODTFit(v);
     let o = ACES_OUT * r;
-    return clamp(o, vec3<f32>(0.0), vec3<f32>(1.0));}
+    return clamp(o, vec3<f32>(0.0), vec3<f32>(1.0));
+}
 
 // Lottes "Neutral" tonemap (linear in -> linear out)
 fn tonemap_neutral(x: vec3<f32>) -> vec3<f32> {
