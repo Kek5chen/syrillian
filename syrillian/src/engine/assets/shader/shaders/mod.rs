@@ -44,6 +44,7 @@ macro_rules! test_custom_shader {
                 polygon_mode: PolygonMode::Line,
                 vertex_buffers: &[],
                 push_constant_ranges: &[],
+                shadow_transparency: false,
             }
             .gen_code();
 
