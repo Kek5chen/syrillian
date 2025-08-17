@@ -19,6 +19,8 @@ pub struct Transform {
     compound_mat: Affine3<f32>,
     invert_position: bool,
     compound_pos_first: bool,
+
+    is_dirty: bool,
 }
 
 impl Clone for Transform {
@@ -33,6 +35,8 @@ impl Clone for Transform {
             invert_position: self.invert_position,
             owner: GameObjectId::null(),
             compound_pos_first: self.compound_pos_first,
+
+            is_dirty: self.is_dirty,
         }
     }
 }
@@ -55,6 +59,8 @@ impl Transform {
             compound_mat: Affine3::identity(),
             invert_position: false,
             compound_pos_first: true,
+
+            is_dirty: true,
         }
     }
 
@@ -318,6 +324,8 @@ impl Transform {
                 * self.scale_mat.to_homogeneous(),
         );
 
+        self.is_dirty = true;
+
         debug_assert_ne!(0.0, self.compound_mat.matrix().determinant());
     }
 
@@ -358,5 +366,13 @@ impl Transform {
     /// Returns the up direction relative to the parent.
     pub fn local_up(&self) -> Vector3<f32> {
         self.local_rotation() * Vector3::new(0.0, 1.0, 0.0)
+    }
+
+    pub fn is_dirty(&self) -> bool {
+        self.is_dirty
+    }
+
+    pub fn clear_dirty(&mut self) {
+        self.is_dirty = false;
     }
 }

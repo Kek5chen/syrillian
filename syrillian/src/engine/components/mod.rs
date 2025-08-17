@@ -284,7 +284,7 @@ pub trait Component: Any {
     fn post_update(&mut self, world: &mut World) {}
 
     // Gets called in preparation of drawing
-    fn update_draw(&mut self, world: &mut World, renderer: &Renderer, outer_transform: &Matrix4<f32>) {}
+    fn update_draw(&mut self, world: &mut World, renderer: &Renderer, transform: &Matrix4<f32>) {}
 
     // Gets called after Drawables have been rendered
     fn draw(&self, world: &World, ctx: &DrawCtx) {}

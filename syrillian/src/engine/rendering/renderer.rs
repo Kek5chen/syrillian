@@ -322,28 +322,29 @@ impl Renderer {
         &self,
         world: &mut World,
         children: &[GameObjectId],
-        combined_matrix: Matrix4<f32>,
+        parent_world: Matrix4<f32>,
     ) {
         for child in children {
+            let child_world = parent_world * child.transform.full_matrix().matrix();
+
+            for comp in child.components.iter().copied() {
+                if let Some(comp) = c_any_mut!(comp) {
+                    comp.update_draw(world, self, &child_world);
+                }
+            }
+
+            if let Some(drawable) = &mut child.clone().drawable {
+                drawable.update(world, child.clone(), &self, &child_world);
+            };
+
             if !child.children.is_empty() {
                 self.traverse_and_update(
                     world,
                     &child.children,
-                    combined_matrix * child.transform.full_matrix().matrix(),
+                    child_world,
                 );
             }
 
-            for comp in child.components.iter().copied() {
-                if let Some(comp) = c_any_mut!(comp) {
-                    comp.update_draw(world, self, &combined_matrix);
-                }
-            }
-
-            let Some(drawable) = &mut child.clone().drawable else {
-                continue;
-            };
-
-            drawable.update(world, child.clone(), &self, &combined_matrix);
         }
     }
 

@@ -201,10 +201,13 @@ impl World {
     /// If you're using the App runtime, this will be handled for you. Only call this function
     /// if you are trying to use a detached world context.
     pub fn post_update(&mut self) {
-        while self.physics.last_update.elapsed() > self.physics.timestep {
+        while self.physics.last_update.elapsed() >= self.physics.timestep {
             self.physics.last_update += self.physics.timestep;
             self.physics.step();
         }
+
+        let rem = self.physics.last_update.elapsed();
+        self.physics.alpha = (rem.as_secs_f32() / self.physics.timestep.as_secs_f32()).clamp(0.0, 1.0);
 
         self.execute_component_func(Component::post_update);
     }
@@ -214,6 +217,9 @@ impl World {
     /// If you're using the App runtime, this will be handled for you. Only call this function
     /// if you are trying to use a detached world context.
     pub fn next_frame(&mut self) {
+        for child in self.objects.values_mut() {
+            child.transform.clear_dirty();
+        }
         self.input.next_frame();
     }
 

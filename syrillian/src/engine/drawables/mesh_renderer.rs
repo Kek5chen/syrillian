@@ -1,4 +1,5 @@
 use crate::assets::{HShader, Mesh, Shader, H};
+use crate::components::RigidBodyComponent;
 use crate::core::{Bone, GameObjectId, ModelUniform, Vertex3D};
 use crate::drawables::Drawable;
 use crate::engine::assets::HMesh;
@@ -89,9 +90,9 @@ impl Drawable for MeshRenderer {
         world: &mut World,
         parent: GameObjectId,
         renderer: &Renderer,
-        outer_transform: &Matrix4<f32>,
+        transform: &Matrix4<f32>,
     ) {
-        self.update_mesh_data(world, parent, renderer, outer_transform);
+        self.update_mesh_data(world, parent, renderer, transform);
 
         #[cfg(debug_assertions)]
         self.update_debug_data(world, renderer, parent);
@@ -159,7 +160,7 @@ impl MeshRenderer {
         world: &mut World,
         parent: GameObjectId,
         renderer: &Renderer,
-        outer_transform: &Matrix4<f32>,
+        transform: &Matrix4<f32>,
     ) {
         let runtime_data = match self.runtime_data.as_mut() {
             None => {
@@ -169,7 +170,14 @@ impl MeshRenderer {
             Some(runtime_data) => runtime_data,
         };
 
-        runtime_data.mesh_data.update(parent, outer_transform);
+        let mut world_m = *transform;
+
+        if let Some(rb) = parent.get_component::<RigidBodyComponent>() {
+            let iso = rb.render_isometry(world.physics.alpha);
+            world_m = iso.to_homogeneous();
+        }
+
+        runtime_data.mesh_data.update(&world_m);
 
         renderer.state.queue.write_buffer(
             &runtime_data.uniform.buffer(MeshUniformIndex::MeshData),

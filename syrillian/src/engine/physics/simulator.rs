@@ -22,6 +22,7 @@ pub struct PhysicsManager {
     pub event_handler: (),
     pub last_update: Instant,
     pub timestep: Duration,
+    pub alpha: f32,
 }
 
 const EARTH_GRAVITY: f32 = 9.81;
@@ -44,6 +45,7 @@ impl Default for PhysicsManager {
             event_handler: (),
             last_update: Instant::now(),
             timestep: Duration::from_secs_f64(1.0 / 60.0),
+            alpha: 0.0,
         }
     }
 }

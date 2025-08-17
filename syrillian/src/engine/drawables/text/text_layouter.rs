@@ -118,9 +118,9 @@ impl<DIM: TextDim> TextLayouter<DIM> {
     pub fn update(
         &mut self,
         world: &mut World,
-        parent: GameObjectId,
+        _parent: GameObjectId,
         renderer: &Renderer,
-        outer_transform: &Matrix4<f32>,
+        transform: &Matrix4<f32>,
     ) {
         if self.rainbow_mode {
             let time = world.start_time().elapsed().as_secs_f32() * 100.;
@@ -136,7 +136,7 @@ impl<DIM: TextDim> TextLayouter<DIM> {
             .as_mut()
             .expect("Render Data should be set up");
 
-        self.translation.update(parent, outer_transform);
+        self.translation.update(transform);
 
         let mesh_buffer = render_data.uniform.buffer(MeshUniformIndex::MeshData);
 

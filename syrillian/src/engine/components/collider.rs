@@ -145,7 +145,7 @@ impl Component for Collider3D {
         &mut self,
         _world: &mut World,
         renderer: &Renderer,
-        outer_transform: &Matrix4<f32>,
+        transform: &Matrix4<f32>,
     ) {
         if self.collider_buffers.is_none() {
             self.generate_collider_data(&renderer.state.device);
@@ -167,7 +167,7 @@ impl Component for Collider3D {
 
         match model_data {
             PotentiallyPiggyBackedModelData::Owned(model, uniform) => {
-                model.update(self.parent, outer_transform);
+                model.update(transform);
 
                 renderer.state.queue.write_buffer(
                     uniform.buffer(MeshUniformIndex::MeshData),

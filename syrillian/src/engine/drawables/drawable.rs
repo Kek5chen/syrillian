@@ -15,7 +15,7 @@ pub trait Drawable: Any {
         world: &mut World,
         parent: GameObjectId,
         renderer: &Renderer,
-        outer_transform: &Matrix4<f32>,
+        transform: &Matrix4<f32>,
     ) {}
     fn draw(
         &self,

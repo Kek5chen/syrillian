@@ -107,7 +107,7 @@ impl Component for FirstPersonCameraController {
         self.base_position = self.parent().transform.local_position().clone();
     }
 
-    fn update(&mut self, world: &mut World) {
+    fn post_update(&mut self, world: &mut World) {
         let input = &world.input;
         let transform = &mut self.parent().transform;
         let delta_time = world.delta_time().as_secs_f32();

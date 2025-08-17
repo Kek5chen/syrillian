@@ -90,7 +90,7 @@ impl Drawable for Image {
         _world: &mut World,
         _parent: GameObjectId,
         renderer: &Renderer,
-        _outer_transform: &Matrix4<f32>,
+        _transform: &Matrix4<f32>,
     ) {
         self.update_model_matrix(&renderer.state.queue, &renderer.window);
     }

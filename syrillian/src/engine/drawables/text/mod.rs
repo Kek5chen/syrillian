@@ -74,7 +74,7 @@ impl<DIM: TextDim + 'static> Drawable for Text<DIM> {
         world: &mut World,
         parent: GameObjectId,
         renderer: &Renderer,
-        outer_transform: &Matrix4<f32>,
+        transform: &Matrix4<f32>,
     ) {
         if self.font_dirty {
             let font = world
@@ -85,7 +85,7 @@ impl<DIM: TextDim + 'static> Drawable for Text<DIM> {
             self.font_dirty = false;
         }
 
-        self.text.update(world, parent, renderer, outer_transform)
+        self.text.update(world, parent, renderer, transform)
     }
 
     fn draw(&self, _world: &World, ctx: &DrawCtx) {

@@ -98,7 +98,7 @@ impl Drawable for CameraDebug {
         _world: &mut World,
         _parent: GameObjectId,
         renderer: &Renderer,
-        _outer_transform: &Matrix4<f32>,
+        _transform: &Matrix4<f32>,
     ) {
         if self.ray_runtime_data.is_none() {
             self._setup(renderer);

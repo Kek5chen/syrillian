@@ -1,4 +1,5 @@
 use crate::utils::math::QuaternionEuler;
+use nalgebra::{Isometry3, Translation3};
 use rapier3d::prelude::*;
 
 use crate::components::Component;
@@ -9,6 +10,8 @@ pub struct RigidBodyComponent {
     parent: GameObjectId,
     pub body_handle: RigidBodyHandle,
     kinematic: bool,
+    prev_iso: Isometry3<f32>,
+    curr_iso: Isometry3<f32>,
 }
 
 impl Component for RigidBodyComponent {
@@ -27,6 +30,8 @@ impl Component for RigidBodyComponent {
             parent,
             body_handle,
             kinematic: false,
+            prev_iso: Isometry3::default(),
+            curr_iso: Isometry3::default(),
         }
     }
 
@@ -36,7 +41,7 @@ impl Component for RigidBodyComponent {
             .rigid_body_set
             .get_mut(self.body_handle);
         if let Some(rb) = rb {
-            if rb.is_dynamic() {
+            if rb.is_dynamic() && self.parent.transform.is_dirty() {
                 rb.set_translation(self.parent.transform.position(), false);
                 rb.set_rotation(self.parent.transform.rotation(), false);
             } else if rb.is_kinematic() {
@@ -54,6 +59,11 @@ impl Component for RigidBodyComponent {
             .rigid_body_set
             .get_mut(self.body_handle);
         if let Some(rb) = rb {
+            self.prev_iso = self.curr_iso;
+            self.curr_iso = Isometry3::from_parts(
+                Translation3::from(*rb.translation()),
+                *rb.rotation(),
+            );
             if rb.is_dynamic() {
                 self.parent().transform.set_position_vec(*rb.translation());
                 if rb.is_rotation_locked().iter().all(|l| !l) {
@@ -106,5 +116,13 @@ impl RigidBodyComponent {
 
     pub fn is_kinematic(&self) -> bool {
         self.kinematic
+    }
+
+    pub fn render_isometry(&self, alpha: f32) -> Isometry3<f32> {
+        let p0 = self.prev_iso.translation.vector;
+        let p1 = self.curr_iso.translation.vector;
+        let p = p0 + (p1 - p0) * alpha;
+        let r = self.prev_iso.rotation.slerp(&self.curr_iso.rotation, alpha);
+        Isometry3::from_parts(Translation3::from(p), r)
     }
 }
