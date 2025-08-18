@@ -238,8 +238,6 @@ impl SceneLoader {
                 obj.transform.set_position(light.pos.x, light.pos.y, light.pos.z);
                 obj.transform.set_euler_rotation(light.direction.x, light.direction.y, light.direction.z);
 
-                dbg!(&light);
-
                 data.color = Vector3::new(light.color_diffuse.r, light.color_diffuse.g, light.color_diffuse.b);
                 data.inner_angle = light.angle_inner_cone;
                 data.outer_angle = light.angle_outer_cone;
