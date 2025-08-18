@@ -1,10 +1,10 @@
-use crate::utils::math::QuaternionEuler;
-use nalgebra::{Isometry3, Translation3};
-use rapier3d::prelude::*;
-
 use crate::components::Component;
 use crate::core::GameObjectId;
+use crate::utils::math::QuaternionEuler;
 use crate::World;
+use nalgebra::{Isometry3, Translation3};
+use rapier3d::prelude::*;
+use syrillian_utils::debug_panic;
 
 pub struct RigidBodyComponent {
     parent: GameObjectId,
@@ -49,7 +49,7 @@ impl Component for RigidBodyComponent {
                 rb.set_next_kinematic_rotation(self.parent.transform.rotation());
             }
         } else {
-            todo!("de-synced - remake_rigid_body();")
+            debug_panic!("de-synced - remake_rigid_body();");
         }
     }
 

@@ -104,7 +104,7 @@ impl Component for FirstPersonCameraController {
     }
 
     fn init(&mut self, _world: &mut World) {
-        self.base_position = self.parent().transform.local_position().clone();
+        self.base_position = *self.parent().transform.local_position();
     }
 
     fn update(&mut self, world: &mut World) {
