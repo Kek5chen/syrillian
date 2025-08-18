@@ -30,13 +30,10 @@ impl<'a> ShaderGen<'a> {
 }
 
 fn generate_default(code: &ShaderCode, custom: bool) -> String {
-    let mut generated = String::new();
+    let mut generated = format!("{BASE_GROUP}\n");
     let fragment_only = code.is_only_fragment_shader();
 
-    generated.push_str(BASE_GROUP);
-    generated.push('\n');
-
-    // if it's a fragment only, it doesn't matter if it's custom, because i can't have a clue what
+    // if it's a fragment only, it doesn't matter if it's custom, because I can't have a clue what
     // the custom vertex shader should look like...
     if !custom {
         generated.push_str(DEFAULT_HEADER);
@@ -78,11 +75,8 @@ fn generate_default(code: &ShaderCode, custom: bool) -> String {
 }
 
 fn generate_post_process(code: &ShaderCode) -> String {
-    let mut generated = String::new();
+    let mut generated = format!("{POST_PROCESS_HEADER}\n");
     let fragment_only = code.is_only_fragment_shader();
-
-    generated.push_str(POST_PROCESS_HEADER);
-    generated.push('\n');
 
     if fragment_only {
         generated.push_str(POST_PROCESS_VERTEX);
