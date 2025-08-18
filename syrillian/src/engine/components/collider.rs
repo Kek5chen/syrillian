@@ -123,7 +123,7 @@ impl Component for Collider3D {
             if self.linked_to_body.is_none() {
                 self.link_to_rigid_body(Some(body_comp.body_handle));
                 let coll = self.get_collider_mut().unwrap();
-                coll.set_translation(Vector3::zeros());
+                coll.set_translation(Vector3::identity());
                 coll.set_rotation(Rotation::identity());
                 // TODO: Sync Scale to coll
             } // the linked rigid body will control the collider or
@@ -295,7 +295,7 @@ impl Collider3D {
             let model = ModelUniform::empty();
             let uniform = ShaderUniform::<MeshUniformIndex>::builder(&model_bgl)
                 .with_buffer_data(&model)
-                .with_buffer_data_slice(&BoneData::DUMMY_BONE)
+                .with_buffer_data_slice(&BoneData::DUMMY)
                 .build(&renderer.state.device);
 
             SharedModelData::Owned(model, uniform)

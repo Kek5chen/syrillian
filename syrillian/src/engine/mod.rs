@@ -32,3 +32,5 @@ pub const ENGINE_STR: &str = const_format::concatcp!(
     " at ",
     ENGINE_BUILD_TIME
 );
+
+pub const MAX_BONES: usize = 256;

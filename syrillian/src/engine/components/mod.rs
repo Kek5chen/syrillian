@@ -49,6 +49,7 @@ pub mod rigid_body;
 pub mod rope;
 pub mod rotate;
 pub mod spring;
+pub mod skeletal;
 
 pub use camera::*;
 pub use collider::*;
@@ -60,6 +61,7 @@ pub use light::*;
 pub use rigid_body::*;
 pub use rope::*;
 pub use rotate::*;
+pub use skeletal::*;
 pub use spring::*;
 
 use crate::core::GameObjectId;

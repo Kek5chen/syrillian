@@ -4,7 +4,7 @@ fn vs_main(in: VInput) -> FInput {
 
     let mvp_matrix = camera.view_proj_mat * model.transform;
 
-    out.position_clip = mvp_matrix * vec4<f32>(in.position, 1.0);
+    out.clip = mvp_matrix * vec4<f32>(in.position, 1.0);
     out.uv = in.uv;
 
     return out;

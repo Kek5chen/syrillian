@@ -132,7 +132,7 @@ impl Image {
 
         let uniform = ShaderUniform::<MeshUniformIndex>::builder(&bgl)
             .with_buffer_data(&translation_data)
-            .with_buffer_data_slice(&BoneData::DUMMY_BONE)
+            .with_buffer_data_slice(&BoneData::DUMMY)
             .build(device);
 
         self.gpu_data = Some(ImageGPUData {

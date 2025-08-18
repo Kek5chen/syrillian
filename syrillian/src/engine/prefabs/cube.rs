@@ -1,8 +1,7 @@
-use crate::assets::{HMaterial, Mesh};
+use crate::assets::{HMaterial, HMesh};
 use crate::core::GameObjectId;
 use crate::drawables::MeshRenderer;
 use crate::prefabs::prefab::Prefab;
-use crate::utils::{CUBE_IDX, CUBE_VERT};
 use crate::World;
 
 pub struct CubePrefab {
@@ -30,16 +29,8 @@ impl Prefab for CubePrefab {
     }
 
     fn build(&self, world: &mut World) -> GameObjectId {
-        // TODO: Move materials out of mesh and into the MeshRenderer
-        let mesh = world.assets.meshes.add(
-            Mesh::builder(CUBE_VERT.to_vec())
-                .with_indices(CUBE_IDX.to_vec())
-                .with_one_texture(self.material)
-                .build(),
-        );
-
         let mut cube = world.new_object("Cube");
-        cube.drawable = Some(MeshRenderer::new(mesh));
+        cube.drawable = Some(MeshRenderer::new(HMesh::UNIT_CUBE, Some(vec![self.material])));
 
         cube
     }

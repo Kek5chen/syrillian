@@ -96,6 +96,17 @@ impl DebugRenderer {
             0
         }
     }
+
+    pub fn off(&mut self) {
+        *self = DebugRenderer {
+            mesh_edges: false,
+            vertex_normals: false,
+            rays: false,
+            colliders_edges: false,
+            text_geometry: false,
+            light: false,
+        }
+    }
 }
 
 impl Renderer {

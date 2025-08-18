@@ -11,6 +11,6 @@ fn vertex_creation_pads_indices() {
         &[1, 2],
         &[0.5, 0.5],
     );
-    assert_eq!(v.bone_indices, [1, 2, 0xFF, 0xFF]);
+    assert_eq!(v.bone_indices, [1, 2, 0, 0]);
     assert_eq!(v.bone_weights, [0.5, 0.5, 0.0, 0.0]);
 }

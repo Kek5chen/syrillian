@@ -111,7 +111,7 @@ impl<DIM: TextDim> TextLayouter<DIM> {
         let model_bgl = renderer.cache.bgl_model();
         let uniform = ShaderUniform::<MeshUniformIndex>::builder(&model_bgl)
             .with_buffer_data(&self.translation)
-            .with_buffer_data(&BoneData::DUMMY_BONE)
+            .with_buffer_data(&BoneData::DUMMY)
             .build(device);
 
         self.render_data = Some(TextRenderData { uniform, glyph_vbo })

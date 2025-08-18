@@ -11,7 +11,7 @@ pub const MATRIX4_ID: Matrix4<f32> = Matrix4::new(
 );
 
 pub trait ExtraMatrixMath {
-    fn decompose(self) -> (Vector3<f32>, UnitQuaternion<f32>, Vector3<f32>);
+    fn decompose(&self) -> (Vector3<f32>, UnitQuaternion<f32>, Vector3<f32>);
 }
 
 pub fn matrix_to_quaternion(matrix: Matrix3<f32>) -> UnitQuaternion<f32> {
@@ -23,7 +23,7 @@ pub fn matrix_to_quaternion(matrix: Matrix3<f32>) -> UnitQuaternion<f32> {
     ))
 }
 
-fn decompose_mat3(matrix: Matrix4<f32>) -> (Vector3<f32>, UnitQuaternion<f32>, Vector3<f32>) {
+fn decompose_mat3(matrix: &Matrix4<f32>) -> (Vector3<f32>, UnitQuaternion<f32>, Vector3<f32>) {
     let translation = matrix.column(3).xyz();
 
     let scale_x = matrix.column(0).xyz().norm();
@@ -43,7 +43,7 @@ fn decompose_mat3(matrix: Matrix4<f32>) -> (Vector3<f32>, UnitQuaternion<f32>, V
 }
 
 impl ExtraMatrixMath for Matrix4<f32> {
-    fn decompose(self) -> (Vector3<f32>, UnitQuaternion<f32>, Vector3<f32>) {
+    fn decompose(&self) -> (Vector3<f32>, UnitQuaternion<f32>, Vector3<f32>) {
         decompose_mat3(self)
     }
 }

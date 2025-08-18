@@ -336,7 +336,8 @@ impl MyMain {
             let target_position = camera.transform.position()
                 + camera.transform.forward() * scale.magnitude().max(1.) * 2.;
             let position = obj.transform.position();
-            let target_rotation = camera.transform.rotation();
+            let target_rotation =
+                UnitQuaternion::face_towards(&camera.transform.up(), &camera.transform.forward());
             let rotation = obj.transform.rotation();
             let unit_quat = UnitQuaternion::from_quaternion(rotation.lerp(&target_rotation, 0.03));
             obj.transform

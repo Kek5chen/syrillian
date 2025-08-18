@@ -2,7 +2,7 @@
 fn vs_main(in: VInput) -> FInput {
     var out: FInput;
 
-    out.position_clip = model.transform * vec4<f32>(in.position, 1.0);
+    out.clip = model.transform * vec4<f32>(in.position, 1.0);
     out.uv = vec2<f32>(in.uv.x, 1.0 - in.uv.y);
 
     return out;

@@ -4,7 +4,7 @@ use crate::assets::mesh::builder::MeshBuilder;
 use crate::assets::scene_loader::SceneLoader;
 use crate::core::{Bones, Vertex3D};
 use crate::engine::assets::generic_store::{HandleName, Store, StoreDefaults, StoreType};
-use crate::engine::assets::{HMaterial, HMesh, H};
+use crate::engine::assets::{HMesh, H};
 use crate::store_add_checked;
 use crate::utils::UNIT_SQUARE_VERT;
 use nalgebra::Point;
@@ -18,7 +18,7 @@ const SPHERE: &[u8] = include_bytes!("preset_meshes/small_sphere.obj");
 #[derive(Debug, Clone)]
 pub struct Mesh {
     pub(crate) data: MeshVertexData<Vertex3D>,
-    pub material_ranges: Vec<(HMaterial, Range<u32>)>,
+    pub material_ranges: Vec<Range<u32>>,
     pub bones: Bones,
 }
 
@@ -96,19 +96,19 @@ impl StoreDefaults for Mesh {
         let unit_cube = SceneLoader::load_first_mesh_from_buffer(CUBE_OBJ, "obj")
             .expect("Cube Mesh load failed")
             .expect("Cube Mesh doesn't have a mesh");
-        store_add_checked!(store, HMesh::UNIT_CUBE_ID, unit_cube);
+        store_add_checked!(store, HMesh::UNIT_CUBE_ID, unit_cube.0);
 
         let debug_arrow = SceneLoader::load_first_mesh_from_buffer(DEBUG_ARROW, "obj")
             .ok()
             .flatten()
             .expect("Debug Arrow Mesh load failed");
-        store_add_checked!(store, HMesh::DEBUG_ARROW_ID, debug_arrow);
+        store_add_checked!(store, HMesh::DEBUG_ARROW_ID, debug_arrow.0);
 
         let sphere = SceneLoader::load_first_mesh_from_buffer(SPHERE, "obj")
             .ok()
             .flatten()
             .expect("Sphere Mesh load failed");
-        store_add_checked!(store, HMesh::SPHERE_ID, sphere);
+        store_add_checked!(store, HMesh::SPHERE_ID, sphere.0);
     }
 }
 

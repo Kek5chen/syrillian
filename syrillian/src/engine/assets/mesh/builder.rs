@@ -1,4 +1,4 @@
-use crate::assets::{HMaterial, Mesh, MeshVertexData};
+use crate::assets::{Mesh, MeshVertexData};
 use crate::core::{Bones, Vertex3D};
 use std::ops::Range;
 
@@ -6,8 +6,7 @@ use std::ops::Range;
 pub struct MeshBuilder {
     vertices: Vec<Vertex3D>,
     indices: Option<Vec<u32>>,
-    single_material: Option<HMaterial>,
-    material_ranges: Option<Vec<(HMaterial, Range<u32>)>>,
+    material_ranges: Option<Vec<Range<u32>>>,
     bones: Option<Bones>,
 }
 
@@ -16,7 +15,6 @@ impl MeshBuilder {
         MeshBuilder {
             vertices,
             indices: None,
-            single_material: None,
             material_ranges: None,
             bones: None,
         }
@@ -31,8 +29,7 @@ impl MeshBuilder {
                 .as_ref()
                 .map_or_else(|| self.vertices.len(), |indices| indices.len());
 
-            let mat = self.single_material.unwrap_or(HMaterial::FALLBACK);
-            material_ranges.push((mat, 0u32..vert_count as u32));
+            material_ranges.push(0u32..vert_count as u32);
         }
 
         Mesh {
@@ -47,16 +44,8 @@ impl MeshBuilder {
         self
     }
 
-    // TODO: Move texturing to MeshRenderer
-    pub fn with_one_texture(mut self, material: HMaterial) -> Self {
-        self.single_material = Some(material);
-        self.material_ranges = None;
-        self
-    }
-
-    pub fn with_many_textures(mut self, materials: Vec<(HMaterial, Range<u32>)>) -> Self {
+    pub fn with_many_textures(mut self, materials: Vec<Range<u32>>) -> Self {
         self.material_ranges = Some(materials);
-        self.single_material = None;
         self
     }
 

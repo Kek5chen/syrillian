@@ -1,12 +1,12 @@
-use crate::assets::{HShader, Mesh, Shader, H};
-use crate::components::RigidBodyComponent;
+use crate::assets::{HMaterial, HShader, Mesh, Shader, H};
+use crate::components::{RigidBodyComponent, SkeletalComponent};
 use crate::core::{Bone, GameObjectId, ModelUniform, Vertex3D};
 use crate::drawables::Drawable;
 use crate::engine::assets::HMesh;
 use crate::engine::rendering::uniform::ShaderUniform;
 use crate::engine::rendering::{DrawCtx, Renderer};
 use crate::rendering::{RuntimeMesh, RuntimeMeshData};
-use crate::{must_pipeline, World};
+use crate::{must_pipeline, World, MAX_BONES};
 use log::warn;
 use nalgebra::{Matrix4, Vector3};
 use std::sync::RwLockWriteGuard;
@@ -20,8 +20,6 @@ pub enum MeshUniformIndex {
     BoneData = 1,
 }
 
-// FIXME: The shader currently only accepts one bone for some reason.
-//        Having more than 1 bone will crash-...
 #[derive(Debug, Default, Clone)]
 pub struct BoneData {
     pub(crate) bones: Vec<Bone>,
@@ -29,25 +27,38 @@ pub struct BoneData {
 
 impl BoneData {
     #[rustfmt::skip]
-    pub const DUMMY_BONE: [Bone; 1] = [Bone {
+    pub const DUMMY: [Bone; MAX_BONES] = [Bone {
         transform: Matrix4::new(
             1.0, 0.0, 0.0, 0.0,
             0.0, 1.0, 0.0, 0.0,
             0.0, 0.0, 1.0, 0.0,
             0.0, 0.0, 0.0, 1.0
         )
-    }];
+    }; MAX_BONES];
 
-    pub fn as_bytes(&self) -> &[u8] {
-        bytemuck::cast_slice(self.as_slice())
+    pub fn new_full_identity() -> Self {
+        Self {
+            bones: vec![
+                Bone {
+                    transform: Matrix4::identity()
+                };
+                MAX_BONES
+            ],
+        }
     }
 
-    pub fn as_slice(&self) -> &[Bone] {
-        if self.bones.is_empty() {
-            &Self::DUMMY_BONE
-        } else {
-            &self.bones[..]
+    pub fn set_first_n(&mut self, mats: &[Matrix4<f32>]) {
+        for (i, m) in mats.iter().enumerate() {
+            self.bones[i].transform = *m;
         }
+    }
+
+    pub fn count(&self) -> usize {
+        self.bones.len()
+    }
+
+    pub fn as_bytes(&self) -> &[u8] {
+        bytemuck::cast_slice(&self.bones)
     }
 }
 
@@ -70,6 +81,7 @@ struct RuntimeDebugData {
 #[derive(Debug)]
 pub struct MeshRenderer {
     mesh: HMesh,
+    materials: Vec<HMaterial>,
     runtime_data: Option<RuntimeMeshData>,
 
     // Data needed for rendering debug stuff
@@ -79,7 +91,7 @@ pub struct MeshRenderer {
 
 impl Drawable for MeshRenderer {
     fn setup(&mut self, renderer: &Renderer, world: &mut World, _parent: GameObjectId) {
-        self.setup_mesh_data(renderer, world);
+        self.setup_mesh_data(renderer);
 
         #[cfg(debug_assertions)]
         self.setup_debug_data(renderer, world, _parent);
@@ -116,7 +128,7 @@ impl Drawable for MeshRenderer {
 
         pass.set_bind_group(1, runtime_data.uniform.bind_group(), &[]);
 
-        draw_mesh(ctx, &mesh, &mesh_data, &mut pass);
+        self.draw_mesh(ctx, &mesh, &mesh_data, &mut pass);
 
         #[cfg(debug_assertions)]
         {
@@ -137,9 +149,11 @@ impl Drawable for MeshRenderer {
 }
 
 impl MeshRenderer {
-    pub fn new(mesh: HMesh) -> Box<MeshRenderer> {
+    pub fn new(mesh: HMesh, materials: Option<Vec<HMaterial>>) -> Box<MeshRenderer> {
+        let materials = materials.unwrap_or_default();
         Box::new(MeshRenderer {
             mesh,
+            materials,
             runtime_data: None,
 
             #[cfg(debug_assertions)]
@@ -164,34 +178,33 @@ impl MeshRenderer {
     ) {
         let runtime_data = match self.runtime_data.as_mut() {
             None => {
-                self.setup_mesh_data(renderer, world);
+                self.setup_mesh_data(renderer);
                 self.runtime_data.as_mut().unwrap()
             }
             Some(runtime_data) => runtime_data,
         };
 
         let mut world_m = *transform;
-
         if let Some(rb) = parent.get_component::<RigidBodyComponent>() {
             let iso = rb.render_isometry(world.physics.alpha);
             world_m = iso.to_homogeneous();
         }
-
         runtime_data.mesh_data.update(&world_m);
 
-        renderer.state.queue.write_buffer(
-            &runtime_data.uniform.buffer(MeshUniformIndex::MeshData),
-            0,
-            bytemuck::bytes_of(&runtime_data.mesh_data),
-        );
-
-        if !runtime_data.bone_data.bones.is_empty() {
+        if let Some(mut skel) = parent.get_component::<SkeletalComponent>() && skel.update_palette() {
+            runtime_data.bone_data.set_first_n(skel.palette());
             renderer.state.queue.write_buffer(
                 &runtime_data.uniform.buffer(MeshUniformIndex::BoneData),
                 0,
                 runtime_data.bone_data.as_bytes(),
             );
         }
+
+        renderer.state.queue.write_buffer(
+            &runtime_data.uniform.buffer(MeshUniformIndex::MeshData),
+            0,
+            bytemuck::bytes_of(&runtime_data.mesh_data),
+        );
     }
 
     #[cfg(debug_assertions)]
@@ -205,23 +218,72 @@ impl MeshRenderer {
         };
     }
 
-    fn setup_mesh_data(&mut self, renderer: &Renderer, world: &mut World) -> bool {
-        let Some(mesh) = world.assets.meshes.try_get(self.mesh) else {
-            warn!("Mesh not found. Can't render");
-            return false;
-        };
+    fn draw_mesh(
+        &self,
+        ctx: &DrawCtx,
+        mesh: &RuntimeMesh,
+        mesh_data: &Mesh,
+        pass: &mut RwLockWriteGuard<RenderPass>,
+    ) {
+        let i_buffer = mesh.indices_buf.as_ref();
+        let current_shader = HShader::DIM3;
+        let shader = ctx.frame.cache.shader_3d();
 
-        let device = renderer.state.device.as_ref();
+        must_pipeline!(pipeline = shader, ctx.pass_type => return);
+
+        pass.set_pipeline(pipeline);
+
+        pass.set_vertex_buffer(0, mesh.vertices_buf.slice(..));
+        if let Some(i_buffer) = i_buffer {
+            pass.set_index_buffer(i_buffer.slice(..), IndexFormat::Uint32);
+        }
+
+        self.draw_materials(ctx, mesh_data, pass, i_buffer, current_shader);
+    }
+
+    fn draw_materials(
+        &self,
+        ctx: &DrawCtx,
+        mesh_data: &Mesh,
+        pass: &mut RwLockWriteGuard<RenderPass>,
+        i_buffer: Option<&Buffer>,
+        current_shader: H<Shader>,
+    ) {
+        for (i, range) in mesh_data.material_ranges.iter().enumerate() {
+            let h_mat = self
+                .materials
+                .get(i)
+                .cloned()
+                .unwrap_or(HMaterial::FALLBACK);
+            let material = ctx.frame.cache.material(h_mat);
+
+            if material.shader != current_shader {
+                let shader = ctx.frame.cache.shader(material.shader);
+                must_pipeline!(pipeline = shader, ctx.pass_type => continue);
+
+                pass.set_pipeline(&pipeline);
+            }
+
+            pass.set_bind_group(2, material.uniform.bind_group(), &[]);
+
+            if i_buffer.is_some() {
+                pass.draw_indexed(range.clone(), 0, 0..1);
+            } else {
+                pass.draw(range.clone(), 0..1);
+            }
+        }
+    }
+
+    fn setup_mesh_data(&mut self, renderer: &Renderer) -> bool {
+        let device = &renderer.state.device;
         let model_bgl = renderer.cache.bgl_model();
         let mesh_data = ModelUniform::empty();
 
-        let bones = mesh.bones.as_slice().to_vec();
-
-        let bone_data = BoneData { bones };
+        let bone_data = BoneData::new_full_identity();
 
         let uniform = ShaderUniform::<MeshUniformIndex>::builder(&model_bgl)
             .with_buffer_data(&mesh_data)
-            .with_buffer_data_slice(bone_data.as_slice())
+            .with_buffer_data_slice(bone_data.bones.as_slice())
             .build(device);
 
         let runtime_data = RuntimeMeshData {
@@ -229,7 +291,6 @@ impl MeshRenderer {
             bone_data,
             uniform,
         };
-
         self.runtime_data = Some(runtime_data);
         true
     }
@@ -268,55 +329,6 @@ impl MeshRenderer {
 
     pub fn mesh_data(&self) -> Option<&RuntimeMeshData> {
         self.runtime_data.as_ref()
-    }
-}
-
-fn draw_mesh(
-    ctx: &DrawCtx,
-    mesh: &RuntimeMesh,
-    mesh_data: &Mesh,
-    pass: &mut RwLockWriteGuard<RenderPass>,
-) {
-    let i_buffer = mesh.indices_buf.as_ref();
-    let current_shader = HShader::DIM3;
-    let shader = ctx.frame.cache.shader_3d();
-
-    must_pipeline!(pipeline = shader, ctx.pass_type => return);
-
-    pass.set_pipeline(pipeline);
-
-    pass.set_vertex_buffer(0, mesh.vertices_buf.slice(..));
-    if let Some(i_buffer) = i_buffer {
-        pass.set_index_buffer(i_buffer.slice(..), IndexFormat::Uint32);
-    }
-
-    draw_materials(ctx, mesh_data, pass, i_buffer, current_shader);
-}
-
-fn draw_materials(
-    ctx: &DrawCtx,
-    mesh_data: &Mesh,
-    pass: &mut RwLockWriteGuard<RenderPass>,
-    i_buffer: Option<&Buffer>,
-    current_shader: H<Shader>,
-) {
-    for (h_mat, range) in mesh_data.material_ranges.iter().cloned() {
-        let material = ctx.frame.cache.material(h_mat);
-
-        if material.shader != current_shader {
-            let shader = ctx.frame.cache.shader(material.shader);
-            must_pipeline!(pipeline = shader, ctx.pass_type => continue);
-
-            pass.set_pipeline(&pipeline);
-        }
-
-        pass.set_bind_group(2, material.uniform.bind_group(), &[]);
-
-        if i_buffer.is_some() {
-            pass.draw_indexed(range.clone(), 0, 0..1);
-        } else {
-            pass.draw(range.clone(), 0..1);
-        }
     }
 }
 

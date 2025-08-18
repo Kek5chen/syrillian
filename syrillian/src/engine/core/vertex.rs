@@ -77,7 +77,7 @@ impl Vertex3D {
             uv: tex_coord,
             normal,
             tangent,
-            bone_indices: pad_to_four(bone_indices, 0xFF),
+            bone_indices: pad_to_four(bone_indices, 0x0),
             bone_weights: pad_to_four(bone_weights, 0.0),
         }
     }

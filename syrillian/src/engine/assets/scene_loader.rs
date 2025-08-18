@@ -4,22 +4,22 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::rc::Rc;
 
-use crate::assets::{HMaterial, HShader, HTexture, Material, Mesh, StoreType, Texture, H};
-use crate::components::SpotLightComponent;
+use crate::assets::{HMaterial, HShader, HTexture, Material, Mesh, StoreType, Texture};
+use crate::components::{SkeletalComponent, SpotLightComponent};
 use crate::core::{Bones, GameObjectId, Vertex3D};
 use crate::drawables::MeshRenderer;
 use crate::rendering::lights::Light;
-use crate::utils::iter::{extend_data, interpolate_zeros};
+use crate::utils::iter::interpolate_zeros;
 use crate::utils::ExtraMatrixMath;
 use crate::World;
-use itertools::{izip, Itertools};
+use itertools::izip;
 use log::warn;
 use nalgebra::{Matrix4, Vector2, Vector3};
 use russimp_ng::light::LightSourceType;
 use russimp_ng::material::{DataContent, MaterialProperty, PropertyTypeInfo, TextureType};
 use russimp_ng::node::Node;
 use russimp_ng::scene::{PostProcess, Scene};
-use russimp_ng::Vector3D;
+use russimp_ng::{Matrix4x4, Vector3D};
 
 const POST_STEPS: &[PostProcess] = &[
     PostProcess::CalculateTangentSpace,
@@ -32,13 +32,160 @@ const POST_STEPS: &[PostProcess] = &[
     PostProcess::LimitBoneWeights,
 ];
 
-#[allow(dead_code)]
 pub struct SceneLoader;
 
-#[allow(dead_code)]
+#[rustfmt::skip]
+fn mat4_from_assimp(m: &Matrix4x4) -> Matrix4<f32> {
+    dbg!(m);
+    Matrix4::new(
+        m.a1, m.a2, m.a3, m.a4,
+        m.b1, m.b2, m.b3, m.b4,
+        m.c1, m.c2, m.c3, m.c4,
+        m.d1, m.d2, m.d3, m.d4,
+    )
+}
+
+// Build a name->(parent_name, local_matrix) map for the scene graph.
+fn build_node_map<'a>(
+    node: &'a Node,
+    parent: Option<&'a str>,
+    out: &mut HashMap<String, (Option<String>, Matrix4<f32>)>,
+) {
+    out.insert(
+        node.name.clone(),
+        (
+            parent.map(|s| s.to_string()),
+            mat4_from_assimp(&node.transformation),
+        ),
+    );
+    for c in node.children.borrow().iter() {
+        build_node_map(c, Some(&node.name), out);
+    }
+}
+
+/// Dedupe bones by name and remember inverse bind matrices (the Assimp "offset" matrix).
+struct BoneTable {
+    names: Vec<String>,
+    inverse_bind: Vec<Matrix4<f32>>,
+    index_of: HashMap<String, usize>,
+}
+
+impl BoneTable {
+    fn new() -> Self {
+        Self {
+            names: Vec::new(),
+            inverse_bind: Vec::new(),
+            index_of: HashMap::new(),
+        }
+    }
+
+    /// Get global bone index for this name; create if missing.
+    fn ensure(&mut self, name: &str, inv_bind: Matrix4<f32>) -> usize {
+        if let Some(&i) = self.index_of.get(name) {
+            return i;
+        }
+        let i = self.names.len();
+        self.names.push(name.to_string());
+        self.inverse_bind.push(inv_bind);
+        self.index_of.insert(name.to_string(), i);
+        i
+    }
+
+    fn into_bones_with_hierarchy(self, scene: &Scene) -> Bones {
+        let mut node_map = HashMap::<String, (Option<String>, Matrix4<f32>)>::new();
+        if let Some(root) = &scene.root {
+            build_node_map(root, None, &mut node_map);
+        }
+
+        let mut parents = vec![None; self.names.len()];
+
+        for (i, name) in self.names.iter().enumerate() {
+            let mut cur = name.as_str();
+            while let Some((parent_name_opt, _)) = node_map.get(cur) {
+                if let Some(parent_name) = parent_name_opt {
+                    if let Some(&pi) = self.index_of.get(parent_name) {
+                        parents[i] = Some(pi);
+                        break;
+                    }
+                    cur = parent_name;
+                } else {
+                    break;
+                }
+            }
+        }
+
+        Bones {
+            names: self.names,
+            parents,
+            inverse_bind: self.inverse_bind,
+            bind_global: Vec::new(), // finalize later
+            bind_local: Vec::new(),  // finalize later
+            index_of: self.index_of,
+        }
+    }
+}
+
+fn compute_global_transform(
+    name: &str,
+    node_map: &HashMap<String, (Option<String>, Matrix4<f32>)>,
+) -> Matrix4<f32> {
+    let mut m = Matrix4::identity();
+    let mut cur = Some(name);
+    while let Some(cn) = cur {
+        if let Some((p, local)) = node_map.get(cn) {
+            m = *local * m;
+            cur = p.as_deref();
+        } else {
+            break;
+        }
+    }
+    m
+}
+
+fn finalize_bones(scene: &Scene, mesh_node: &Node, bones: &mut Bones) {
+    let mut node_map = HashMap::<String, (Option<String>, Matrix4<f32>)>::new();
+    if let Some(root) = &scene.root {
+        build_node_map(root, None, &mut node_map);
+    }
+
+    let mesh_global = compute_global_transform(&mesh_node.name, &node_map);
+    let mesh_inv = mesh_global.try_inverse().unwrap_or(Matrix4::identity());
+
+    let n = bones.len();
+    bones.bind_global = vec![Matrix4::identity(); n];
+    bones.bind_local = vec![Matrix4::identity(); n];
+
+    for (i, name) in bones.names.iter().enumerate() {
+        let g_world = compute_global_transform(name, &node_map);
+        let g_model = mesh_inv * g_world;           // *** convert to mesh MODEL space ***
+        bones.bind_global[i] = g_model;
+    }
+    for i in 0..n {
+        bones.bind_local[i] = match bones.parents[i] {
+            None => bones.bind_global[i],
+            Some(p) => bones.bind_global[p]
+                .try_inverse().unwrap_or(Matrix4::identity())
+                * bones.bind_global[i],
+        };
+    }
+}
+
+/// Keep top-4 weights, sort descending, renormalize.
+fn pack_top4(mut pairs: Vec<(usize, f32)>) -> (Vec<u32>, Vec<f32>) {
+    if pairs.is_empty() {
+        return (Vec::new(), Vec::new());
+    }
+    pairs.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    pairs.truncate(4);
+    let sum = pairs.iter().map(|p| p.1).sum::<f32>().max(1e-8);
+    let idx: Vec<u32> = pairs.iter().map(|p| p.0 as u32).collect();
+    let wts: Vec<f32> = pairs.iter().map(|p| p.1 / sum).collect();
+    (idx, wts)
+}
+
 impl SceneLoader {
     pub fn load(world: &mut World, path: &str) -> Result<GameObjectId, Box<dyn Error>> {
-        let mut scene = Self::load_scene(path)?;
+        let scene = Self::load_scene(path)?;
 
         let root = match &scene.root {
             Some(node) => node.clone(),
@@ -48,10 +195,7 @@ impl SceneLoader {
         let materials = load_materials(&scene, world);
         trace!("Loaded materials for {path:?}");
 
-        update_material_indices(&mut scene, materials);
-        trace!("Mapped Material Indices for {path:?}");
-
-        let root_object = Self::spawn_object(world, &scene, &root);
+        let root_object = Self::spawn_deep_object(world, &scene, &root, Some(&materials));
         Self::load_lights(world, &scene, root_object);
         Ok(root_object)
     }
@@ -71,51 +215,67 @@ impl SceneLoader {
         Ok(scene)
     }
 
-    pub fn spawn_object(world: &mut World, scene: &Scene, node: &Node) -> GameObjectId {
-        Self::_spawn_object(world, scene, node, 1)
-    }
-
-    fn _spawn_object(world: &mut World, scene: &Scene, node: &Node, depth: u32) -> GameObjectId {
-        let mut node_obj = build_object(world, scene, node);
-
-        if depth >= 1000 {
-            warn!("Node Object Iteration Depth reached 1000");
-            return node_obj;
+    pub fn spawn_deep_object(
+        world: &mut World,
+        scene: &Scene,
+        node: &Node,
+        materials: Option<&HashMap<u32, HMaterial>>,
+    ) -> GameObjectId {
+        struct SpawnData<'a, 'b> {
+            world: &'a mut World,
+            scene: &'b Scene,
+            materials: Option<&'b HashMap<u32, HMaterial>>,
         }
 
-        for child in node.children.borrow().iter() {
-            let child_obj = Self::_spawn_object(world, scene, child, depth + 1);
-            trace!("Loaded new scene object {}", child_obj.name);
-            node_obj.add_child(child_obj);
+        let mut data = SpawnData {
+            world,
+            scene,
+            materials,
+        };
+
+        fn inner(ctx: &mut SpawnData, node: &Node, depth: u32) -> GameObjectId {
+            let mut node_obj = SceneLoader::build_object(ctx.world, ctx.scene, node, ctx.materials);
+
+            if depth >= 1000 {
+                warn!("Node Object Iteration Depth reached 1000");
+                return node_obj;
+            }
+
+            for child in node.children.borrow().iter() {
+                let child_obj = inner(ctx, child, depth + 1);
+                trace!("Loaded new scene object {}", child_obj.name);
+                node_obj.add_child(child_obj);
+            }
+
+            node_obj
         }
 
-        node_obj
+        inner(&mut data, node, 1)
     }
 
     pub fn load_first_mesh_from_buffer(
         model: &[u8],
         hint: &str,
-    ) -> Result<Option<Mesh>, Box<dyn Error>> {
+    ) -> Result<Option<(Mesh, Vec<u32>)>, Box<dyn Error>> {
         let scene = Self::load_scene_from_buffer(model, hint)?;
         Ok(Self::load_first_from_scene(&scene))
     }
 
-    pub fn load_first_mesh(path: &str) -> Result<Option<Mesh>, Box<dyn Error>> {
+    pub fn load_first_mesh(path: &str) -> Result<Option<(Mesh, Vec<u32>)>, Box<dyn Error>> {
         let scene = Self::load_scene(path)?;
         Ok(Self::load_first_from_scene(&scene))
     }
 
-    pub fn load_first_from_scene(scene: &Scene) -> Option<Mesh> {
-        let mesh = load_first_from_node(&scene, scene.root.as_ref()?, 0);
-        mesh
+    pub fn load_first_from_scene(scene: &Scene) -> Option<(Mesh, Vec<u32>)> {
+        load_first_from_node(&scene, scene.root.as_ref()?, 0)
     }
 
-    pub fn load_mesh(scene: &Scene, node: &Node) -> Option<Mesh> {
+    pub fn load_mesh(scene: &Scene, node: &Node) -> Option<(Mesh, Vec<u32>)> {
         if node.meshes.is_empty() {
             return None;
         }
 
-        let mut bones = Bones::default();
+        let mut bones_tbl = BoneTable::new();
 
         let mut positions: Vec<Vector3<f32>> = Vec::new();
         let mut tex_coords: Vec<Vector2<f32>> = Vec::new();
@@ -123,81 +283,78 @@ impl SceneLoader {
         let mut tangents: Vec<Vector3<f32>> = Vec::new();
         let mut bitangents: Vec<Vector3<f32>> = Vec::new();
         let mut bone_idxs: Vec<Vec<u32>> = Vec::new();
-        let mut bone_weights: Vec<Vec<f32>> = Vec::new();
+        let mut bone_wts: Vec<Vec<f32>> = Vec::new();
 
         let mut material_ranges = Vec::new();
-        let mut mesh_vertex_count_start: usize = 0;
+        let mut materials = Vec::new();
 
-        for mesh_id in node.meshes.iter() {
-            let mesh = scene.meshes.get(*mesh_id as usize)?;
-            let mut mesh_vertex_count = mesh_vertex_count_start;
-            // filter faces with not 3 vertices.
-            // 1 and 2 are point and line faces which I can't render yet
-            // 3+ shouldn't happen because of Triangulate PostProcess Assimp feature, thanksyu
-            let filtered_faces = mesh.faces.iter().filter(|face| face.0.len() == 3);
+        for mesh_id in node.meshes.iter().copied() {
+            let amesh = scene.meshes.get(mesh_id as usize)?;
+            let start_vertex = positions.len();
 
-            for face in filtered_faces.clone() {
-                let face_indices = &face.0;
-
-                extend_data(
-                    &mut positions,
-                    face_indices,
-                    &mesh.vertices,
-                    vec3_from_vec3d,
-                );
-
-                if let Some(Some(dif_tex_coords)) = mesh.texture_coords.first() {
-                    extend_data(
-                        &mut tex_coords,
-                        face_indices,
-                        dif_tex_coords,
-                        vec2_from_vec3d,
-                    );
-                } else {
-                    warn!(
-                        "Face in Mesh {} didn't have any texture coordinates set",
-                        mesh_id
-                    );
+            let mut weights_by_vertex: HashMap<u32, Vec<(usize, f32)>> = HashMap::new();
+            for b in &amesh.bones {
+                let inv_bind = mat4_from_assimp(&b.offset_matrix);
+                let gidx = bones_tbl.ensure(&b.name, inv_bind);
+                for w in &b.weights {
+                    weights_by_vertex
+                        .entry(w.vertex_id)
+                        .or_default()
+                        .push((gidx, w.weight));
                 }
-
-                extend_data(&mut normals, face_indices, &mesh.normals, vec3_from_vec3d);
-                extend_data(&mut tangents, face_indices, &mesh.tangents, vec3_from_vec3d);
-                extend_data(
-                    &mut bitangents,
-                    face_indices,
-                    &mesh.bitangents,
-                    vec3_from_vec3d,
-                );
-
-                mesh_vertex_count += 3;
             }
 
-            bone_idxs.resize_with(mesh_vertex_count, Vec::new);
-            bone_weights.resize_with(mesh_vertex_count, Vec::new);
+            let faces = amesh.faces.iter().filter(|f| f.0.len() == 3);
+            let tc0 = amesh.texture_coords.first().and_then(|opt| opt.as_ref());
 
-            map_bones(
-                bone_idxs[mesh_vertex_count_start..mesh_vertex_count].as_mut(),
-                bone_weights[mesh_vertex_count_start..mesh_vertex_count].as_mut(),
-                &mut bones,
-                mesh,
-                filtered_faces,
-            );
+            for f in faces {
+                for &vi in &f.0 {
+                    let p = vec3_from_vec3d(&amesh.vertices[vi as usize]);
+                    let n = amesh
+                        .normals
+                        .get(vi as usize)
+                        .map(vec3_from_vec3d)
+                        .unwrap_or(Vector3::zeros());
+                    let t = amesh
+                        .tangents
+                        .get(vi as usize)
+                        .map(vec3_from_vec3d)
+                        .unwrap_or(Vector3::zeros());
+                    let bt = amesh
+                        .bitangents
+                        .get(vi as usize)
+                        .map(vec3_from_vec3d)
+                        .unwrap_or(Vector3::zeros());
+                    let uv = tc0
+                        .and_then(|tc| tc.get(vi as usize))
+                        .map(vec2_from_vec3d)
+                        .unwrap_or(Vector2::zeros());
 
-            // TODO: Change material ranges to usize? (This is a question)
-            //   Rev1: Not sure, i don't think that's needed
-            material_ranges.push((
-                H::new(mesh.material_index),
-                mesh_vertex_count_start as u32..mesh_vertex_count as u32,
-            ));
+                    positions.push(p);
+                    normals.push(n);
+                    tangents.push(t);
+                    bitangents.push(bt);
+                    tex_coords.push(uv);
 
-            mesh_vertex_count_start = mesh_vertex_count;
+                    let (idxs, wts) = weights_by_vertex
+                        .remove(&vi)
+                        .map(pack_top4)
+                        .unwrap_or_else(|| (Vec::new(), Vec::new()));
+
+                    bone_idxs.push(idxs);
+                    bone_wts.push(wts);
+                }
+            }
+
+            let end_vertex = positions.len();
+            material_ranges.push(start_vertex as u32..end_vertex as u32);
+            materials.push(amesh.material_index);
         }
 
         if positions.is_empty() {
             return None;
         }
 
-        // it do work tho
         interpolate_zeros(
             positions.len(),
             &mut [
@@ -209,36 +366,42 @@ impl SceneLoader {
         );
 
         let vertices: Vec<Vertex3D> = izip!(
-            positions,
-            tex_coords,
-            normals,
-            tangents,
-            bitangents,
-            &bone_idxs,
-            &bone_weights
+            positions, tex_coords, normals, tangents, bitangents, &bone_idxs, &bone_wts
         )
         .map(Vertex3D::from)
         .collect();
+
+        let mut bones: Bones = bones_tbl.into_bones_with_hierarchy(scene);
+        finalize_bones(scene, node, &mut bones);
 
         let mesh = Mesh::builder(vertices)
             .with_many_textures(material_ranges)
             .with_bones(bones)
             .build();
 
-        Some(mesh)
+        Some((mesh, materials))
     }
 
-    fn load_lights(world: &mut World, scene: &Scene, mut root: GameObjectId) {
+    pub fn load_lights(world: &mut World, scene: &Scene, mut root: GameObjectId) {
         for light in &scene.lights {
             if light.light_source_type == LightSourceType::Spot {
                 let mut obj = world.new_object(&light.name);
                 let spot = obj.add_component::<SpotLightComponent>();
                 let data = spot.data_mut(world);
 
-                obj.transform.set_position(light.pos.x, light.pos.y, light.pos.z);
-                obj.transform.set_euler_rotation(light.direction.x, light.direction.y, light.direction.z);
+                obj.transform
+                    .set_position(light.pos.x, light.pos.y, light.pos.z);
+                obj.transform.set_euler_rotation(
+                    light.direction.x,
+                    light.direction.y,
+                    light.direction.z,
+                );
 
-                data.color = Vector3::new(light.color_diffuse.r, light.color_diffuse.g, light.color_diffuse.b);
+                data.color = Vector3::new(
+                    light.color_diffuse.r,
+                    light.color_diffuse.g,
+                    light.color_diffuse.b,
+                );
                 data.inner_angle = light.angle_inner_cone;
                 data.outer_angle = light.angle_outer_cone;
                 data.range = light.attenuation_linear;
@@ -248,9 +411,50 @@ impl SceneLoader {
             }
         }
     }
+
+    pub fn build_object(
+        world: &mut World,
+        scene: &Scene,
+        node: &Node,
+        scene_materials: Option<&HashMap<u32, HMaterial>>,
+    ) -> GameObjectId {
+        trace!("Starting to build scene object {:?}", node.name);
+        let mut node_obj = world.new_object(&node.name);
+
+        if let Some((mesh, materials)) = SceneLoader::load_mesh(scene, node) {
+            let has_bones = !mesh.bones.is_empty();
+            let handle = world.assets.meshes.add(mesh);
+            if let Some(scene_materials) = scene_materials {
+                let materials = materials
+                    .iter()
+                    .map(|&id| {
+                        scene_materials
+                            .get(&id)
+                            .copied()
+                            .unwrap_or(HMaterial::FALLBACK)
+                    })
+                    .collect();
+                node_obj.drawable = Some(MeshRenderer::new(handle, Some(materials)));
+            } else {
+                node_obj.drawable = Some(MeshRenderer::new(handle, None));
+            }
+
+            if has_bones {
+                node_obj.add_component::<SkeletalComponent>();
+            }
+        }
+
+        let (position, rotation, scale) = mat4_from_assimp(&node.transformation).decompose();
+
+        node_obj.transform.set_local_position_vec(position);
+        node_obj.transform.set_local_rotation(rotation);
+        node_obj.transform.set_nonuniform_local_scale(scale);
+
+        node_obj
+    }
 }
 
-fn load_first_from_node(scene: &Scene, node: &Node, iter: u32) -> Option<Mesh> {
+fn load_first_from_node(scene: &Scene, node: &Node, iter: u32) -> Option<(Mesh, Vec<u32>)> {
     if iter > 1000 {
         return None;
     }
@@ -266,56 +470,6 @@ fn load_first_from_node(scene: &Scene, node: &Node, iter: u32) -> Option<Mesh> {
     }
 
     None
-}
-
-fn map_bones<'a>(
-    indices: &mut [Vec<u32>], // start from 0 to how many were defined in the raw mesh, not including point or line "faces"
-    weights: &mut [Vec<f32>], // "
-    mapped: &mut Bones, // are the total bones that this merged mesh will have, mapped to the merged vertices
-    raw: &'a russimp_ng::mesh::Mesh, // the raw bones for this specific mesh part
-    faces: impl Iterator<Item = &'a russimp_ng::face::Face>, // the faces that need to be mapped
-) {
-    // grab bones length before so we know where we base our ids off of. the new indices should
-    // now be bones_base + raw id
-    let original_bone_count = mapped.raw.len();
-
-    // map bones from raw into mapped bone list
-    for bone in &raw.bones {
-        mapped.names.push(bone.name.clone());
-        mapped.raw.push(bone.into())
-    }
-
-    // transpose the mapping from `Vec<weights.vertex ids>` to `vertex ids -> Vec<weights>`
-    let mapped_indices: HashMap<u32, Vec<(usize, f32)>> = raw
-        .bones
-        .iter()
-        .enumerate()
-        .flat_map(|(i, b)| {
-            b.weights
-                .iter()
-                .map(move |w| (w.vertex_id, (i + original_bone_count, w.weight)))
-        })
-        .into_group_map();
-
-    // map the bone weights to these face vertex ids.
-    for face in faces {
-        for v_id in &face.0 {
-            let Some(idxs) = indices.get_mut(*v_id as usize) else {
-                unreachable!("The indices should've been prepared.");
-            };
-            let Some(weights) = weights.get_mut(*v_id as usize) else {
-                unreachable!("The weights should've been prepared.");
-            };
-
-            let Some(bones_by_index) = mapped_indices.get(v_id) else {
-                // no bones found for this index
-                break;
-            };
-
-            idxs.extend(bones_by_index.iter().map(|b| b.0 as u32));
-            weights.extend(bones_by_index.iter().map(|b| b.1));
-        }
-    }
 }
 
 fn load_texture(
@@ -386,32 +540,6 @@ fn load_material(world: &mut World, material: &russimp_ng::material::Material) -
     world.assets.materials.add(new_material)
 }
 
-pub fn build_object(world: &mut World, scene: &Scene, node: &Node) -> GameObjectId {
-    trace!("Starting to build scene object {:?}", node.name);
-    let mut node_obj = world.new_object(&node.name);
-
-    if let Some(mesh) = SceneLoader::load_mesh(scene, node) {
-        let handle = world.assets.meshes.add(mesh);
-
-        node_obj.drawable = Some(MeshRenderer::new(handle));
-    }
-
-    let t = node.transformation;
-    let (position, rotation, scale) = Matrix4::from([
-        [t.a1, t.b1, t.c1, t.d1],
-        [t.a2, t.b2, t.c2, t.d2],
-        [t.a3, t.b3, t.c3, t.d3],
-        [t.a4, t.b4, t.c4, t.d4],
-    ])
-        .decompose(); // convert row to column major (assimp to nalgebra)
-
-    node_obj.transform.set_local_position_vec(position);
-    node_obj.transform.set_local_rotation(rotation);
-    node_obj.transform.set_nonuniform_local_scale(scale);
-
-    node_obj
-}
-
 fn load_materials(scene: &Scene, world: &mut World) -> HashMap<u32, HMaterial> {
     let mut mapping = HashMap::new();
     for (i, material) in scene.materials.iter().enumerate() {
@@ -419,16 +547,6 @@ fn load_materials(scene: &Scene, world: &mut World) -> HashMap<u32, HMaterial> {
         mapping.insert(i as u32, mat_id);
     }
     mapping
-}
-
-fn update_material_indices(scene: &mut Scene, mat_map: HashMap<u32, HMaterial>) {
-    for mesh in &mut scene.meshes {
-        let mapped_mat = mat_map
-            .get(&mesh.material_index)
-            .cloned()
-            .unwrap_or(HMaterial::FALLBACK);
-        mesh.material_index = mapped_mat.id();
-    }
 }
 
 fn get_string_property_or<F>(properties: &[MaterialProperty], key: &str, default: F) -> String
