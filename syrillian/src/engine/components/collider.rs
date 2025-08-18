@@ -36,8 +36,6 @@ struct ColliderDebugData {
     collider_indices_count: u32,
 }
 
-// Lol
-//
 // Okay, so.. Either a MeshRenderer is already assigned, which is likely.
 // Then use that uniform as it'll auto update for us.
 // If we don't have a MeshRenderer, we have to update ourselves.
@@ -45,17 +43,17 @@ struct ColliderDebugData {
 // phased out for something different. But I imagine the use cases where this will work
 // are far overgrowing the opposite.
 #[cfg(debug_assertions)]
-enum PotentiallyPiggyBackedModelData {
+enum SharedModelData {
     Backed(ShaderUniform<MeshUniformIndex>),
     Owned(ModelUniform, ShaderUniform<MeshUniformIndex>),
 }
 
 #[cfg(debug_assertions)]
-impl PotentiallyPiggyBackedModelData {
+impl SharedModelData {
     fn uniform(&self) -> &ShaderUniform<MeshUniformIndex> {
         match self {
-            PotentiallyPiggyBackedModelData::Backed(uniform)
-            | PotentiallyPiggyBackedModelData::Owned(_, uniform) => uniform,
+            SharedModelData::Backed(uniform)
+            | SharedModelData::Owned(_, uniform) => uniform,
         }
     }
 }
@@ -71,7 +69,7 @@ pub struct Collider3D {
     #[cfg(debug_assertions)]
     collider_buffers: Option<ColliderDebugData>,
     #[cfg(debug_assertions)]
-    model_data: Option<PotentiallyPiggyBackedModelData>,
+    model_data: Option<SharedModelData>,
 }
 
 #[derive(Debug, Snafu)]
@@ -165,17 +163,14 @@ impl Component for Collider3D {
             }
         };
 
-        match model_data {
-            PotentiallyPiggyBackedModelData::Owned(model, uniform) => {
-                model.update(transform);
+        if let SharedModelData::Owned(model, uniform) = model_data {
+            model.update(transform);
 
-                renderer.state.queue.write_buffer(
-                    uniform.buffer(MeshUniformIndex::MeshData),
-                    0,
-                    bytemuck::bytes_of(model),
-                );
-            }
-            _ => (),
+            renderer.state.queue.write_buffer(
+                uniform.buffer(MeshUniformIndex::MeshData),
+                0,
+                bytemuck::bytes_of(model),
+            );
         }
     }
 
@@ -293,9 +288,8 @@ impl Collider3D {
             .parent
             .drawable::<MeshRenderer>()
             .and_then(|renderer| renderer.mesh_data())
-            .map(|mesh_data| mesh_data.uniform.clone())
         {
-            PotentiallyPiggyBackedModelData::Backed(mesh_data)
+            SharedModelData::Backed(mesh_data.uniform.clone())
         } else {
             let model_bgl = renderer.cache.bgl_model();
             let model = ModelUniform::empty();
@@ -304,7 +298,7 @@ impl Collider3D {
                 .with_buffer_data_slice(&BoneData::DUMMY_BONE)
                 .build(&renderer.state.device);
 
-            PotentiallyPiggyBackedModelData::Owned(model, uniform)
+            SharedModelData::Owned(model, uniform)
         };
 
         self.model_data = Some(mesh_data);
