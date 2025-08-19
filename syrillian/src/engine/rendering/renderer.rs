@@ -382,7 +382,7 @@ impl Renderer {
 
         ctx.output.present();
 
-        if self.frame_count % 1000 == 0 {
+        if self.cache.last_refresh().elapsed().as_secs_f32() > 5.0 {
             trace!("Refreshing cache...");
             let refreshed_count = self.cache.refresh_all();
             if cfg!(debug_assertions) && refreshed_count != 0 {

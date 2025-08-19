@@ -8,7 +8,8 @@ use crate::engine::rendering::State;
 use crate::rendering::cache::font::FontAtlas;
 use crate::rendering::cache::GpuTexture;
 use crate::rendering::{RuntimeMaterial, RuntimeMesh, RuntimeShader};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+use std::time::Instant;
 use wgpu::BindGroupLayout;
 
 pub struct AssetCache {
@@ -18,6 +19,8 @@ pub struct AssetCache {
     pub materials: Cache<Material>,
     pub bgls: Cache<BGL>,
     pub fonts: Cache<Font>,
+
+    last_refresh: Mutex<Instant>,
 }
 
 impl AssetCache {
@@ -31,6 +34,7 @@ impl AssetCache {
             materials: Cache::new(store.materials.clone(), device.clone(), queue.clone()),
             bgls: Cache::new(store.bgls.clone(), device.clone(), queue.clone()),
             fonts: Cache::new(store.fonts.clone(), device.clone(), queue.clone()),
+            last_refresh: Mutex::new(Instant::now()),
         }
     }
     pub fn mesh(&self, handle: HMesh) -> Option<Arc<RuntimeMesh>> {
@@ -137,6 +141,12 @@ impl AssetCache {
         refreshed_count += self.textures.refresh_dirty();
         refreshed_count += self.bgls.refresh_dirty();
 
+        *self.last_refresh.lock().unwrap() = Instant::now();
+
         refreshed_count
+    }
+
+    pub fn last_refresh(&self) -> Instant {
+        *self.last_refresh.lock().unwrap()
     }
 }
