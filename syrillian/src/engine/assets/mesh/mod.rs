@@ -121,6 +121,8 @@ impl StoreType for Mesh {
         match handle.id() {
             HMesh::UNIT_SQUARE_ID => HandleName::Static("Unit Square"),
             HMesh::UNIT_CUBE_ID => HandleName::Static("Unit Cube"),
+            HMesh::DEBUG_ARROW_ID => HandleName::Static("Debug Arrow"),
+            HMesh::SPHERE_ID => HandleName::Static("Sphere"),
             _ => HandleName::Id(handle),
         }
     }
