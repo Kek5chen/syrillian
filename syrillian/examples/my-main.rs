@@ -215,30 +215,6 @@ impl AppState for MyMain {
         Ok(())
     }
 
-    #[cfg(debug_assertions)]
-    fn draw(
-        &mut self,
-        world: &mut World,
-        renderer: &mut Renderer,
-    ) -> Result<(), Box<dyn Error>> {
-        if world.input.is_key_down(KeyCode::KeyL) {
-            let mode = renderer.debug.next_mode();
-
-            let Some(mut collider) = self.player.get_component::<Collider3D>() else {
-                return Ok(());
-            };
-            if collider.is_debug_render_enabled() {
-                collider.set_debug_render(false);
-            } else {
-                if mode == 0 {
-                    collider.set_debug_render(true);
-                }
-            }
-        }
-
-        Ok(())
-    }
-
     fn update(&mut self, world: &mut World, window: &Window) -> Result<(), Box<dyn Error>> {
         self.frame_counter.new_frame_from_world(world);
         window.set_title(&self.format_title());
@@ -267,6 +243,30 @@ impl AppState for MyMain {
         }
 
         self.do_raycast_test(world);
+
+        Ok(())
+    }
+
+    #[cfg(debug_assertions)]
+    fn draw(
+        &mut self,
+        world: &mut World,
+        renderer: &mut Renderer,
+    ) -> Result<(), Box<dyn Error>> {
+        if world.input.is_key_down(KeyCode::KeyL) {
+            let mode = renderer.debug.next_mode();
+
+            let Some(mut collider) = self.player.get_component::<Collider3D>() else {
+                return Ok(());
+            };
+            if collider.is_debug_render_enabled() {
+                collider.set_debug_render(false);
+            } else {
+                if mode == 0 {
+                    collider.set_debug_render(true);
+                }
+            }
+        }
 
         Ok(())
     }
