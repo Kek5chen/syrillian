@@ -1,10 +1,10 @@
 use crate::components::Component;
 use crate::core::{Bones, GameObjectId};
 use crate::drawables::MeshRenderer;
-// components/skeletal.rs
 use crate::World;
-use nalgebra::Matrix4;
-use nalgebra::UnitQuaternion;
+use log::warn;
+use nalgebra::{Matrix4, Vector3};
+use nalgebra::{Scale3, Translation3, UnitQuaternion};
 
 pub struct SkeletalComponent {
     parent: GameObjectId,
@@ -29,9 +29,11 @@ impl Component for SkeletalComponent {
 
     fn init(&mut self, world: &mut World) {
         let Some(renderer) = self.parent.drawable::<MeshRenderer>() else {
+            warn!("No Mesh Renderer found on Skeletal Object");
             return;
         };
         let Some(mesh) = world.assets.meshes.try_get(renderer.mesh()) else {
+            warn!("No Mesh found for the Mesh linked in a Mesh Renderer");
             return;
         };
 
@@ -52,6 +54,29 @@ impl Component for SkeletalComponent {
 impl SkeletalComponent {
     pub fn bone_count(&self) -> usize {
         self.bones_static.len()
+    }
+
+    /// Access bones metadata (names/parents/inv_bind)
+    pub fn bones(&self) -> &Bones {
+        &self.bones_static
+    }
+
+    /// Set local TRS for (some/all) bones.
+    pub fn set_local_pose_trs(
+        &mut self,
+        locals: &[(Vector3<f32>, UnitQuaternion<f32>, Vector3<f32>)],
+    ) {
+        let n = self.bones_static.len();
+        if self.delta_local.len() != n {
+            self.delta_local = vec![Matrix4::identity(); n];
+        }
+        for (i, (pos, rot, scale)) in locals.iter().enumerate().take(n) {
+            let m = Translation3::from(*pos).to_homogeneous()
+                * rot.to_homogeneous()
+                * Scale3::from(*scale).to_homogeneous();
+            self.set_local_transform(i, m);
+        }
+        self.dirty = true;
     }
 
     /// Set a bone's local delta rotation (about its local origin)

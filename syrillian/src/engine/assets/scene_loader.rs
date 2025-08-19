@@ -36,7 +36,6 @@ pub struct SceneLoader;
 
 #[rustfmt::skip]
 fn mat4_from_assimp(m: &Matrix4x4) -> Matrix4<f32> {
-    dbg!(m);
     Matrix4::new(
         m.a1, m.a2, m.a3, m.a4,
         m.b1, m.b2, m.b3, m.b4,

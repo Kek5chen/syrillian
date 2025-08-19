@@ -66,7 +66,7 @@ impl Default for DebugRenderer {
         DebugRenderer {
             mesh_edges: DEBUG_BUILD,
             colliders_edges: false,
-            vertex_normals: DEBUG_BUILD,
+            vertex_normals: false,
             rays: DEBUG_BUILD,
             text_geometry: DEBUG_BUILD,
             light: DEBUG_BUILD,
@@ -76,11 +76,14 @@ impl Default for DebugRenderer {
 
 impl DebugRenderer {
     pub fn next_mode(&mut self) -> u32 {
-        if self.mesh_edges {
+        if self.mesh_edges && !self.vertex_normals {
+            self.vertex_normals = true;
+            1
+        } else if self.mesh_edges {
             self.mesh_edges = false;
             self.vertex_normals = false;
             self.colliders_edges = true;
-            1
+            2
         } else if self.colliders_edges {
             *self = DebugRenderer {
                 mesh_edges: false,
@@ -90,7 +93,7 @@ impl DebugRenderer {
                 text_geometry: false,
                 light: false,
             };
-            2
+            3
         } else {
             *self = DebugRenderer::default();
             0

@@ -25,6 +25,7 @@ use syrillian::prefabs::first_person_player::FirstPersonPlayerPrefab;
 use syrillian::prefabs::prefab::Prefab;
 use syrillian::prefabs::CubePrefab;
 use syrillian::rendering::lights::Light;
+use syrillian::rendering::renderer::Renderer;
 use syrillian::utils::frame_counter::FrameCounter;
 use syrillian::SyrillianApp;
 use syrillian::{AppState, World};
@@ -218,7 +219,7 @@ impl AppState for MyMain {
     fn draw(
         &mut self,
         world: &mut World,
-        renderer: &mut syrillian::rendering::renderer::Renderer,
+        renderer: &mut Renderer,
     ) -> Result<(), Box<dyn Error>> {
         if world.input.is_key_down(KeyCode::KeyL) {
             let mode = renderer.debug.next_mode();
