@@ -5,16 +5,17 @@ use std::error::Error;
 use std::rc::Rc;
 
 use crate::assets::{HMaterial, HShader, HTexture, Material, Mesh, StoreType, Texture};
-use crate::components::{SkeletalComponent, SpotLightComponent};
+use crate::components::{AnimationComponent, SkeletalComponent, SpotLightComponent};
 use crate::core::{Bones, GameObjectId, Vertex3D};
 use crate::drawables::MeshRenderer;
 use crate::rendering::lights::Light;
+use crate::utils::animation::{AnimationClip, Channel, TransformKeys};
 use crate::utils::iter::interpolate_zeros;
 use crate::utils::ExtraMatrixMath;
 use crate::World;
 use itertools::izip;
 use log::warn;
-use nalgebra::{Matrix4, Vector2, Vector3};
+use nalgebra::{Matrix4, Quaternion, UnitQuaternion, Vector2, Vector3};
 use russimp_ng::light::LightSourceType;
 use russimp_ng::material::{DataContent, MaterialProperty, PropertyTypeInfo, TextureType};
 use russimp_ng::node::Node;
@@ -182,6 +183,77 @@ fn pack_top4(mut pairs: Vec<(usize, f32)>) -> (Vec<u32>, Vec<f32>) {
     (idx, wts)
 }
 
+fn clip_group_key(anim_name: &str) -> String {
+    let mut parts = anim_name.split('|').collect::<Vec<_>>();
+    if parts.len() >= 2 {
+        let last = parts.pop().unwrap();
+        let prev = parts.pop().unwrap();
+        format!("{prev}|{last}")
+    } else {
+        anim_name.to_owned()
+    }
+}
+
+fn merge_channels(dest: &mut Vec<Channel>, mut src: Vec<Channel>) {
+    let mut idx = HashMap::<String, usize>::new();
+    for (i, ch) in dest.iter().enumerate() {
+        idx.insert(ch.target_name.clone(), i);
+    }
+    for ch in src.drain(..) {
+        if let Some(i) = idx.get(&ch.target_name).copied() {
+            dest[i] = ch;
+        } else {
+            idx.insert(ch.target_name.clone(), dest.len());
+            dest.push(ch);
+        }
+    }
+}
+
+fn animations_from_scene(scene: &Scene) -> Vec<AnimationClip> {
+    let mut groups: HashMap<String, AnimationClip> = HashMap::new();
+
+    for a in &scene.animations {
+        let tps = if a.ticks_per_second > 0.0 { a.ticks_per_second as f32 } else { 25.0 };
+        let dur = (a.duration as f32) / tps;
+        let key = clip_group_key(&a.name);
+
+        let mut channels = Vec::<Channel>::new();
+        for ch in &a.channels {
+            let mut keys = TransformKeys::default();
+
+            for k in &ch.position_keys {
+                keys.t_times.push((k.time as f32) / tps);
+                keys.t_values.push(Vector3::new(k.value.x, k.value.y, k.value.z));
+            }
+            for k in &ch.rotation_keys {
+                keys.r_times.push((k.time as f32) / tps);
+                keys.r_values.push(UnitQuaternion::from_quaternion(
+                    Quaternion::new(k.value.w, k.value.x, k.value.y, k.value.z),
+                ));
+            }
+            for k in &ch.scaling_keys {
+                keys.s_times.push((k.time as f32) / tps);
+                keys.s_values.push(Vector3::new(k.value.x, k.value.y, k.value.z));
+            }
+
+            channels.push(Channel {
+                target_name: ch.name.clone(),
+                keys,
+            });
+        }
+
+        groups
+            .entry(key.clone())
+            .and_modify(|clip| {
+                clip.duration = clip.duration.max(dur);
+                merge_channels(&mut clip.channels, channels.clone());
+            })
+            .or_insert(AnimationClip { name: key, duration: dur.max(0.0), channels });
+    }
+
+    groups.into_values().collect()
+}
+
 impl SceneLoader {
     pub fn load(world: &mut World, path: &str) -> Result<GameObjectId, Box<dyn Error>> {
         let scene = Self::load_scene(path)?;
@@ -196,7 +268,17 @@ impl SceneLoader {
 
         let root_object = Self::spawn_deep_object(world, &scene, &root, Some(&materials));
         Self::load_lights(world, &scene, root_object);
+        SceneLoader::load_animations(&scene, root_object);
         Ok(root_object)
+    }
+
+    fn load_animations(scene: &Scene, mut object: GameObjectId) {
+        let clips = animations_from_scene(&scene);
+        if !clips.is_empty() {
+            let mut anim = object.add_component::<AnimationComponent>();
+            anim.set_clips(clips);
+            anim.play_index(0, true, 1.0, 1.0);
+        }
     }
 
     pub fn load_scene(path: &str) -> Result<Scene, Box<dyn Error>> {

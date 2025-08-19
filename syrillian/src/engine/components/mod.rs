@@ -50,7 +50,9 @@ pub mod rope;
 pub mod rotate;
 pub mod spring;
 pub mod skeletal;
+pub mod animation;
 
+pub use animation::*;
 pub use camera::*;
 pub use collider::*;
 pub use fp_camera::*;
