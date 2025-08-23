@@ -6,7 +6,7 @@ use syrillian::core::Vertex3D;
 
 #[test]
 fn test_predefined_meshes() {
-    let store = AssetStore::empty();
+    let store = AssetStore::new();
 
     store.meshes.try_get(HMesh::UNIT_SQUARE).unwrap();
     store.meshes.try_get(HMesh::UNIT_CUBE).unwrap();
@@ -16,7 +16,7 @@ fn test_predefined_meshes() {
 
 #[test]
 fn test_mesh_store() {
-    let store = AssetStore::empty();
+    let store = AssetStore::new();
 
     let vertices = vec![
         Vertex3D::new(
@@ -54,7 +54,7 @@ fn test_mesh_store() {
 
 #[test]
 fn test_shader_store() {
-    let store = AssetStore::empty();
+    let store = AssetStore::new();
     let shader = Shader::new_default("Test Shader", "// Test shader code");
     let handle = store.shaders.add(shader);
     let retrieved_shader = store.shaders.try_get(handle);
@@ -64,7 +64,7 @@ fn test_shader_store() {
 
 #[test]
 fn test_texture_store() {
-    let store = AssetStore::empty();
+    let store = AssetStore::new();
     let pixels = vec![255, 0, 0, 255];
     let texture = Texture::load_pixels(pixels, 1, 1, wgpu::TextureFormat::Rgba8UnormSrgb);
     let handle = store.textures.add(texture);
@@ -77,7 +77,7 @@ fn test_texture_store() {
 
 #[test]
 fn test_material_store() {
-    let store = AssetStore::empty();
+    let store = AssetStore::new();
     let material = Material::builder()
         .name("Test Material".to_string())
         .build();
@@ -90,7 +90,7 @@ fn test_material_store() {
 #[test]
 #[ignore]
 fn test_font_store() {
-    let store = AssetStore::empty();
+    let store = AssetStore::new();
     let font = Font::new("Arial".to_string(), None);
     let handle = store.fonts.add(font);
     let retrieved_font = store.fonts.try_get(handle);
@@ -100,7 +100,7 @@ fn test_font_store() {
 #[test]
 #[ignore]
 fn test_find_font() {
-    let store = AssetStore::empty();
+    let store = AssetStore::new();
     let font = Font::new("Arial".to_string(), None);
     let handle = store.fonts.add(font);
     let found_handle = store.fonts.find("Arial");
@@ -110,7 +110,7 @@ fn test_find_font() {
 
 #[test]
 fn test_predefined_materials() {
-    let store = AssetStore::empty();
+    let store = AssetStore::new();
 
     store.materials.try_get(HMaterial::FALLBACK).unwrap();
     store.materials.try_get(HMaterial::DEFAULT).unwrap();
@@ -118,7 +118,7 @@ fn test_predefined_materials() {
 
 #[test]
 fn test_predefined_shaders() {
-    let store = AssetStore::empty();
+    let store = AssetStore::new();
 
     store.shaders.try_get(HShader::FALLBACK).unwrap();
     store.shaders.try_get(HShader::DIM2).unwrap();
@@ -126,16 +126,20 @@ fn test_predefined_shaders() {
     store.shaders.try_get(HShader::POST_PROCESS).unwrap();
     store.shaders.try_get(HShader::TEXT_2D).unwrap();
     store.shaders.try_get(HShader::TEXT_3D).unwrap();
-    store.shaders.try_get(HShader::DEBUG_EDGES).unwrap();
-    store.shaders.try_get(HShader::DEBUG_VERTEX_NORMALS).unwrap();
-    store.shaders.try_get(HShader::DEBUG_RAYS).unwrap();
-    store.shaders.try_get(HShader::DEBUG_TEXT2D_GEOMETRY).unwrap();
-    store.shaders.try_get(HShader::DEBUG_TEXT3D_GEOMETRY).unwrap();
+
+    #[cfg(debug_assertions)]
+    {
+        store.shaders.try_get(HShader::DEBUG_EDGES).unwrap();
+        store.shaders.try_get(HShader::DEBUG_VERTEX_NORMALS).unwrap();
+        store.shaders.try_get(HShader::DEBUG_LINES).unwrap();
+        store.shaders.try_get(HShader::DEBUG_TEXT2D_GEOMETRY).unwrap();
+        store.shaders.try_get(HShader::DEBUG_TEXT3D_GEOMETRY).unwrap();
+    }
 }
 
 #[test]
 fn test_predefined_textures() {
-    let store = AssetStore::empty();
+    let store = AssetStore::new();
 
     let _ = store.textures.try_get(HTexture::FALLBACK_DIFFUSE);
     let _ = store.textures.try_get(HTexture::FALLBACK_NORMAL);
@@ -144,7 +148,7 @@ fn test_predefined_textures() {
 
 #[test]
 fn test_remove_asset() {
-    let store = AssetStore::empty();
+    let store = AssetStore::new();
 
     let vertices = vec![
         Vertex3D::new(
@@ -174,7 +178,7 @@ fn test_remove_asset() {
 
 #[test]
 fn test_iterate_assets() {
-    let store = AssetStore::empty();
+    let store = AssetStore::new();
 
     let vertices = vec![
         Vertex3D::new(

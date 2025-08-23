@@ -20,6 +20,8 @@ pub struct AssetCache {
     pub bgls: Cache<BGL>,
     pub fonts: Cache<Font>,
 
+    store: Arc<AssetStore>,
+
     last_refresh: Mutex<Instant>,
 }
 
@@ -34,9 +36,15 @@ impl AssetCache {
             materials: Cache::new(store.materials.clone(), device.clone(), queue.clone()),
             bgls: Cache::new(store.bgls.clone(), device.clone(), queue.clone()),
             fonts: Cache::new(store.fonts.clone(), device.clone(), queue.clone()),
+            store,
             last_refresh: Mutex::new(Instant::now()),
         }
     }
+
+    pub fn store(&self) -> &AssetStore {
+        &self.store
+    }
+    
     pub fn mesh(&self, handle: HMesh) -> Option<Arc<RuntimeMesh>> {
         self.meshes.try_get(handle, self)
     }
@@ -128,8 +136,8 @@ impl AssetCache {
             .expect("Post Process is a default layout")
     }
 
-    pub fn font(&self, handle: HFont) -> Option<Arc<FontAtlas>> {
-        self.fonts.try_get(handle, self)
+    pub fn font(&self, handle: HFont) -> Arc<FontAtlas> {
+        self.fonts.get(handle, self)
     }
 
     pub fn refresh_all(&self) -> usize {

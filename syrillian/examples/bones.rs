@@ -8,17 +8,17 @@ use std::error::Error;
 use syrillian::assets::scene_loader::SceneLoader;
 use syrillian::components::{Component, SkeletalComponent};
 use syrillian::core::GameObjectId;
-use syrillian::rendering::renderer::Renderer;
 use syrillian::{AppState, World};
 use syrillian_macros::SyrillianApp;
+
+#[cfg(debug_assertions)]
 use winit::keyboard::KeyCode;
-use winit::window::Window;
 
 #[derive(Debug, Default, SyrillianApp)]
 struct BonesExample;
 
 impl AppState for BonesExample {
-    fn init(&mut self, world: &mut World, _window: &Window) -> Result<(), Box<dyn Error>> {
+    fn init(&mut self, world: &mut World) -> Result<(), Box<dyn Error>> {
         world.new_camera();
 
         let mut boney_obj = SceneLoader::load(world, "./testmodels/hampter/hampter.fbx")?;
@@ -35,9 +35,11 @@ impl AppState for BonesExample {
         Ok(())
     }
 
-    fn draw(&mut self, world: &mut World, renderer: &mut Renderer) -> Result<(), Box<dyn Error>> {
+    #[cfg(debug_assertions)]
+    fn update(&mut self, world: &mut World) -> Result<(), Box<dyn Error>> {
+        use syrillian::rendering::DebugRenderer;
         if world.input.is_key_down(KeyCode::KeyL) {
-            renderer.debug.next_mode();
+            DebugRenderer::next_mode();
         }
         // renderer.debug.off();
 
@@ -62,5 +64,6 @@ impl Component for BoneChainWave {
             }
         }
     }
+
     fn parent(&self) -> GameObjectId { self.parent }
 }

@@ -1,10 +1,10 @@
 use crate::components::Component;
 use crate::core::GameObjectId;
-use crate::rendering::lights::{Light, LightHandle, LightType};
+use crate::rendering::lights::{Light, LightProxy, LightType};
+use crate::rendering::CPUDrawCtx;
 use crate::utils::FloatMathExt;
 use crate::World;
 use std::marker::PhantomData;
-use syrillian_utils::debug_panic;
 
 pub trait LightTypeTrait {
     fn type_id() -> LightType;
@@ -16,13 +16,15 @@ pub struct Spot;
 
 pub struct LightComponent<L: LightTypeTrait + 'static> {
     parent: GameObjectId,
-    handle: LightHandle,
 
     target_inner_angle: f32,
     target_outer_angle: f32,
     pub inner_angle_t: f32,
     pub outer_angle_t: f32,
     pub tween_enabled: bool,
+    dirty: bool,
+
+    local_proxy: LightProxy,
 
     light_type: PhantomData<L>,
 }
@@ -54,54 +56,75 @@ impl<L: LightTypeTrait + 'static> Component for LightComponent<L> {
     where
         Self: Sized,
     {
-        let world = World::instance();
-        let handle = world.lights.register();
-
         const DEFAULT_INNER_ANGLE: f32 = 5.0f32.to_radians();
         const DEFAULT_OUTER_ANGLE: f32 = 30.0f32.to_radians();
 
-        if let Some(light) = world.lights.get_mut(handle) {
-            let type_id = L::type_id();
-            light.type_id = type_id as u32;
-            if type_id == LightType::Spot {
-                light.inner_angle = DEFAULT_INNER_ANGLE;
-                light.outer_angle = DEFAULT_OUTER_ANGLE;
-                light.range = 100.0;
-                light.intensity = 100.0;
-            }
-        } else {
-            debug_panic!("Light wasn't created");
+        let mut local_proxy = LightProxy::dummy();
+
+        let type_id = L::type_id();
+        local_proxy.type_id = type_id as u32;
+        if type_id == LightType::Spot {
+            local_proxy.inner_angle = DEFAULT_INNER_ANGLE;
+            local_proxy.outer_angle = DEFAULT_OUTER_ANGLE;
+            local_proxy.range = 100.0;
+            local_proxy.intensity = 100.0;
         }
 
         LightComponent {
             parent,
-            handle,
+
             target_inner_angle: DEFAULT_INNER_ANGLE,
             target_outer_angle: DEFAULT_OUTER_ANGLE,
             inner_angle_t: 1.0,
             outer_angle_t: 1.0,
             tween_enabled: false,
+
+            dirty: true,
+            local_proxy,
+
             light_type: PhantomData,
         }
     }
 
     fn update(&mut self, world: &mut World) {
-        let delta = world.delta_time().as_secs_f32();
-        let Some(data) = world.lights.get_mut(self.handle) else {
-            debug_panic!("Light disappeared");
-            return;
-        };
-
-        data.position = self.parent.transform.position();
-        data.direction = self.parent.transform.forward();
-        data.up = self.parent.transform.up();
-
-        if self.tween_enabled {
-            data.outer_angle = data.outer_angle.lerp(self.target_outer_angle, self.outer_angle_t * delta);
-            data.inner_angle = data.inner_angle.lerp(self.target_inner_angle, self.inner_angle_t * delta);
+        if self.parent.transform.is_dirty() {
+            self.local_proxy.position = self.parent.transform.position();
+            self.local_proxy.direction = self.parent.transform.forward();
+            self.local_proxy.up = self.parent.transform.up();
+            self.local_proxy.view_mat = self.parent.transform.view_matrix_rigid().to_matrix();
+            self.dirty = true;
         }
 
-        data.view_mat = self.parent.transform.view_matrix_rigid().to_matrix();
+        if self.tween_enabled {
+            let delta = world.delta_time().as_secs_f32();
+
+            self.local_proxy.outer_angle = self
+                .local_proxy
+                .outer_angle
+                .lerp(self.target_outer_angle, self.outer_angle_t * delta);
+            self.local_proxy.inner_angle = self
+                .local_proxy
+                .inner_angle
+                .lerp(self.target_inner_angle, self.inner_angle_t * delta);
+            self.dirty = true;
+        }
+    }
+
+    fn create_light_proxy(&mut self, _world: &World) -> Option<Box<LightProxy>> {
+        Some(Box::new(self.local_proxy.clone()))
+    }
+
+    fn update_proxy(&mut self, _world: &World, ctx: CPUDrawCtx) {
+        if !self.dirty {
+            return;
+        }
+
+        let new_proxy = self.local_proxy;
+        ctx.send_light_proxy_update(move |proxy| {
+            *proxy = new_proxy;
+        });
+
+        self.dirty = false;
     }
 
     #[inline]
@@ -112,13 +135,27 @@ impl<L: LightTypeTrait + 'static> Component for LightComponent<L> {
 
 impl<L: LightTypeTrait + 'static> Light for LightComponent<L> {
     #[inline]
-    fn light_handle(&self) -> LightHandle {
-        self.handle
-    }
-
-    #[inline]
     fn light_type(&self) -> LightType {
         L::type_id()
+    }
+
+    fn data(&self) -> &LightProxy {
+        &self.local_proxy
+    }
+
+    fn data_mut(&mut self, mark_dirty: bool) -> &mut LightProxy {
+        if mark_dirty {
+            self.dirty = true;
+        }
+        &mut self.local_proxy
+    }
+
+    fn mark_dirty(&mut self) {
+        self.dirty = true;
+    }
+
+    fn is_dirty(&self) -> bool {
+        self.dirty
     }
 }
 

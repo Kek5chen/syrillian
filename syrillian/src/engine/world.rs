@@ -5,21 +5,23 @@
 //! offers utilities such as methods to create, find and remove game objects.
 
 use crate::assets::{Material, Mesh, Shader, Store, Texture, BGL};
-use crate::components::{CRef, Component};
+use crate::components::{CRef, CWeak, CameraComponent, Component};
 use crate::core::component_storage::ComponentStorage;
 use crate::core::{GameObject, GameObjectId, Transform};
 use crate::engine::assets::AssetStore;
 use crate::engine::prefabs::prefab::Prefab;
-use crate::engine::rendering::Renderer;
+use crate::game_thread::GameAppEvent;
 use crate::input::InputManager;
 use crate::physics::PhysicsManager;
 use crate::prefabs::CameraPrefab;
-use crate::rendering::lights::LightManager;
+use crate::rendering::message::RenderMsg;
+use crate::rendering::CPUDrawCtx;
 use itertools::Itertools;
 use log::info;
 use slotmap::{HopSlotMap, Key};
 use std::collections::HashSet;
-use std::sync::Arc;
+use std::mem::swap;
+use std::sync::{mpsc, Arc};
 use std::time::{Duration, Instant};
 
 static mut G_WORLD: *mut World = std::ptr::null_mut();
@@ -38,13 +40,11 @@ pub struct World {
     /// Root-level game objects that have no parent
     pub children: Vec<GameObjectId>,
     /// The currently active camera used for rendering
-    pub active_camera: Option<GameObjectId>,
+    active_camera: CWeak<CameraComponent>,
     /// Physics simulation system
     pub physics: PhysicsManager,
     /// Input management system
     pub input: InputManager,
-    /// Light management system
-    pub lights: LightManager,
     /// Asset storage containing meshes, textures, materials, etc.
     pub assets: Arc<AssetStore>,
 
@@ -54,8 +54,11 @@ pub struct World {
     delta_time: Duration,
     /// Time when the last frame started
     last_frame_time: Instant,
+
     /// Flag indicating whether a shutdown has been requested
     requested_shutdown: bool,
+    render_tx: mpsc::Sender<RenderMsg>,
+    game_event_tx: mpsc::Sender<GameAppEvent>,
 }
 
 impl World {
@@ -67,20 +70,27 @@ impl World {
     /// Than managing the world state globally. It's currently like this
     /// because the GameObjectId Deref makes usage very - !! very !! simple.
     /// At the cost of safety and some other things.
-    fn empty() -> Box<World> {
+    fn empty(
+        render_tx: mpsc::Sender<RenderMsg>,
+        game_event_tx: mpsc::Sender<GameAppEvent>,
+        assets: Arc<AssetStore>,
+    ) -> Box<World> {
         Box::new(World {
             objects: HopSlotMap::with_key(),
             components: ComponentStorage::default(),
             children: vec![],
-            active_camera: None,
+            active_camera: CWeak::null(),
             physics: PhysicsManager::default(),
-            input: InputManager::default(),
-            lights: LightManager::default(),
-            assets: AssetStore::empty(),
+            input: InputManager::new(game_event_tx.clone()),
+            assets,
+
             start_time: Instant::now(),
             delta_time: Duration::default(),
             last_frame_time: Instant::now(),
+
             requested_shutdown: false,
+            render_tx,
+            game_event_tx,
         })
     }
 
@@ -90,8 +100,12 @@ impl World {
     /// This function must only be called once during program startup since the
     /// returned world is stored in a global pointer for [`World::instance`]. The
     /// world should remain alive for the duration of the application.
-    pub unsafe fn new() -> Box<World> {
-        let mut world = World::empty();
+    pub unsafe fn new(
+        assets: Arc<AssetStore>,
+        render_tx: mpsc::Sender<RenderMsg>,
+        game_event_tx: mpsc::Sender<GameAppEvent>,
+    ) -> Box<World> {
+        let mut world = World::empty(render_tx, game_event_tx, assets);
 
         // create a second mutable reference so G_WORLD can be used in (~un~)safe code
         unsafe {
@@ -99,6 +113,16 @@ impl World {
         }
 
         world
+    }
+
+    // SAFETY: View [`World::new`]. This function will just set up data structures around the world
+    // needed for initialization. Mostly useful for tests.
+    pub unsafe fn fresh() -> (Box<World>, mpsc::Receiver<RenderMsg>, mpsc::Receiver<GameAppEvent>) {
+        let (tx1, rx1) = mpsc::channel();
+        let (tx2, rx2) = mpsc::channel();
+        let store = AssetStore::new();
+        let world = unsafe { World::new(store, tx1, tx2) };
+        (world, rx1, rx2)
     }
 
     // TODO: make this an option later when it's too late
@@ -133,7 +157,6 @@ impl World {
             children: vec![],
             parent: None,
             transform: Transform::new(GameObjectId::null()),
-            drawable: None,
             components: HashSet::new(),
         };
 
@@ -150,15 +173,24 @@ impl World {
     ///
     /// If no active camera exists yet, this camera will be set as the active camera
     /// and added as a child of the world.
-    pub fn new_camera(&mut self) -> GameObjectId {
-        let camera = CameraPrefab.build(self);
+    pub fn new_camera(&mut self) -> CRef<CameraComponent> {
+        let obj = CameraPrefab.build(self);
+        let camera = obj.get_component::<CameraComponent>().unwrap_or_default();
 
-        if self.active_camera.is_none() {
-            self.add_child(camera);
-            self.active_camera = Some(camera);
+        if !self.active_camera.exists(self) {
+            self.add_child(obj);
+            self.set_active_camera(camera);
         }
 
         camera
+    }
+
+    pub fn set_active_camera(&mut self, camera: CRef<CameraComponent>) {
+        self.active_camera = camera.downgrade();
+    }
+
+    pub fn active_camera(&self) -> CWeak<CameraComponent> {
+        self.active_camera
     }
 
     /// Adds a game object as a child of the world (root level)
@@ -195,7 +227,8 @@ impl World {
         }
 
         let rem = self.physics.last_update.elapsed();
-        self.physics.alpha = (rem.as_secs_f32() / self.physics.timestep.as_secs_f32()).clamp(0.0, 1.0);
+        self.physics.alpha =
+            (rem.as_secs_f32() / self.physics.timestep.as_secs_f32()).clamp(0.0, 1.0);
     }
 
     /// Updates all game objects and their components
@@ -215,6 +248,74 @@ impl World {
     /// if you are trying to use a detached world context.
     pub fn post_update(&mut self) {
         self.execute_component_func(Component::post_update);
+        let mut fresh = Vec::new();
+        swap(&mut fresh, &mut self.components.fresh);
+        for cid in fresh {
+            let Some(comp) = World::instance().components.get_dyn_mut(cid) else {
+                continue;
+            };
+
+            let local_to_world = comp.parent().transform.get_global_transform_matrix();
+            if let Some(proxy) = comp.create_render_proxy(World::instance()) {
+                self.render_tx
+                    .send(RenderMsg::RegisterProxy(cid, proxy, local_to_world))
+                    .unwrap();
+            }
+            if let Some(proxy) = comp.create_light_proxy(World::instance()) {
+                self.render_tx
+                    .send(RenderMsg::RegisterLightProxy(cid, proxy))
+                    .unwrap();
+            }
+        }
+
+        for (_, obj) in self.objects.iter() {
+            if !obj.transform.is_dirty() {
+                continue;
+            }
+            for ctid in obj.components.iter().copied() {
+                self.render_tx
+                    .send(RenderMsg::UpdateTransform(
+                        ctid,
+                        obj.transform.get_global_transform_matrix(),
+                    ))
+                    .unwrap();
+            }
+        }
+
+        let world = self as *mut World;
+        for (ctid, comp) in self.components.iter_mut() {
+            let ctx = CPUDrawCtx::new(ctid, self.render_tx.clone());
+            unsafe {
+                comp.update_proxy(&mut *world, ctx);
+            }
+        }
+
+        if let Some(mut active_camera) = self.active_camera.upgrade(self) {
+            let obj = active_camera.parent();
+            if obj.transform.is_dirty() {
+                let pos = obj.transform.position();
+                let view_mat = obj.transform.view_matrix_rigid().to_matrix();
+                let view_proj_mat = active_camera.projection.as_matrix() * view_mat;
+                self.render_tx
+                    .send(RenderMsg::UpdateActiveCamera(Box::new(move |cam| {
+                        cam.view_mat = view_mat;
+                        cam.proj_view_mat = view_proj_mat;
+                        cam.pos = pos;
+                    })))
+                    .unwrap();
+            }
+
+            if active_camera.is_projection_dirty() {
+                let proj_mat = active_camera.projection;
+                self.render_tx
+                    .send(RenderMsg::UpdateActiveCamera(Box::new(move |cam| {
+                        cam.proj_view_mat = proj_mat.as_matrix() * cam.view_mat;
+                        cam.projection_mat = proj_mat;
+                    })))
+                    .unwrap();
+                active_camera.clear_projection_dirty();
+            }
+        }
     }
 
     /// Prepares for the next frame by resetting the input state
@@ -295,24 +396,6 @@ impl World {
         self.start_time.elapsed()
     }
 
-    /// Initializes runtime components of all game objects
-    ///
-    /// This method sets up all drawable components with the provided renderer.
-    ///
-    /// If you're using the App runtime, this will be handled for you. Only call this function
-    /// if you are trying to use a detached world context.
-    pub fn initialize_runtime(&mut self, renderer: &Renderer) {
-        self.lights.init(&renderer, &self.assets);
-        let world_ptr: *mut World = self;
-        unsafe {
-            for (id, obj) in &mut self.objects {
-                if let Some(ref mut drawable) = obj.drawable {
-                    drawable.setup(renderer, &mut *world_ptr, id)
-                }
-            }
-        }
-    }
-
     /// Marks a game object for deletion. This will immediately run the object internal destruction routine
     /// and also clean up any component-specific data.
     pub fn delete_object(&mut self, mut object: GameObjectId) {
@@ -334,6 +417,12 @@ impl World {
 
         caller.unlink();
         self.objects.remove(caller);
+    }
+
+    pub fn set_window_title(&mut self, title: String) {
+        self.game_event_tx
+            .send(GameAppEvent::UpdateWindowTitle(title))
+            .unwrap();
     }
 
     /// Requests a shutdown of the world
@@ -386,11 +475,6 @@ fn print_objects_rec(children: &Vec<GameObjectId>, i: i32) {
             "{}-> Components: {}",
             "  ".repeat(i as usize + 1),
             child.components.len()
-        );
-        info!(
-            "{}-> Has Drawable: {}",
-            "  ".repeat(i as usize + 1),
-            child.drawable.is_some()
         );
         print_objects_rec(&child.children, i + 1);
     }

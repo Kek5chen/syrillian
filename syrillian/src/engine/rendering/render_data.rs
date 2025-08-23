@@ -1,18 +1,20 @@
 use crate::core::Transform;
 use crate::ensure_aligned;
+use crate::rendering::lights::LightProxy;
 use crate::rendering::uniform::ShaderUniform;
 use crate::utils::{MATRIX4_ID, VECTOR3_ID};
-use nalgebra::{Matrix4, Vector2, Vector3};
+use nalgebra::{Matrix4, Perspective3, Vector2, Vector3};
 use syrillian_macros::UniformIndex;
 use wgpu::{BindGroupLayout, Device, Queue};
 
+// TODO: Use proper matrix types (Affine3, Perspective3)
 #[repr(C)]
-#[derive(Default, Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct CameraUniform {
     pub(crate) pos: Vector3<f32>,
     pub(crate) _padding: u32,
     pub(crate) view_mat: Matrix4<f32>,
-    pub(crate) projection_mat: Matrix4<f32>,
+    pub(crate) projection_mat: Perspective3<f32>,
     pub proj_view_mat: Matrix4<f32>,
 }
 
@@ -41,18 +43,32 @@ pub struct RenderUniformData {
     pub uniform: ShaderUniform<RenderUniformIndex>,
 }
 
+impl Default for CameraUniform {
+    fn default() -> Self {
+        let projection_mat = Perspective3::new(1.0, 60.0, 0.1, 1000.0);
+        let proj_view_mat = projection_mat.to_homogeneous(); // identity matrix for view_mat so it's the same
+        CameraUniform {
+            pos: VECTOR3_ID,
+            _padding: 0,
+            view_mat: MATRIX4_ID,
+            projection_mat,
+            proj_view_mat,
+        }
+    }
+}
+
 impl CameraUniform {
     pub const fn empty() -> Self {
         CameraUniform {
             pos: VECTOR3_ID,
             _padding: 0,
             view_mat: MATRIX4_ID,
-            projection_mat: MATRIX4_ID,
+            projection_mat: Perspective3::from_matrix_unchecked(MATRIX4_ID), // This is 100% wrong but nalgebra forces this for const. It's ""fine"" though.
             proj_view_mat: MATRIX4_ID,
         }
     }
 
-    pub fn update_with_transform(&mut self, proj_matrix: &Matrix4<f32>, cam_transform: &Transform) {
+    pub fn update_with_transform(&mut self, proj_matrix: &Perspective3<f32>, cam_transform: &Transform) {
         let pos = cam_transform.position();
         let view_mat = cam_transform
             .get_global_transform_matrix_ext(true)
@@ -63,14 +79,14 @@ impl CameraUniform {
 
     pub fn update(
         &mut self,
-        proj_matrix: &Matrix4<f32>,
+        proj_matrix: &Perspective3<f32>,
         pos: &Vector3<f32>,
         view_matrix: &Matrix4<f32>,
     ) {
         self.pos = *pos;
         self.view_mat = *view_matrix;
         self.projection_mat = *proj_matrix;
-        self.proj_view_mat = self.projection_mat * self.view_mat;
+        self.proj_view_mat = self.projection_mat.as_matrix() * self.view_mat;
     }
 }
 
@@ -98,6 +114,17 @@ impl RenderUniformData {
             system_data,
             uniform,
         }
+    }
+
+    pub fn update_shadow_camera_for_spot(&mut self, light: &LightProxy, queue: &Queue) {
+        let fovy = (2.0 * light.outer_angle).clamp(0.0175, 3.12);
+        let near = 0.05_f32;
+        let far = light.range.max(near + 0.01);
+        let proj = Perspective3::new(1.0, fovy, near, far);
+
+        self.camera_data
+            .update(&proj, &light.position, &light.view_mat);
+        self.upload_camera_data(queue);
     }
 
     pub fn upload_camera_data(&self, queue: &Queue) {

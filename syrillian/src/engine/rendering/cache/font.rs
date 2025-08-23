@@ -1,5 +1,5 @@
 use crate::assets::{Font, HMaterial, HTexture, FONT_ATLAS_CHARS};
-use crate::drawables::text::msdf_atlas::{FontLineMetrics, GlyphAtlasEntry, MsdfAtlas};
+use crate::components::msdf_atlas::{FontLineMetrics, GlyphAtlasEntry, MsdfAtlas};
 use crate::rendering::{AssetCache, CacheType};
 use crate::World;
 use std::sync::{Arc, RwLock};

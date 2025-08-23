@@ -1,39 +1,44 @@
-use crate::core::ModelUniform;
-use crate::drawables::{BoneData, MeshUniformIndex};
 use crate::engine::assets::Mesh;
 use crate::engine::rendering::cache::generic_cache::CacheType;
 use crate::engine::rendering::cache::AssetCache;
-use crate::rendering::uniform::ShaderUniform;
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::{BufferUsages, Device, Queue};
 
 #[derive(Debug)]
-pub struct RuntimeMeshData {
-    pub mesh_data: ModelUniform,
-    pub bone_data: BoneData,
-
-    // TODO: Consider having a uniform like that, for every Transform by default in some way, or
-    //       lazy-make / provide one by default.
-    pub uniform: ShaderUniform<MeshUniformIndex>,
-}
-
-#[derive(Debug)]
 pub struct RuntimeMesh {
-    pub(crate) vertices_buf: wgpu::Buffer,
-    pub(crate) vertices_num: usize,
-    pub(crate) indices_buf: Option<wgpu::Buffer>,
-    pub(crate) indices_num: usize,
+    vertices_buf: wgpu::Buffer,
+    vertices_num: usize,
+    indices_buf: Option<wgpu::Buffer>,
+    indices_num: usize,
 }
 
 impl RuntimeMesh {
-    #[inline]
-    pub fn vertex_count(&self) -> usize {
-        self.vertices_num
+    pub fn set_vertex_buffer(&mut self, buffer: wgpu::Buffer, vertex_count: usize) {
+        self.vertices_buf = buffer;
+        self.vertices_num = vertex_count;
+    }
+
+    pub fn set_index_buffer(&mut self, buffer: Option<wgpu::Buffer>, indices_count: usize) {
+        self.indices_num = buffer.is_some().then_some(indices_count).unwrap_or(0);
+        self.indices_buf = buffer;
     }
 
     #[inline]
-    pub fn indices_count(&self) -> usize {
-        self.indices_num
+    pub fn vertex_count(&self) -> u32 {
+        self.vertices_num as u32
+    }
+
+    #[inline]
+    pub fn indices_count(&self) -> u32 {
+        self.indices_num as u32
+    }
+
+    pub fn vertex_buffer(&self) -> &wgpu::Buffer {
+        &self.vertices_buf
+    }
+
+    pub fn indices_buffer(&self) -> Option<&wgpu::Buffer> {
+        self.indices_buf.as_ref()
     }
 }
 

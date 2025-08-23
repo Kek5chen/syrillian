@@ -1,12 +1,8 @@
-use delegate::delegate;
 use smallvec::{smallvec, SmallVec};
 use std::marker::PhantomData;
 use syrillian_utils::{ShaderUniformIndex, ShaderUniformMultiIndex, ShaderUniformSingleIndex};
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
-use wgpu::{
-    BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindingResource, Buffer,
-    BufferAddress, BufferDescriptor, BufferUsages, Device, Sampler, TextureView,
-};
+use wgpu::{BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindingResource, Buffer, BufferAddress, BufferDescriptor, BufferUsages, Device, Sampler, TextureView};
 
 #[derive(Debug, Clone)]
 pub struct ShaderUniform<I: ShaderUniformIndex> {
@@ -22,7 +18,9 @@ pub struct ShaderUniformBuilder<'a, I: ShaderUniformIndex> {
 #[allow(unused)]
 pub enum ResourceDesc<'a, I: ShaderUniformIndex> {
     DataBuffer { data: &'a [u8], name: I },
-    StorageBuffer { data: &'a [u8], name: I },
+    Buffer { buffer: Buffer, name: I },
+    StorageBufferData { data: &'a [u8], name: I },
+    StorageBuffer { buffer: Buffer, name: I },
     EmptyBuffer { size: u64, name: I, map: bool },
     TextureView { view: &'a TextureView, name: I },
     Sampler { sampler: &'a Sampler, name: I },
@@ -36,7 +34,7 @@ pub struct UniformBufferStorage<I: ShaderUniformIndex> {
 }
 
 #[allow(unused)]
-impl<'a, I: ShaderUniformIndex + 'static> ShaderUniformBuilder<'a, I> {
+impl<'a, I: ShaderUniformIndex> ShaderUniformBuilder<'a, I> {
     #[inline]
     pub fn build(self, device: &Device) -> ShaderUniform<I> {
         let buffers = UniformBufferStorage::new(&device, &self.data);
@@ -82,13 +80,29 @@ impl<'a, I: ShaderUniformIndex + 'static> ShaderUniformBuilder<'a, I> {
     }
 
     #[inline]
-    pub fn with_buffer_storage<B>(mut self, data: &'a [B]) -> Self
+    pub fn with_buffer(mut self, buffer: Buffer) -> Self
+    {
+        let name = self._next_index();
+        self.data.push(ResourceDesc::Buffer { buffer, name });
+        self
+    }
+
+    #[inline]
+    pub fn with_storage_buffer_data<B>(mut self, data: &'a [B]) -> Self
     where
         B: bytemuck::Pod + bytemuck::Zeroable + 'a,
     {
         let name = self._next_index();
         let data = bytemuck::cast_slice(data);
-        self.data.push(ResourceDesc::StorageBuffer { data, name });
+        self.data.push(ResourceDesc::StorageBufferData { data, name });
+        self
+    }
+
+    #[inline]
+    pub fn with_storage_buffer(mut self, buffer: Buffer) -> Self
+    {
+        let name = self._next_index();
+        self.data.push(ResourceDesc::StorageBuffer { buffer, name });
         self
     }
 
@@ -150,12 +164,6 @@ impl<I: ShaderUniformIndex> ShaderUniform<I> {
     pub fn bind_group(&self) -> &BindGroup {
         &self.bind_group
     }
-
-    delegate! {
-        to self.buffers {
-            pub fn set_buffer(&mut self, resource_desc: ResourceDesc<I>, device: &Device);
-        }
-    }
 }
 
 impl<I: ShaderUniformMultiIndex> ShaderUniform<I> {
@@ -178,19 +186,14 @@ impl<I: ShaderUniformSingleIndex> ShaderUniform<I> {
 impl<I: ShaderUniformIndex> UniformBufferStorage<I> {
     #[inline]
     fn new(device: &Device, desc: &[ResourceDesc<I>]) -> Self {
-        assert_eq!(desc.len(), I::MAX + 1);
+        let buffers: SmallVec<[Option<Buffer>; 1]> = desc.into_iter().map(|desc| desc.make_buffer(device)).collect();
 
-        let buffers = desc.iter().map(|desc| desc.make_buffer(device)).collect();
+        assert_eq!(buffers.len(), I::MAX + 1);
 
         UniformBufferStorage {
             buffers,
             _indexer: PhantomData::default(),
         }
-    }
-
-    fn set_buffer(&mut self, resource_desc: ResourceDesc<I>, device: &Device) {
-        let idx = resource_desc.index();
-        self.buffers[idx] = resource_desc.make_buffer(device);
     }
 }
 
@@ -198,8 +201,10 @@ impl<I: ShaderUniformIndex> ResourceDesc<'_, I> {
     #[inline]
     fn name(&self) -> &I {
         match self {
-            ResourceDesc::StorageBuffer { name, .. }
             | ResourceDesc::DataBuffer { name, .. }
+            | ResourceDesc::Buffer { name, .. }
+            | ResourceDesc::StorageBufferData { name, .. }
+            | ResourceDesc::StorageBuffer { name, .. }
             | ResourceDesc::EmptyBuffer { name, .. }
             | ResourceDesc::TextureView { name, .. }
             | ResourceDesc::Sampler { name, .. } => name,
@@ -224,13 +229,15 @@ impl<I: ShaderUniformIndex> ResourceDesc<'_, I> {
     fn entry<'a>(&'a self, buffers: &'a UniformBufferStorage<I>) -> BindGroupEntry<'a> {
         let resource = match self {
             ResourceDesc::DataBuffer { .. }
-            | ResourceDesc::StorageBuffer { .. }
+            | ResourceDesc::StorageBufferData { .. }
             | ResourceDesc::EmptyBuffer { .. } => buffers.buffers[self.index()]
                 .as_ref()
                 .expect("Resource should be registered as a buffer")
                 .as_entire_binding(),
             ResourceDesc::TextureView { view, .. } => BindingResource::TextureView(view),
             ResourceDesc::Sampler { sampler, .. } => BindingResource::Sampler(sampler),
+            ResourceDesc::Buffer { buffer, .. } => buffer.as_entire_binding(),
+            ResourceDesc::StorageBuffer { buffer, .. } => buffer.as_entire_binding(),
         };
 
         BindGroupEntry {
@@ -242,7 +249,7 @@ impl<I: ShaderUniformIndex> ResourceDesc<'_, I> {
     #[inline]
     fn make_buffer(&self, device: &Device) -> Option<Buffer> {
         match self {
-            ResourceDesc::StorageBuffer { data, .. } => {
+            ResourceDesc::StorageBufferData { data, .. } => {
                 Some(device.create_buffer_init(&BufferInitDescriptor {
                     label: self.buffer_name("Storage").as_deref(),
                     contents: data,
@@ -265,6 +272,8 @@ impl<I: ShaderUniformIndex> ResourceDesc<'_, I> {
                 }))
             }
             ResourceDesc::TextureView { .. } | ResourceDesc::Sampler { .. } => None,
+            ResourceDesc::Buffer { buffer, .. } => Some(buffer.clone()),
+            ResourceDesc::StorageBuffer { buffer, .. } => Some(buffer.clone())
         }
     }
 }

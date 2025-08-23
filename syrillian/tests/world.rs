@@ -5,7 +5,7 @@ use syrillian::World;
 #[test]
 #[serial]
 fn new_object_add_find_delete() {
-    let mut world = unsafe { World::new() };
+    let (mut world, _rx1, _rx2) = unsafe { World::fresh() };
     let id = world.new_object("TestObject");
     world.add_child(id);
     assert!(world.find_object_by_name("TestObject").is_some());
@@ -19,7 +19,7 @@ fn new_object_add_find_delete() {
 #[test]
 #[serial]
 fn delta_time_advances() {
-    let mut world = unsafe { World::new() };
+    let (mut world, _rx1, _rx2) = unsafe { World::fresh() };
     std::thread::sleep(Duration::from_millis(1));
     world.update();
     world.next_frame();

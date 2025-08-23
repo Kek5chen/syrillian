@@ -3,7 +3,7 @@ mod logging;
 use std::fmt::Debug;
 
 /// Trait implemented by index enums used for uniform buffers.
-pub trait ShaderUniformIndex: Debug + Sized {
+pub trait ShaderUniformIndex: Debug + Sized + 'static {
     const MAX: usize;
     fn index(&self) -> usize;
     fn by_index(index: usize) -> Option<Self>;

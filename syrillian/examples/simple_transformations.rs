@@ -10,13 +10,12 @@ use syrillian::prefabs::prefab::Prefab;
 use syrillian::world::World;
 use syrillian::AppState;
 use syrillian_macros::SyrillianApp;
-use winit::window::Window;
 
 #[derive(Debug, Default, SyrillianApp)]
 struct SimpleTransformations;
 
 impl AppState for SimpleTransformations {
-    fn init(&mut self, world: &mut World, _window: &Window) -> Result<(), Box<dyn Error>> {
+    fn init(&mut self, world: &mut World) -> Result<(), Box<dyn Error>> {
         world.new_camera();
         world.spawn(&NineCubes);
 

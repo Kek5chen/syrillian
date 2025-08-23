@@ -15,7 +15,6 @@ use syrillian::prefabs::CubePrefab;
 use syrillian::utils::validate_wgsl_source;
 use syrillian::{AppState, World};
 use syrillian_macros::SyrillianApp;
-use winit::window::Window;
 
 const SHADER_PATH: &str = "examples/dynamic_shader/shader.wgsl";
 const DEFAULT_VERT: &str =
@@ -150,7 +149,7 @@ impl DynamicShaderExample {
 }
 
 impl AppState for DynamicShaderExample {
-    fn init(&mut self, world: &mut World, _window: &Window) -> Result<(), Box<dyn Error>> {
+    fn init(&mut self, world: &mut World) -> Result<(), Box<dyn Error>> {
         _ = self.try_load_shader(world);
         self.respawn_cube(world);
 
@@ -158,7 +157,7 @@ impl AppState for DynamicShaderExample {
 
         Ok(())
     }
-    fn update(&mut self, world: &mut World, _window: &Window) -> Result<(), Box<dyn Error>> {
+    fn update(&mut self, world: &mut World) -> Result<(), Box<dyn Error>> {
         if self.last_refresh_time.elapsed().as_secs() > 0 {
             self.poll(world)?;
             self.last_refresh_time = Instant::now();

@@ -1,13 +1,15 @@
+use crate::game_thread::GameAppEvent;
 use crate::input::gamepad_manager::GamePadManager;
 use crate::World;
 use gilrs::Button;
+use log::{info, trace};
 use nalgebra::Vector2;
 use num_traits::Zero;
 use std::collections::HashMap;
+use std::sync::mpsc;
 use winit::dpi::PhysicalPosition;
 use winit::event::{DeviceEvent, ElementState, MouseButton, MouseScrollDelta, WindowEvent};
 use winit::keyboard::{KeyCode, PhysicalKey};
-use winit::window::{CursorGrabMode, Window};
 
 pub type KeyState = ElementState;
 
@@ -21,15 +23,15 @@ pub struct InputManager {
     mouse_wheel_delta: f32,
     mouse_pos: PhysicalPosition<f32>,
     mouse_delta: Vector2<f32>,
-    lock_on_next_frame: bool,
-    unlock_on_next_frame: bool,
-    current_mouse_mode: CursorGrabMode,
+    is_locked: bool,
     auto_cursor_lock: bool,
     quit_on_escape: bool,
+    game_event_tx: mpsc::Sender<GameAppEvent>,
 }
 
-impl Default for InputManager {
-    fn default() -> Self {
+#[allow(unused)]
+impl InputManager {
+    pub fn new(game_event_tx: mpsc::Sender<GameAppEvent>) -> Self {
         InputManager {
             key_states: HashMap::default(),
             key_just_updated: Vec::new(),
@@ -39,22 +41,14 @@ impl Default for InputManager {
             mouse_wheel_delta: 0.0,
             mouse_pos: PhysicalPosition::default(),
             mouse_delta: Vector2::zero(),
-            lock_on_next_frame: true,
-            unlock_on_next_frame: true,
-            current_mouse_mode: CursorGrabMode::None,
+            is_locked: false,
             auto_cursor_lock: false,
             quit_on_escape: false,
+            game_event_tx,
         }
     }
-}
 
-#[allow(unused)]
-impl InputManager {
-    pub(crate) fn process_device_input_event(
-        &mut self,
-        window: &Window,
-        device_event: &DeviceEvent,
-    ) {
+    pub(crate) fn process_device_input_event(&mut self, device_event: &DeviceEvent) {
         if let DeviceEvent::MouseMotion { delta } = device_event {
             self.mouse_delta = Vector2::new(-delta.0 as f32, -delta.1 as f32);
             self.mouse_pos.x += self.mouse_delta.x;
@@ -63,51 +57,18 @@ impl InputManager {
     }
 
     #[inline]
-    pub(crate) fn process_mouse_event(
-        &mut self,
-        window: &Window,
-        position: &PhysicalPosition<f64>,
-    ) {
-        #[cfg(not(target_os = "macos"))]
-        {
-            self.mouse_delta += Vector2::new(
-                self.mouse_pos.x - position.x as f32,
-                self.mouse_pos.y - position.y as f32,
-            );
-            if self.is_cursor_locked() {
-                let size = window.inner_size();
-                let newpos =
-                    PhysicalPosition::new(size.width as f64 / 2f64, size.height as f64 / 2f64);
-                if newpos.x == position.x && newpos.y == position.y {
-                    return;
-                }
-                self.mouse_pos = PhysicalPosition::new(newpos.x as f32, newpos.y as f32);
-                window.set_cursor_position(newpos);
-            } else {
-                self.mouse_pos = PhysicalPosition::new(position.x as f32, position.y as f32);
-            }
-        }
-
-        #[cfg(target_os = "macos")]
-        {
-            self.mouse_pos = PhysicalPosition::new(position.x as f32, position.y as f32);
-        }
+    pub(crate) fn process_mouse_event(&mut self, position: &PhysicalPosition<f64>) {
+        // FIXME: This might not work on windows and/or linux
+        let new_pos = PhysicalPosition::new(position.x as f32, position.y as f32);
+        self.mouse_pos = new_pos;
     }
 
-    pub fn process_event(&mut self, window: &mut Window, event: &WindowEvent) {
-        if self.auto_cursor_lock {
-            self.auto_cursor_lock_loop();
-        }
-        if self.quit_on_escape && self.is_key_down(KeyCode::Escape) && !self.is_cursor_locked() {
-            World::instance().shutdown();
-        }
-        self.do_cursor_lock(window);
-
-        self.handle_window_event(window, event);
+    pub fn process_event(&mut self, event: &WindowEvent) {
+        self.handle_window_event(event);
         self.gamepad.poll();
     }
 
-    pub fn handle_window_event(&mut self, window: &mut Window, event: &WindowEvent) {
+    pub fn handle_window_event(&mut self, event: &WindowEvent) {
         match event {
             WindowEvent::KeyboardInput { event, .. } => {
                 if let PhysicalKey::Code(code) = event.physical_key {
@@ -123,7 +84,10 @@ impl InputManager {
                     self.key_states.insert(code, event.state);
                 }
             }
-            WindowEvent::CursorMoved { position, .. } => self.process_mouse_event(window, position),
+            WindowEvent::CursorMoved {
+                position,
+                device_id,
+            } => self.process_mouse_event(position),
             WindowEvent::MouseWheel { delta, .. } => {
                 let y = match delta {
                     MouseScrollDelta::LineDelta(_, y) => *y as f64,
@@ -175,10 +139,6 @@ impl InputManager {
         self.get_key_state(key_code) == KeyState::Released
     }
 
-    fn set_mouse_state(&self) {
-        //World::instance().
-    }
-
     pub fn get_button_state(&self, button: MouseButton) -> ElementState {
         *self
             .button_states
@@ -209,41 +169,33 @@ impl InputManager {
         &self.mouse_delta
     }
 
-    fn _set_cursor_grab(
-        &mut self,
-        window: &mut Window,
-        mode: CursorGrabMode,
-    ) -> Result<(), winit::error::ExternalError> {
-        window.set_cursor_grab(mode)?;
-        window.set_cursor_visible(mode == CursorGrabMode::None);
-        self.current_mouse_mode = mode;
-        Ok(())
+    pub fn lock_cursor(&mut self) {
+        trace!("GT: Locked cursor");
+        self.is_locked = true;
+        self.game_event_tx
+            .send(GameAppEvent::cursor_mode(true, false));
     }
 
-    fn _lock_cursor(&mut self, window: &mut Window) {
-        self._set_cursor_grab(window, CursorGrabMode::Locked)
-            .or_else(|_| self._set_cursor_grab(window, CursorGrabMode::Confined))
-            .expect("Couldn't lock or confine the cursor");
-    }
-
-    fn _unlock_cursor(&mut self, window: &mut Window) {
-        self._set_cursor_grab(window, CursorGrabMode::None)
-            .expect("Couldn't grab the cursor");
-    }
-
-    pub fn lock_cursor(&mut self, locked: bool) {
-        if locked {
-            self.lock_on_next_frame = true;
-        } else {
-            self.unlock_on_next_frame = true;
-        }
+    pub fn unlock_cursor(&mut self) {
+        trace!("GT: Unlocked cursor");
+        self.is_locked = false;
+        self.game_event_tx
+            .send(GameAppEvent::cursor_mode(false, true));
     }
 
     pub fn is_cursor_locked(&self) -> bool {
-        self.current_mouse_mode != CursorGrabMode::None
+        self.is_locked
     }
 
     pub fn next_frame(&mut self) {
+        if self.quit_on_escape && self.is_key_down(KeyCode::Escape) && !self.is_cursor_locked() {
+            info!("Shutting down world from escape press");
+            World::instance().shutdown();
+        }
+        if self.auto_cursor_lock {
+            self.auto_cursor_lock_loop();
+        }
+
         self.key_just_updated.clear();
         self.button_just_updated.clear();
         self.mouse_delta = Vector2::zero();
@@ -259,21 +211,11 @@ impl InputManager {
 
     fn auto_cursor_lock_loop(&mut self) {
         if self.is_key_down(KeyCode::Escape) {
-            self.lock_cursor(false);
+            self.unlock_cursor();
         }
 
-        if self.is_button_pressed(MouseButton::Left) || self.is_button_pressed(MouseButton::Right) {
-            self.lock_cursor(true);
-        }
-    }
-
-    fn do_cursor_lock(&mut self, window: &mut Window) {
-        if self.lock_on_next_frame {
-            self._lock_cursor(window);
-            self.lock_on_next_frame = false;
-        } else if self.unlock_on_next_frame {
-            self._unlock_cursor(window);
-            self.unlock_on_next_frame = false;
+        if self.is_button_down(MouseButton::Left) || self.is_button_down(MouseButton::Right) {
+            self.lock_cursor();
         }
     }
 

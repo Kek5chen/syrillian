@@ -5,9 +5,15 @@ use wgpu::{
     Device, Face, FragmentState, MultisampleState, PipelineCompilationOptions, PipelineLayout,
     PolygonMode, PrimitiveState, PrimitiveTopology, RenderPipeline, RenderPipelineDescriptor,
     ShaderModule, StencilFaceState, StencilState, TextureFormat, VertexBufferLayout, VertexState,
+    VertexStepMode,
 };
 
 pub const DEFAULT_VBL: [VertexBufferLayout; 1] = [Vertex3D::continuous_descriptor()];
+pub const DEFAULT_VBL_STEP_INSTANCE: [VertexBufferLayout; 1] = {
+    let mut continuous = Vertex3D::continuous_descriptor();
+    continuous.step_mode = VertexStepMode::Instance;
+    [continuous]
+};
 
 const DEFAULT_COLOR_TARGET_STATE: [Option<ColorTargetState>; 1] = [Some(ColorTargetState {
     format: TextureFormat::Bgra8UnormSrgb,

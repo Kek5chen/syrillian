@@ -6,6 +6,7 @@ const DEFAULT_HEADER: &str = include_str!("shaders/groups/basic.wgsl");
 const LIGHT_GROUP: &str = include_str!("shaders/groups/light.wgsl");
 const BASE_GROUP: &str = include_str!("shaders/groups/render.wgsl");
 const MODEL_GROUP: &str = include_str!("shaders/groups/model.wgsl");
+const MATERIAL_GROUP: &str = include_str!("shaders/groups/material.wgsl");
 const DEFAULT_VERTEX_3D: &str = include_str!("shaders/default_vertex3d.wgsl");
 const POST_PROCESS_VERTEX: &str = include_str!("shaders/default_vertex_post.wgsl");
 
@@ -40,6 +41,8 @@ fn generate_default(code: &ShaderCode, custom: bool) -> String {
         generated.push('\n');
         generated.push_str(MODEL_GROUP);
         generated.push('\n');
+        generated.push_str(MATERIAL_GROUP);
+        generated.push('\n');
         generated.push_str(LIGHT_GROUP);
         generated.push('\n');
 
@@ -63,6 +66,7 @@ fn generate_default(code: &ShaderCode, custom: bool) -> String {
         let group = line[import + 5..].trim();
         match group {
             "model" => generated.push_str(MODEL_GROUP),
+            "material" => generated.push_str(MATERIAL_GROUP),
             "light" => generated.push_str(LIGHT_GROUP),
             "default_vertex" => generated.push_str(DEFAULT_HEADER),
 

@@ -1,4 +1,4 @@
-use crate::drawables::text::msdf_atlas::GlyphAtlasEntry;
+use crate::components::msdf_atlas::GlyphAtlasEntry;
 use crate::rendering::{AssetCache, FontAtlas};
 use nalgebra::Vector2;
 use wgpu::Queue;

@@ -51,6 +51,12 @@ pub mod rotate;
 pub mod spring;
 pub mod skeletal;
 pub mod animation;
+pub mod text;
+pub mod mesh_renderer;
+pub mod image;
+
+#[cfg(debug_assertions)]
+pub mod camera_debug;
 
 pub use animation::*;
 pub use camera::*;
@@ -59,18 +65,25 @@ pub use fp_camera::*;
 pub use fp_movement::*;
 pub use freecam::*;
 pub use gravity::*;
+pub use image::*;
 pub use light::*;
+pub use mesh_renderer::*;
 pub use rigid_body::*;
 pub use rope::*;
 pub use rotate::*;
 pub use skeletal::*;
 pub use spring::*;
+pub use text::*;
+
+#[cfg(debug_assertions)]
+pub use camera_debug::*;
 
 use crate::core::GameObjectId;
-use crate::rendering::{DrawCtx, Renderer};
+use crate::rendering::lights::LightProxy;
+use crate::rendering::proxies::SceneProxy;
+use crate::rendering::CPUDrawCtx;
 use crate::World;
 use delegate::delegate;
-use nalgebra::Matrix4;
 use slotmap::{new_key_type, Key};
 use std::any::{Any, TypeId};
 use std::fmt::{Debug, Formatter};
@@ -278,7 +291,7 @@ pub trait Component: Any {
     // Gets called when the game object is created directly after new
     fn init(&mut self, world: &mut World) {}
 
-    // Gets called when the component should update anything state related
+    // Gets called when the component should update anything state-related
     fn update(&mut self, world: &mut World) {}
 
     // Gets called when the component should update any state that's necessary for physics
@@ -293,11 +306,11 @@ pub trait Component: Any {
     // Gets called after all other updates are done
     fn post_update(&mut self, world: &mut World) {}
 
-    // Gets called in preparation of drawing
-    fn update_draw(&mut self, world: &mut World, renderer: &Renderer, transform: &Matrix4<f32>) {}
+    fn create_render_proxy(&mut self, world: &World) -> Option<Box<dyn SceneProxy>> { None }
 
-    // Gets called after Drawables have been rendered
-    fn draw(&self, world: &World, ctx: &DrawCtx) {}
+    fn create_light_proxy(&mut self, world: &World) -> Option<Box<LightProxy>> { None }
+
+    fn update_proxy(&mut self, world: &World, ctx: CPUDrawCtx) {}
 
     // Gets called when the component is about to be deleted
     fn delete(&mut self, world: &mut World) {}

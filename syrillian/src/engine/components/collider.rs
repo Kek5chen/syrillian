@@ -1,9 +1,8 @@
 use crate::components::ColliderError::{
     DesyncedCollider, InvalidMesh, InvalidMeshRef, NoMeshRenderer,
 };
-use crate::components::{Component, RigidBodyComponent};
+use crate::components::{Component, MeshRenderer, RigidBodyComponent};
 use crate::core::GameObjectId;
-use crate::drawables::MeshRenderer;
 use crate::engine::assets::Mesh;
 use crate::World;
 use log::{trace, warn};
@@ -12,51 +11,21 @@ use rapier3d::prelude::*;
 use snafu::Snafu;
 
 #[cfg(debug_assertions)]
-use crate::assets::HShader;
+use crate::assets::HMesh;
 #[cfg(debug_assertions)]
-use crate::core::{ModelUniform, Vertex3D};
+use crate::assets::StoreType;
 #[cfg(debug_assertions)]
-use crate::drawables::{BoneData, MeshUniformIndex};
+use crate::core::Vertex3D;
 #[cfg(debug_assertions)]
-use crate::rendering::uniform::ShaderUniform;
+use crate::rendering::proxies::DebugSceneProxy;
 #[cfg(debug_assertions)]
-use crate::rendering::{DrawCtx, Renderer};
+use crate::rendering::proxies::SceneProxy;
 #[cfg(debug_assertions)]
-use nalgebra::Matrix4;
+use crate::rendering::{CPUDrawCtx, DebugRenderer};
 #[cfg(debug_assertions)]
-use std::sync::RwLockWriteGuard;
+use nalgebra::Vector4;
 #[cfg(debug_assertions)]
-use wgpu::{IndexFormat, RenderPass};
-
-#[derive(Debug)]
-#[cfg(debug_assertions)]
-struct ColliderDebugData {
-    vertex_buf: wgpu::Buffer,
-    index_buf: wgpu::Buffer,
-    collider_indices_count: u32,
-}
-
-// Okay, so.. Either a MeshRenderer is already assigned, which is likely.
-// Then use that uniform as it'll auto update for us.
-// If we don't have a MeshRenderer, we have to update ourselves.
-// This will not handle the case where the backed uniform goes missing and needs to be
-// phased out for something different. But I imagine the use cases where this will work
-// are far overgrowing the opposite.
-#[cfg(debug_assertions)]
-enum SharedModelData {
-    Backed(ShaderUniform<MeshUniformIndex>),
-    Owned(ModelUniform, ShaderUniform<MeshUniformIndex>),
-}
-
-#[cfg(debug_assertions)]
-impl SharedModelData {
-    fn uniform(&self) -> &ShaderUniform<MeshUniformIndex> {
-        match self {
-            SharedModelData::Backed(uniform)
-            | SharedModelData::Owned(_, uniform) => uniform,
-        }
-    }
-}
+use syrillian_utils::debug_panic;
 
 pub struct Collider3D {
     pub phys_handle: ColliderHandle,
@@ -64,12 +33,11 @@ pub struct Collider3D {
     parent: GameObjectId,
 
     #[cfg(debug_assertions)]
-    enable_debug_render: bool,
-
+    enable_debug_render: bool, // TODO: Sync with GPU
     #[cfg(debug_assertions)]
-    collider_buffers: Option<ColliderDebugData>,
+    debug_collider_mesh: Option<HMesh>,
     #[cfg(debug_assertions)]
-    model_data: Option<SharedModelData>,
+    was_debug_enabled: bool,
 }
 
 #[derive(Debug, Snafu)]
@@ -111,10 +79,22 @@ impl Component for Collider3D {
             #[cfg(debug_assertions)]
             enable_debug_render: true,
             #[cfg(debug_assertions)]
-            collider_buffers: None,
+            debug_collider_mesh: None,
             #[cfg(debug_assertions)]
-            model_data: None,
+            was_debug_enabled: true,
         }
+    }
+
+    #[cfg(debug_assertions)]
+    fn update(&mut self, world: &mut World) {
+        match self.debug_collider_mesh {
+            Some(mesh) => mesh,
+            None => {
+                let mesh = self.generate_collider_mesh(world);
+                self.debug_collider_mesh = Some(mesh);
+                mesh
+            }
+        };
     }
 
     fn fixed_update(&mut self, _world: &mut World) {
@@ -139,60 +119,28 @@ impl Component for Collider3D {
     }
 
     #[cfg(debug_assertions)]
-    fn update_draw(
-        &mut self,
-        _world: &mut World,
-        renderer: &Renderer,
-        transform: &Matrix4<f32>,
-    ) {
-        if self.collider_buffers.is_none() {
-            self.generate_collider_data(&renderer.state.device);
-        }
-
-        let model_data = match &mut self.model_data {
-            Some(data) => data,
-            None => {
-                self.setup_model(renderer);
-                match &mut self.model_data {
-                    Some(data) => data,
-                    None => {
-                        warn!("Model data could not be initialized in Collider3D");
-                        return;
-                    }
-                }
-            }
+    fn create_render_proxy(&mut self, _world: &World) -> Option<Box<dyn SceneProxy>> {
+        let Some(mesh) = self.debug_collider_mesh else {
+            debug_panic!("Debug mode is enabled but no collider mesh was made in update");
+            return None;
         };
 
-        if let SharedModelData::Owned(model, uniform) = model_data {
-            model.update(transform);
+        const COLOR: Vector4<f32> = Vector4::new(0.0, 1.0, 0.2, 1.0);
 
-            renderer.state.queue.write_buffer(
-                uniform.buffer(MeshUniformIndex::MeshData),
-                0,
-                bytemuck::bytes_of(model),
-            );
-        }
+        let mut proxy = Box::new(DebugSceneProxy::single_mesh(mesh));
+        proxy.color = COLOR;
+        Some(proxy)
     }
 
     #[cfg(debug_assertions)]
-    fn draw(&self, _world: &World, ctx: &DrawCtx) {
-        if !ctx.frame.debug.colliders_edges || !self.enable_debug_render {
-            return;
+    fn update_proxy(&mut self, _world: &World, ctx: CPUDrawCtx) {
+        if !DebugRenderer::collider_mesh() && self.was_debug_enabled {
+            ctx.disable_proxy();
+            self.was_debug_enabled = false;
+        } else if DebugRenderer::collider_mesh() && !self.was_debug_enabled {
+            ctx.enable_proxy();
+            self.was_debug_enabled = true;
         }
-
-        let Some(collider_buf) = &self.collider_buffers else {
-            warn!("Collider draw data not initialized for {}.", self.parent.name);
-            return;
-        };
-
-        let Some(model_data) = &self.model_data else {
-            warn!("Model data not set in Collider3D before draw call");
-            return;
-        };
-
-        let mut pass = ctx.pass.write().unwrap();
-
-        draw_collider_edges(ctx, collider_buf, &model_data.uniform(), &mut pass)
     }
 
     fn delete(&mut self, world: &mut World) {
@@ -255,7 +203,7 @@ impl Collider3D {
     pub fn try_use_mesh(&mut self) -> Result<(), ColliderError> {
         let mesh_renderer = self
             .parent
-            .drawable::<MeshRenderer>()
+            .get_component::<MeshRenderer>()
             .ok_or(NoMeshRenderer)?;
 
         let handle = mesh_renderer.mesh();
@@ -273,86 +221,29 @@ impl Collider3D {
     }
 
     #[cfg(debug_assertions)]
-    pub fn set_debug_render(&mut self, enabled: bool) {
+    pub fn set_local_debug_render_enabled(&mut self, enabled: bool) {
         self.enable_debug_render = enabled;
     }
 
     #[cfg(debug_assertions)]
-    pub fn is_debug_render_enabled(&self) -> bool {
+    pub fn is_local_debug_render_enabled(&self) -> bool {
         self.enable_debug_render
     }
 
     #[cfg(debug_assertions)]
-    fn setup_model(&mut self, renderer: &Renderer) {
-        let mesh_data = if let Some(mesh_data) = self
-            .parent
-            .drawable::<MeshRenderer>()
-            .and_then(|renderer| renderer.mesh_data())
-        {
-            SharedModelData::Backed(mesh_data.uniform.clone())
-        } else {
-            let model_bgl = renderer.cache.bgl_model();
-            let model = ModelUniform::empty();
-            let uniform = ShaderUniform::<MeshUniformIndex>::builder(&model_bgl)
-                .with_buffer_data(&model)
-                .with_buffer_data_slice(&BoneData::DUMMY)
-                .build(&renderer.state.device);
-
-            SharedModelData::Owned(model, uniform)
-        };
-
-        self.model_data = Some(mesh_data);
-    }
-
-    /// Returns Vertices and Indices
-    #[cfg(debug_assertions)]
-    fn generate_collider_data(&mut self, device: &wgpu::Device) {
-        use wgpu::BufferUsages;
-        use wgpu::util::{BufferInitDescriptor, DeviceExt};
-
+    fn generate_collider_mesh(&mut self, world: &mut World) -> HMesh {
         let Some(collider) = self.get_collider() else {
-            warn!("No collider attached to Collider 3D component");
-            return;
+            debug_panic!("No collider attached to Collider 3D component");
+            return HMesh::UNIT_CUBE;
         };
 
         let (vertices, indices) = collider.shared_shape().to_trimesh();
-
         let vertices: Vec<_> = vertices.iter().map(|v| Vertex3D::basic(v.coords)).collect();
 
-        let vertex_bytes = bytemuck::cast_slice(&vertices[..]);
-
-        if cfg!(debug_assertions) {
-            let vertex_bytes_size = size_of_val(vertex_bytes) as i64;
-            let expected_vertex_bytes_size = (indices
-                .iter()
-                .flatten()
-                .max()
-                .map(|i| *i as i64)
-                .unwrap_or(-1)
-                + 1)
-                * size_of::<Vertex3D>() as i64;
-
-            assert_eq!(vertex_bytes_size, expected_vertex_bytes_size);
-        }
-
-        let vertex_buf = device.create_buffer_init(&BufferInitDescriptor {
-            label: Some("Collider Debug Vertex Buffer"),
-            contents: vertex_bytes,
-            usage: BufferUsages::VERTEX,
-        });
-        let index_buf = device.create_buffer_init(&BufferInitDescriptor {
-            label: Some("Collider Debug Index Buffer"),
-            contents: bytemuck::cast_slice(&indices[..]),
-            usage: BufferUsages::INDEX,
-        });
-
-        let data = ColliderDebugData {
-            vertex_buf,
-            index_buf,
-            collider_indices_count: indices.len() as u32 * 3,
-        };
-
-        self.collider_buffers = Some(data);
+        Mesh::builder(vertices)
+            .with_indices(indices.into_flattened())
+            .build()
+            .store(world)
     }
 }
 
@@ -415,28 +306,4 @@ impl MeshShapeExtra<SharedShape> for SharedShape {
             TypedShape::Custom(_) => self.local_aabb_mesh(),
         }
     }
-}
-
-#[cfg(debug_assertions)]
-fn draw_collider_edges(
-    ctx: &DrawCtx,
-    debug_data: &ColliderDebugData,
-    model_uniform: &ShaderUniform<MeshUniformIndex>,
-    pass: &mut RwLockWriteGuard<RenderPass>,
-) {
-    use nalgebra::Vector4;
-    use wgpu::ShaderStages;
-
-    const COLOR: Vector4<f32> = Vector4::new(0.0, 1.0, 0.2, 1.0);
-
-    let shader = ctx.frame.cache.shader(HShader::DEBUG_EDGES);
-    crate::must_pipeline!(pipeline = shader, ctx.pass_type => return);
-
-    pass.set_pipeline(pipeline);
-    pass.set_push_constants(ShaderStages::FRAGMENT, 0, bytemuck::bytes_of(&COLOR));
-    pass.set_bind_group(1, model_uniform.bind_group(), &[]);
-
-    pass.set_vertex_buffer(0, debug_data.vertex_buf.slice(..));
-    pass.set_index_buffer(debug_data.index_buf.slice(..), IndexFormat::Uint32);
-    pass.draw_indexed(0..debug_data.collider_indices_count, 0, 0..1);
 }

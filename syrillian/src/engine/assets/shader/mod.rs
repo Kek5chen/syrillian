@@ -5,9 +5,9 @@ mod shaders;
 
 use crate::assets::shader::shader_gen::ShaderGen;
 use crate::assets::HBGL;
-use crate::drawables::text::text_layouter::TextPushConstants;
 use crate::engine::assets::generic_store::{HandleName, Store, StoreDefaults, StoreType};
 use crate::engine::assets::{HShader, StoreTypeFallback, StoreTypeName, H};
+use crate::rendering::proxies::text_proxy::TextPushConstants;
 use crate::rendering::AssetCache;
 use crate::utils::sizes::VEC2_SIZE;
 use crate::{store_add_checked, store_add_checked_many};
@@ -19,6 +19,9 @@ use wgpu::{
     PrimitiveTopology, PushConstantRange, ShaderStages, VertexAttribute, VertexBufferLayout,
     VertexFormat, VertexStepMode,
 };
+
+#[cfg(debug_assertions)]
+use crate::rendering::DEFAULT_VBL_STEP_INSTANCE;
 
 #[derive(Debug, Clone)]
 pub enum ShaderCode {
@@ -84,7 +87,7 @@ impl H<Shader> {
     #[cfg(debug_assertions)]
     pub const DEBUG_VERTEX_NORMALS_ID: u32 = 7;
     #[cfg(debug_assertions)]
-    pub const DEBUG_RAYS_ID: u32 = 8;
+    pub const DEBUG_LINES_ID: u32 = 8;
     #[cfg(debug_assertions)]
     pub const DEBUG_TEXT2D_GEOMETRY_ID: u32 = 9;
     #[cfg(debug_assertions)]
@@ -120,9 +123,9 @@ impl H<Shader> {
     #[cfg(debug_assertions)]
     pub const DEBUG_VERTEX_NORMALS: H<Shader> = H::new(Self::DEBUG_VERTEX_NORMALS_ID);
 
-    // An addon shader ID that is used for drawing debug rays
+    // An addon shader ID that is used for drawing debug lines
     #[cfg(debug_assertions)]
-    pub const DEBUG_RAYS: H<Shader> = H::new(Self::DEBUG_RAYS_ID);
+    pub const DEBUG_LINES: H<Shader> = H::new(Self::DEBUG_LINES_ID);
     #[cfg(debug_assertions)]
     pub const DEBUG_TEXT2D_GEOMETRY: H<Shader> = H::new(Self::DEBUG_TEXT2D_GEOMETRY_ID);
     #[cfg(debug_assertions)]
@@ -143,7 +146,7 @@ const DEBUG_EDGES_SHADER: &str = include_str!("shaders/debug/edges.wgsl");
 #[cfg(debug_assertions)]
 const DEBUG_VERTEX_NORMAL_SHADER: &str = include_str!("shaders/debug/vertex_normals.wgsl");
 #[cfg(debug_assertions)]
-const DEBUG_RAY_SHADER: &str = include_str!("shaders/debug/rays.wgsl");
+const DEBUG_LINES_SHADER: &str = include_str!("shaders/debug/lines.wgsl");
 #[cfg(debug_assertions)]
 const DEBUG_TEXT2D_GEOMETRY: &str = include_str!("shaders/debug/text2d_geometry.wgsl");
 #[cfg(debug_assertions)]
@@ -213,7 +216,7 @@ impl StoreDefaults for Shader {
         #[cfg(debug_assertions)]
         {
             use crate::rendering::DEFAULT_VBL;
-            use crate::utils::sizes::{VEC3_SIZE, WGPU_VEC3_ALIGN};
+            use crate::utils::sizes::{VEC3_SIZE, VEC4_SIZE, WGPU_VEC4_ALIGN};
             use wgpu::{VertexAttribute, VertexFormat, VertexStepMode};
 
             store_add_checked!(
@@ -227,28 +230,11 @@ impl StoreDefaults for Shader {
                     vertex_buffers: &DEFAULT_VBL,
                     push_constant_ranges: &[PushConstantRange {
                         stages: ShaderStages::FRAGMENT,
-                        range: 0..WGPU_VEC3_ALIGN as u32,
+                        range: 0..WGPU_VEC4_ALIGN as u32,
                     }],
                     shadow_transparency: false,
                 }
             );
-
-            const DEBUG_VERTEX_NORMALS_VBL: &[VertexBufferLayout] = &[VertexBufferLayout {
-                array_stride: 0,
-                step_mode: VertexStepMode::Instance,
-                attributes: &[
-                    VertexAttribute {
-                        format: VertexFormat::Float32x3,
-                        offset: 0,
-                        shader_location: 0,
-                    },
-                    VertexAttribute {
-                        format: VertexFormat::Float32x3,
-                        offset: VEC3_SIZE,
-                        shader_location: 1,
-                    },
-                ],
-            }];
 
             store_add_checked!(
                 store,
@@ -258,43 +244,48 @@ impl StoreDefaults for Shader {
                     code: ShaderCode::Full(DEBUG_VERTEX_NORMAL_SHADER.to_string()),
                     topology: PrimitiveTopology::LineList,
                     polygon_mode: PolygonMode::Line,
-                    vertex_buffers: DEBUG_VERTEX_NORMALS_VBL,
+                    vertex_buffers: &DEFAULT_VBL_STEP_INSTANCE,
                     push_constant_ranges: &[],
                     shadow_transparency: false,
                 }
             );
 
-            const DEBUG_RAYS_VBL: &[VertexBufferLayout] = &[VertexBufferLayout {
+            const DEBUG_LINE_VBL: &[VertexBufferLayout] = &[VertexBufferLayout {
                 array_stride: 0,
                 step_mode: VertexStepMode::Instance,
                 attributes: &[
                     VertexAttribute {
-                        format: VertexFormat::Float32x3,
+                        format: VertexFormat::Float32x3, // start position
                         offset: 0,
                         shader_location: 0,
                     },
                     VertexAttribute {
-                        format: VertexFormat::Float32x3,
+                        format: VertexFormat::Float32x3, // end position
                         offset: VEC3_SIZE,
                         shader_location: 1,
                     },
                     VertexAttribute {
-                        format: VertexFormat::Float32,
+                        format: VertexFormat::Float32x4, // start color
                         offset: VEC3_SIZE * 2,
                         shader_location: 2,
+                    },
+                    VertexAttribute {
+                        format: VertexFormat::Float32x4, // end color
+                        offset: VEC3_SIZE * 2 + VEC4_SIZE,
+                        shader_location: 3,
                     },
                 ],
             }];
 
             store_add_checked!(
                 store,
-                HShader::DEBUG_RAYS_ID,
+                HShader::DEBUG_LINES_ID,
                 Shader::Custom {
-                    name: "Ray Debug".to_owned(),
-                    code: ShaderCode::Full(DEBUG_RAY_SHADER.to_string()),
+                    name: "Line Debug".to_owned(),
+                    code: ShaderCode::Full(DEBUG_LINES_SHADER.to_string()),
                     topology: PrimitiveTopology::LineList,
                     polygon_mode: PolygonMode::Line,
-                    vertex_buffers: DEBUG_RAYS_VBL,
+                    vertex_buffers: DEBUG_LINE_VBL,
                     push_constant_ranges: &[],
                     shadow_transparency: false,
                 }
@@ -392,7 +383,7 @@ impl StoreType for Shader {
             #[cfg(debug_assertions)]
             HShader::DEBUG_VERTEX_NORMALS_ID => "Debug Vertex Normals Shader",
             #[cfg(debug_assertions)]
-            HShader::DEBUG_RAYS_ID => "Debug Rays Shader",
+            HShader::DEBUG_LINES_ID => "Debug Rays Shader",
             #[cfg(debug_assertions)]
             HShader::DEBUG_TEXT2D_GEOMETRY_ID => "Debug Text 2D Geometry Shader",
             #[cfg(debug_assertions)]
@@ -561,6 +552,7 @@ impl Shader {
 
         let use_name = match bgl.id() {
             HBGL::MODEL_ID => "model",
+            HBGL::MATERIAL_ID => "material",
             HBGL::LIGHT_ID => "light",
             HBGL::SHADOW_ID => "shadow",
 
@@ -601,6 +593,8 @@ impl Shader {
         } else {
             if self.needs_bgl(HBGL::MODEL) {
                 slots[1] = Some(&mdl_bgl);
+            }
+            if self.needs_bgl(HBGL::MATERIAL) {
                 slots[2] = Some(&mat_bgl);
             }
             if self.needs_bgl(HBGL::LIGHT) {
@@ -640,6 +634,8 @@ impl Shader {
 
         if self.needs_bgl(HBGL::MODEL) {
             slots[1] = Some(&mdl_bgl);
+        }
+        if self.needs_bgl(HBGL::MATERIAL) {
             slots[2] = Some(&mat_bgl);
         }
         if self.needs_bgl(HBGL::LIGHT) {
