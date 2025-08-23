@@ -115,7 +115,7 @@ impl InputManager {
                         || self
                             .key_states
                             .get(&code)
-                            .is_some_and(|state| !state.is_pressed())
+                        .is_none_or(|state| !state.is_pressed())
                     {
                         self.key_just_updated.push(code);
                     }
@@ -136,7 +136,7 @@ impl InputManager {
                     || self
                         .button_states
                         .get(button)
-                        .is_some_and(|state| !state.is_pressed())
+                    .is_none_or(|state| !state.is_pressed())
                 {
                     self.button_just_updated.push(*button);
                 }
