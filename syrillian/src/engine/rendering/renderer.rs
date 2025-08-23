@@ -136,6 +136,11 @@ impl Renderer {
                     binding.enabled = enabled;
                 }
             }
+            RenderMsg::CommandBatch(batch) => {
+                for message in batch {
+                    self.handle_message(message);
+                }
+            }
         }
     }
 

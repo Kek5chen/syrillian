@@ -89,7 +89,7 @@ impl Component for Image {
         }))
     }
 
-    fn update_proxy(&mut self, _world: &World, ctx: CPUDrawCtx) {
+    fn update_proxy(&mut self, _world: &World, mut ctx: CPUDrawCtx) {
         if !self.dirty {
             return;
         }

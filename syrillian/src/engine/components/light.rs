@@ -114,7 +114,7 @@ impl<L: LightTypeTrait + 'static> Component for LightComponent<L> {
         Some(Box::new(self.local_proxy.clone()))
     }
 
-    fn update_proxy(&mut self, _world: &World, ctx: CPUDrawCtx) {
+    fn update_proxy(&mut self, _world: &World, mut ctx: CPUDrawCtx) {
         if !self.dirty {
             return;
         }

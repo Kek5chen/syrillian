@@ -95,7 +95,7 @@ impl<DIM: TextDim> TextProxy<DIM> {
 
     pub fn update_game_thread(
         &mut self,
-        ctx: CPUDrawCtx,
+        mut ctx: CPUDrawCtx,
     ) {
         if self.constants_dirty {
             let constants = self.pc;

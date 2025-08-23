@@ -66,6 +66,7 @@ where
 #[derive(Default)]
 pub struct ComponentStorage {
     inner: HashMap<TypeId, Box<dyn HopSlotMapUntyped<ComponentId>>>,
+    len: usize,
     pub(crate) fresh: Vec<TypedComponentId>,
 }
 impl ComponentStorage {
@@ -164,6 +165,7 @@ impl ComponentStorage {
 
     pub(crate) fn add<C: Component>(&mut self, component: C) -> CRef<C> {
         let comp: CRef<C> = CRef(self.map_mut().insert(component), PhantomData);
+        self.len += 1;
         self.fresh.push(comp.into());
         comp
     }
@@ -174,5 +176,10 @@ impl ComponentStorage {
             return;
         };
         map.remove(comp.1);
+        self.len = self.len.saturating_sub(1);
+    }
+
+    pub const fn len(&mut self) -> usize {
+        self.len
     }
 }

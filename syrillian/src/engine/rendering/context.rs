@@ -2,7 +2,7 @@ use crate::components::TypedComponentId;
 use crate::rendering::lights::LightProxy;
 use crate::rendering::message::RenderMsg;
 use crate::rendering::proxies::SceneProxy;
-use std::sync::{mpsc, RwLock};
+use std::sync::RwLock;
 use wgpu::{RenderPass, SurfaceTexture, TextureView};
 
 pub struct FrameCtx {
@@ -23,35 +23,36 @@ pub struct GPUDrawCtx<'a> {
     pub frame: &'a FrameCtx,
 }
 
-pub struct CPUDrawCtx {
+pub struct CPUDrawCtx<'a> {
     current_cid: TypedComponentId,
-    render_tx: mpsc::Sender<RenderMsg>,
+    batch: &'a mut Vec<RenderMsg>,
 }
 
-impl CPUDrawCtx {
-    pub fn new(cid: TypedComponentId, render_tx: mpsc::Sender<RenderMsg>) -> Self {
+impl<'a> CPUDrawCtx<'a> {
+    pub fn new(cid: TypedComponentId, batch: &'a mut Vec<RenderMsg>) -> Self {
         Self {
             current_cid: cid,
-            render_tx,
+            batch,
         }
     }
-    pub fn send_proxy_update(&self, cmd: impl FnOnce(&mut dyn SceneProxy) + Send + 'static) {
+
+    pub fn send_proxy_update(&mut self, cmd: impl FnOnce(&mut dyn SceneProxy) + Send + 'static) {
         let msg = RenderMsg::ProxyUpdate(self.current_cid, Box::new(cmd));
-        self.render_tx.send(msg).unwrap();
+        self.batch.push(msg);
     }
 
-    pub fn send_light_proxy_update(&self, cmd: impl FnOnce(&mut LightProxy) + Send + 'static) {
+    pub fn send_light_proxy_update(&mut self, cmd: impl FnOnce(&mut LightProxy) + Send + 'static) {
         let msg = RenderMsg::LightProxyUpdate(self.current_cid, Box::new(cmd));
-        self.render_tx.send(msg).unwrap();
+        self.batch.push(msg);
     }
 
-    pub fn disable_proxy(&self) {
+    pub fn disable_proxy(&mut self) {
         let msg = RenderMsg::ProxyState(self.current_cid, false);
-        self.render_tx.send(msg).unwrap();
+        self.batch.push(msg);
     }
 
-    pub fn enable_proxy(&self) {
+    pub fn enable_proxy(&mut self) {
         let msg = RenderMsg::ProxyState(self.current_cid, true);
-        self.render_tx.send(msg).unwrap();
+        self.batch.push(msg);
     }
 }
