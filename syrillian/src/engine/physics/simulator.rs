@@ -1,4 +1,3 @@
-use crate::components::camera::CameraComponent;
 use crate::core::GameObjectId;
 use crate::World;
 use nalgebra::Vector3;
@@ -92,8 +91,8 @@ impl PhysicsManager {
     pub fn cursor_ray(&self, world: &World) -> Option<Ray> {
         let cursor_pos = world.input.mouse_position();
         world
-            .active_camera
-            .and_then(|cam| cam.get_component::<CameraComponent>())
+            .active_camera()
+            .upgrade(world)
             .map(|cam| cam.click_ray(cursor_pos.x, cursor_pos.y))
     }
 

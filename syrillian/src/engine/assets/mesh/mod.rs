@@ -52,6 +52,11 @@ impl Mesh {
     pub fn indices(&self) -> Option<&[u32]> {
         self.data.indices.as_ref().map(|i| i.as_slice())
     }
+
+    #[inline]
+    pub fn has_indices(&self) -> bool {
+        self.data.indices.is_some()
+    }
 }
 
 impl MeshVertexData<Vertex3D> {

@@ -5,9 +5,8 @@ use std::error::Error;
 use std::rc::Rc;
 
 use crate::assets::{HMaterial, HShader, HTexture, Material, Mesh, StoreType, Texture};
-use crate::components::{AnimationComponent, SkeletalComponent, SpotLightComponent};
+use crate::components::{AnimationComponent, MeshRenderer, SkeletalComponent, SpotLightComponent};
 use crate::core::{Bones, GameObjectId, Vertex3D};
-use crate::drawables::MeshRenderer;
 use crate::rendering::lights::Light;
 use crate::utils::animation::{AnimationClip, Channel, TransformKeys};
 use crate::utils::iter::interpolate_zeros;
@@ -157,15 +156,18 @@ fn finalize_bones(scene: &Scene, mesh_node: &Node, bones: &mut Bones) {
 
     for (i, name) in bones.names.iter().enumerate() {
         let g_world = compute_global_transform(name, &node_map);
-        let g_model = mesh_inv * g_world;           // *** convert to mesh MODEL space ***
+        let g_model = mesh_inv * g_world; // *** convert to mesh MODEL space ***
         bones.bind_global[i] = g_model;
     }
     for i in 0..n {
         bones.bind_local[i] = match bones.parents[i] {
             None => bones.bind_global[i],
-            Some(p) => bones.bind_global[p]
-                .try_inverse().unwrap_or(Matrix4::identity())
-                * bones.bind_global[i],
+            Some(p) => {
+                bones.bind_global[p]
+                    .try_inverse()
+                    .unwrap_or(Matrix4::identity())
+                    * bones.bind_global[i]
+            }
         };
     }
 }
@@ -213,7 +215,11 @@ fn animations_from_scene(scene: &Scene) -> Vec<AnimationClip> {
     let mut groups: HashMap<String, AnimationClip> = HashMap::new();
 
     for a in &scene.animations {
-        let tps = if a.ticks_per_second > 0.0 { a.ticks_per_second as f32 } else { 25.0 };
+        let tps = if a.ticks_per_second > 0.0 {
+            a.ticks_per_second as f32
+        } else {
+            25.0
+        };
         let dur = (a.duration as f32) / tps;
         let key = clip_group_key(&a.name);
 
@@ -223,17 +229,20 @@ fn animations_from_scene(scene: &Scene) -> Vec<AnimationClip> {
 
             for k in &ch.position_keys {
                 keys.t_times.push((k.time as f32) / tps);
-                keys.t_values.push(Vector3::new(k.value.x, k.value.y, k.value.z));
+                keys.t_values
+                    .push(Vector3::new(k.value.x, k.value.y, k.value.z));
             }
             for k in &ch.rotation_keys {
                 keys.r_times.push((k.time as f32) / tps);
-                keys.r_values.push(UnitQuaternion::from_quaternion(
-                    Quaternion::new(k.value.w, k.value.x, k.value.y, k.value.z),
-                ));
+                keys.r_values
+                    .push(UnitQuaternion::from_quaternion(Quaternion::new(
+                        k.value.w, k.value.x, k.value.y, k.value.z,
+                    )));
             }
             for k in &ch.scaling_keys {
                 keys.s_times.push((k.time as f32) / tps);
-                keys.s_values.push(Vector3::new(k.value.x, k.value.y, k.value.z));
+                keys.s_values
+                    .push(Vector3::new(k.value.x, k.value.y, k.value.z));
             }
 
             channels.push(Channel {
@@ -248,7 +257,11 @@ fn animations_from_scene(scene: &Scene) -> Vec<AnimationClip> {
                 clip.duration = clip.duration.max(dur);
                 merge_channels(&mut clip.channels, channels.clone());
             })
-            .or_insert(AnimationClip { name: key, duration: dur.max(0.0), channels });
+            .or_insert(AnimationClip {
+                name: key,
+                duration: dur.max(0.0),
+                channels,
+            });
     }
 
     groups.into_values().collect()
@@ -467,8 +480,8 @@ impl SceneLoader {
         for light in &scene.lights {
             if light.light_source_type == LightSourceType::Spot {
                 let mut obj = world.new_object(&light.name);
-                let spot = obj.add_component::<SpotLightComponent>();
-                let data = spot.data_mut(world);
+                let mut spot = obj.add_component::<SpotLightComponent>();
+                let data = spot.data_mut(true);
 
                 obj.transform
                     .set_position(light.pos.x, light.pos.y, light.pos.z);
@@ -515,9 +528,13 @@ impl SceneLoader {
                             .unwrap_or(HMaterial::FALLBACK)
                     })
                     .collect();
-                node_obj.drawable = Some(MeshRenderer::new(handle, Some(materials)));
+                node_obj
+                    .add_component::<MeshRenderer>()
+                    .change_mesh(handle, Some(materials));
             } else {
-                node_obj.drawable = Some(MeshRenderer::new(handle, None));
+                node_obj
+                    .add_component::<MeshRenderer>()
+                    .change_mesh(handle, None);
             }
 
             if has_bones {

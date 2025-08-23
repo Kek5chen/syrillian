@@ -1,4 +1,5 @@
-use crate::assets::{HFont, HandleName, Store, StoreType, H};
+use crate::assets::{HFont, HandleName, Store, StoreDefaults, StoreType, StoreTypeFallback, H};
+use crate::store_add_checked;
 use font_kit::canvas::{Canvas, Format, RasterizationOptions};
 use font_kit::family_name::FamilyName;
 use font_kit::hinting::HintingOptions;
@@ -31,6 +32,23 @@ impl StoreType for Font {
 
     fn is_builtin(_: H<Self>) -> bool {
         false
+    }
+}
+
+impl H<Font> {
+    const DEFAULT_ID: u32 = 0;
+    pub const DEFAULT: HFont = HFont::new(Self::DEFAULT_ID);
+}
+
+impl StoreDefaults for Font {
+    fn populate(store: &mut Store<Self>) {
+        store_add_checked!(store, HFont::DEFAULT_ID, Font::new("Arial".to_string(), None));
+    }
+}
+
+impl StoreTypeFallback for Font {
+    fn fallback() -> H<Self> {
+        HFont::DEFAULT
     }
 }
 

@@ -1,5 +1,5 @@
 use crate::core::GameObjectId;
-use nalgebra::{Affine3, Isometry3, Scale3, Translation3, UnitQuaternion, Vector3};
+use nalgebra::{Affine3, Isometry3, Point, Scale3, Translation3, UnitQuaternion, Vector3};
 use num_traits::AsPrimitive;
 use slotmap::Key;
 
@@ -26,6 +26,8 @@ pub struct Transform {
 impl Clone for Transform {
     fn clone(&self) -> Self {
         Transform {
+            owner: GameObjectId::null(),
+
             pos: self.pos,
             rot: self.rot,
             scale: self.scale,
@@ -33,7 +35,6 @@ impl Clone for Transform {
             scale_mat: self.scale_mat,
             compound_mat: self.compound_mat,
             invert_position: self.invert_position,
-            owner: GameObjectId::null(),
             compound_pos_first: self.compound_pos_first,
 
             is_dirty: self.is_dirty,
@@ -78,14 +79,14 @@ impl Transform {
     /// Sets the global position using a vector.
     pub fn set_position_vec(&mut self, pos: Vector3<f32>) {
         let mat = self.get_global_transform_matrix_ext(false);
-        self.set_local_position_vec(mat.inverse_transform_vector(&pos));
+        self.set_local_position_vec(mat.inverse_transform_vector(&pos)); // FIXME: transform point?
     }
 
     /// Returns the global position of the transform.
     pub fn position(&self) -> Vector3<f32> {
-        let mat = self.get_global_transform_matrix();
-        let mat = mat.matrix();
-        Vector3::new(mat.m14, mat.m24, mat.m34)
+        self.get_global_transform_matrix()
+            .transform_point(&Point::default())
+            .coords
     }
 
     /// Collects the list of parents up to the root.

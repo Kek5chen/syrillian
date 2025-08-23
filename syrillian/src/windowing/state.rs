@@ -1,25 +1,24 @@
-use crate::rendering::Renderer;
 use crate::world::World;
 use crate::{AppRuntime, AppSettings};
 use std::error::Error;
 use winit::dpi::{PhysicalSize, Size};
-use winit::window::{Window, WindowAttributes};
+use winit::window::WindowAttributes;
 
 #[allow(unused)]
-pub trait AppState: Sized {
-    fn init(&mut self, world: &mut World, window: &Window) -> Result<(), Box<dyn Error>> {
+pub trait AppState: Sized + Send + 'static {
+    fn init(&mut self, world: &mut World) -> Result<(), Box<dyn Error>> {
         Ok(())
     }
-    fn update(&mut self, world: &mut World, window: &Window) -> Result<(), Box<dyn Error>> {
+
+    fn update(&mut self, world: &mut World) -> Result<(), Box<dyn Error>> {
         Ok(())
     }
-    fn draw(&mut self, world: &mut World, renderer: &mut Renderer) -> Result<(), Box<dyn Error>> {
+
+    fn late_update(&mut self, world: &mut World) -> Result<(), Box<dyn Error>> {
         Ok(())
     }
-    fn late_update(&mut self, world: &mut World, window: &Window) -> Result<(), Box<dyn Error>> {
-        Ok(())
-    }
-    fn destroy(&mut self, world: &mut World, window: &Window) -> Result<(), Box<dyn Error>> {
+
+    fn destroy(&mut self, world: &mut World) -> Result<(), Box<dyn Error>> {
         Ok(())
     }
 }

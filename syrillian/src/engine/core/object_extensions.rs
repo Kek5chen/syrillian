@@ -1,7 +1,6 @@
 use crate::components::{Collider3D, Component, LightComponent, LightTypeTrait, RigidBodyComponent, RopeComponent, RotateComponent};
 use crate::core::{GameObject, GameObjectId};
 use crate::rendering::lights::Light;
-use crate::World;
 use nalgebra::Vector3;
 use rapier3d::dynamics::RigidBody;
 use rapier3d::prelude::Collider;
@@ -184,14 +183,14 @@ impl<'a, L: LightTypeTrait> GOComponentExt<'a> for LightComponent<L> {
 
 impl<L: LightTypeTrait + 'static> GOLightExt<'_, L> {
     #[inline]
-    pub fn color(self, world: &mut World, r: f32, g: f32, b: f32) -> Self {
-        self.0.set_color(world, r, g, b);
+    pub fn color(self, r: f32, g: f32, b: f32) -> Self {
+        self.0.set_color(r, g, b);
         self
     }
 
     #[inline]
-    pub fn brightness(self, world: &mut World, amount: f32) -> Self {
-        self.0.set_intensity(world, amount);
+    pub fn brightness(self, amount: f32) -> Self {
+        self.0.set_intensity(amount);
         self
     }
 }

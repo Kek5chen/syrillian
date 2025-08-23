@@ -5,6 +5,7 @@
 
 pub mod app;
 pub mod state;
+pub mod game_thread;
 
 pub use app::*;
 pub use state::*;

@@ -101,3 +101,65 @@ pub fn syrillian_app(input: TokenStream) -> TokenStream {
         }
     }.into()
 }
+
+// TODO: macro-ize some things related to proxy data / scene proxies and in general
+// #[proc_macro_attribute]
+// fn proxy_data_fn(_: TokenStream, input: TokenStream) -> TokenStream {
+//     let func = syn::parse_macro_input!(input as ImplItemFn);
+//     match &func.sig.output {
+//         ReturnType::Default => wrap_update_render(func),
+//         ReturnType::Type(_, _) => wrap_setup_render(func),
+//     }.into()
+// }
+//
+// fn wrap_setup_render(mut func: ImplItemFn) -> proc_macro2::TokenStream {
+//     let output = &func.sig.output;
+//     let ty = match output {
+//         ReturnType::Default => unreachable!(),
+//         ReturnType::Type(_, ty) => ty,
+//     }.clone();
+//
+//     let new_ident = Ident::new("__inner_setup_render", func.sig.ident.span());
+//     func.sig.ident = new_ident.clone();
+//
+//     quote! {
+//         fn setup_render(&mut self, renderer: &Renderer, local_to_world: &Matrix4<f32>) -> Box<dyn Any> {
+//             #func
+//             let proxy_data = #new_ident(self, renderer, data, window, local_to_world);
+//             Box::new(proxy_data)
+//         }
+//     }
+// }
+//
+// fn wrap_update_render(mut func: ImplItemFn) -> proc_macro2::TokenStream {
+//     if func.sig.inputs.len() < 3 {
+//         return Error::new_spanned(
+//             &func.sig.ident,
+//             "expected at least 3 arguments"
+//         ).to_compile_error();
+//     }
+//
+//     let third = func.sig.inputs[2].clone();
+//
+//     let ty = match &third {
+//         FnArg::Typed(pat_type) => &*pat_type.ty,
+//         FnArg::Receiver(_) => {
+//             return Error::new_spanned(
+//                 third,
+//                 "expected a typed argument, but found `self`"
+//             ).to_compile_error().into();
+//         }
+//     };
+//
+//     let new_ident = Ident::new("__inner_update_render", func.sig.ident.span());
+//     func.sig.ident = new_ident.clone();
+//
+//     quote! {
+//         fn update_render(&mut self, renderer: &Renderer, data: &mut dyn Any, window: &Window, local_to_world: &Matrix4<f32>) {
+//             #func
+//             let data: #ty = proxy_data_mut!(data);
+//
+//             #new_ident(self, renderer, data, window, local_to_world)
+//         }
+//     }
+// }

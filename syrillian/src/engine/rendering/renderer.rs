@@ -1,28 +1,29 @@
 //! High-level renderer driving all drawing operations.
 //!
 //! The [`Renderer`] owns the [`State`], manages frame buffers and traverses
-//! the [`World`](crate::engine::world::World) to draw all objects each frame.
+//! the all Scene Proxies it gets from the world to draw the latest snapshots of all world objects each frame.
 //! It also provides debug drawing and post-processing utilities.
 
 use super::error::*;
-use crate::c_any_mut;
-use crate::components::CameraComponent;
-use crate::core::GameObjectId;
+use crate::components::TypedComponentId;
 use crate::engine::assets::AssetStore;
 use crate::engine::rendering::cache::AssetCache;
-use crate::engine::rendering::context::DrawCtx;
 use crate::engine::rendering::offscreen_surface::OffscreenSurface;
 use crate::engine::rendering::post_process_pass::PostProcessData;
 use crate::engine::rendering::FrameCtx;
-use crate::rendering::lights::{LightType, LightUniform};
+use crate::rendering::light_manager::LightManager;
+use crate::rendering::lights::LightType;
+use crate::rendering::message::RenderMsg;
+use crate::rendering::proxies::SceneProxyBinding;
 use crate::rendering::render_data::RenderUniformData;
-use crate::rendering::{RenderPassType, State};
-use crate::world::World;
+use crate::rendering::{GPUDrawCtx, RenderPassType, State};
 use log::{error, trace};
-use nalgebra::{Matrix4, Perspective3, Vector2};
+use nalgebra::Vector2;
 use snafu::ResultExt;
-use std::fmt::Debug;
-use std::sync::{Arc, RwLock};
+use std::collections::HashMap;
+use std::mem::swap;
+use std::sync::{mpsc, Arc, RwLock};
+use std::time::{Duration, Instant};
 use syrillian_utils::debug_panic;
 use wgpu::{
     Color, CommandEncoderDescriptor, LoadOp, Operations, RenderPass, RenderPassColorAttachment,
@@ -31,6 +32,9 @@ use wgpu::{
 };
 use winit::dpi::PhysicalSize;
 use winit::window::Window;
+
+#[cfg(debug_assertions)]
+use crate::rendering::DebugRenderer;
 
 #[allow(dead_code)]
 pub struct Renderer {
@@ -44,76 +48,19 @@ pub struct Renderer {
 
     pub cache: Arc<AssetCache>,
 
-    pub debug: DebugRenderer,
+    game_rx: mpsc::Receiver<RenderMsg>,
+    proxies: HashMap<TypedComponentId, SceneProxyBinding>,
+    pub(super) lights: LightManager,
+
+    start_time: Instant,
+    delta_time: Duration,
+    last_frame_time: Instant,
 
     frame_count: usize,
 }
 
-#[derive(Debug, Clone)]
-pub struct DebugRenderer {
-    pub mesh_edges: bool,
-    pub vertex_normals: bool,
-    pub rays: bool,
-    pub colliders_edges: bool,
-    pub text_geometry: bool,
-    pub light: bool,
-}
-
-impl Default for DebugRenderer {
-    fn default() -> Self {
-        const DEBUG_BUILD: bool = cfg!(debug_assertions);
-
-        DebugRenderer {
-            mesh_edges: DEBUG_BUILD,
-            colliders_edges: false,
-            vertex_normals: false,
-            rays: DEBUG_BUILD,
-            text_geometry: DEBUG_BUILD,
-            light: DEBUG_BUILD,
-        }
-    }
-}
-
-impl DebugRenderer {
-    pub fn next_mode(&mut self) -> u32 {
-        if self.mesh_edges && !self.vertex_normals {
-            self.vertex_normals = true;
-            1
-        } else if self.mesh_edges {
-            self.mesh_edges = false;
-            self.vertex_normals = false;
-            self.colliders_edges = true;
-            2
-        } else if self.colliders_edges {
-            *self = DebugRenderer {
-                mesh_edges: false,
-                colliders_edges: false,
-                vertex_normals: false,
-                rays: false,
-                text_geometry: false,
-                light: false,
-            };
-            3
-        } else {
-            *self = DebugRenderer::default();
-            0
-        }
-    }
-
-    pub fn off(&mut self) {
-        *self = DebugRenderer {
-            mesh_edges: false,
-            vertex_normals: false,
-            rays: false,
-            colliders_edges: false,
-            text_geometry: false,
-            light: false,
-        }
-    }
-}
-
 impl Renderer {
-    pub fn new(window: Window, store: Arc<AssetStore>) -> Result<Self> {
+    pub fn new(game_rx: mpsc::Receiver<RenderMsg>, window: Window, store: Arc<AssetStore>) -> Result<Self> {
         let state = Box::new(State::new(&window).context(StateErr)?);
         let offscreen_surface = OffscreenSurface::new(&state.device, &state.config);
         let cache = Arc::new(AssetCache::new(store, &state));
@@ -128,6 +75,8 @@ impl Renderer {
         let post_process_data =
             PostProcessData::new(&state.device, &pp_bgl, &offscreen_surface.view());
 
+        let lights = LightManager::new(&cache, &state.device);
+
         Ok(Renderer {
             state,
             window,
@@ -137,27 +86,81 @@ impl Renderer {
             offscreen_surface,
             cache,
 
-            debug: DebugRenderer::default(),
+            game_rx,
+            proxies: HashMap::new(),
+            lights,
+
+            start_time: Instant::now(),
+            delta_time: Duration::default(),
+            last_frame_time: Instant::now(),
 
             frame_count: 0,
         })
     }
 
-    pub fn update_world(&mut self, world: &mut World) {
-        if let Err(e) = self._update_world(world) {
-            error!("Error when updating world drawables: {e}");
+    pub fn handle_message(&mut self, msg: RenderMsg) {
+        match msg {
+            RenderMsg::RegisterProxy(cid, mut proxy, local_to_world) => {
+                trace!("Registered Proxy for #{:?}", cid.0);
+                let data = proxy.setup_render(self, local_to_world.matrix());
+                let binding = SceneProxyBinding::new(cid, local_to_world, data, proxy);
+                self.proxies.insert(cid, binding);
+            }
+            RenderMsg::RegisterLightProxy(cid, proxy) => {
+                trace!("Registered Light Proxy for #{:?}", cid.0);
+                self.lights.add_proxy(cid, proxy);
+            }
+            RenderMsg::RemoveProxy(cid) => {
+                self.proxies.remove(&cid);
+                self.lights.remove_proxy(cid);
+            }
+            RenderMsg::UpdateTransform(cid, ltw) => {
+                if let Some(cid) = self.proxies.get_mut(&cid) {
+                    cid.update_transform(ltw);
+                }
+            }
+            RenderMsg::ProxyUpdate(cid, command) => {
+                if let Some(binding) = self.proxies.get_mut(&cid) {
+                    command(binding.proxy.as_mut());
+                }
+            }
+            RenderMsg::LightProxyUpdate(cid, command) => {
+                self.lights.execute_light_command(cid, command);
+            }
+            RenderMsg::UpdateActiveCamera(camera_data) => {
+                camera_data(&mut self.render_data.camera_data);
+                self.update_view_camera_data();
+            },
+            RenderMsg::ProxyState(cid, enabled) => {
+                if let Some(binding) = self.proxies.get_mut(&cid) {
+                    binding.enabled = enabled;
+                }
+            }
         }
     }
 
-    pub fn _update_world(&mut self, world: &mut World) -> Result<()> {
-        unsafe {
-            let world_ptr = world as *mut World;
-            self.traverse_and_update(&mut *world_ptr, &world.children, Matrix4::identity());
+    pub fn handle_events(&mut self) {
+        loop {
+            let Ok(msg) = self.game_rx.try_recv() else {
+                break;
+            };
+            self.handle_message(msg)
         }
-        self.update_render_data(world)
     }
 
-    pub fn render_frame(&mut self, world: &mut World) -> bool {
+    pub fn update(&mut self) {
+        let mut proxies = HashMap::new();
+        swap(&mut self.proxies, &mut proxies);
+
+        for (_, proxy) in &mut proxies {
+            proxy.update(self, self.window());
+        }
+
+        self.proxies = proxies;
+        self.update_render_data();
+    }
+
+    pub fn render_frame(&mut self) -> bool {
         let mut ctx = match self.begin_render() {
             Ok(ctx) => ctx,
             Err(RenderError::Surface {
@@ -178,8 +181,8 @@ impl Renderer {
             }
         };
 
-        self.render(&mut ctx, world);
-        self.end_render(world, ctx);
+        self.render(&mut ctx);
+        self.end_render(ctx);
 
         true
     }
@@ -225,44 +228,40 @@ impl Renderer {
             output,
             color_view,
             depth_view,
-            cache: self.cache.clone(),
-
-            #[cfg(debug_assertions)]
-            debug: self.debug.clone(),
         })
     }
 
-    fn render(&mut self, ctx: &mut FrameCtx, world: &mut World) {
-        self.shadow_pass(ctx, world);
-        self.main_pass(ctx, world);
+    fn render(&mut self, ctx: &mut FrameCtx) {
+        self.shadow_pass(ctx);
+        self.main_pass(ctx);
     }
 
-    fn shadow_pass(&mut self, ctx: &mut FrameCtx, world: &mut World) {
-        world.lights.update(self);
+    fn shadow_pass(&mut self, ctx: &mut FrameCtx) {
+        self.lights.update(&self.cache, &self.state.queue, &self.state.device);
 
-        let shadow_layers = world
+        let shadow_layers = self
             .lights
-            .shadow_array(&world.assets)
+            .shadow_array(&self.cache.textures.store())
             .unwrap()
             .array_layers;
-        let light_count = world.lights.update_shadow_map_ids(shadow_layers);
+        let light_count = self.lights.update_shadow_map_ids(shadow_layers);
 
         for layer in 0..light_count {
-            let Some(light) = world.lights.light_for_layer(layer) else {
+            let Some(light) = self.lights.light_for_layer(layer) else {
                 debug_panic!("Invalid light layer");
                 continue;
             };
 
             if light.type_id == LightType::Spot as u32 {
-                self.update_shadow_camera_for_spot(light);
-                self.prepare_shadow_map(world, ctx, layer);
+                self.shadow_render_data.update_shadow_camera_for_spot(light, &self.state.queue);
+                self.prepare_shadow_map(ctx, layer);
             } else {
                 // TODO: Other Light Type Shadow Maps
             }
         }
     }
 
-    fn prepare_shadow_map(&mut self, world: &mut World, ctx: &mut FrameCtx, layer: u32) {
+    fn prepare_shadow_map(&mut self, ctx: &mut FrameCtx, layer: u32) {
         let mut encoder = self
             .state
             .device
@@ -270,18 +269,18 @@ impl Renderer {
                 label: Some("Shadow Pass Encoder"),
             });
 
-        let layer_view = world.lights.shadow_layer(&self.cache, layer);
+        let layer_view = self.lights.shadow_layer(&self.cache, layer);
         let mut pass = self.prepare_shadow_pass(&mut encoder, &layer_view);
 
         let render_uniform = &self.shadow_render_data.uniform;
         pass.set_bind_group(0, render_uniform.bind_group(), &[]);
 
-        self.render_world(world, ctx, pass, RenderPassType::Shadow);
+        self.render_scene(ctx, pass, RenderPassType::Shadow);
 
         self.state.queue.submit(Some(encoder.finish()));
     }
 
-    fn main_pass(&mut self, ctx: &mut FrameCtx, world: &mut World) {
+    fn main_pass(&mut self, ctx: &mut FrameCtx) {
         let mut encoder = self
             .state
             .device
@@ -294,93 +293,57 @@ impl Renderer {
         let render_uniform = &self.render_data.uniform;
         pass.set_bind_group(0, render_uniform.bind_group(), &[]);
 
-        self.render_world(world, ctx, pass, RenderPassType::Color);
+        self.render_scene(ctx, pass, RenderPassType::Color);
 
         self.state.queue.submit(Some(encoder.finish()));
     }
 
-    fn render_world(
+    fn render_scene(
         &self,
-        world: &mut World,
         frame_ctx: &FrameCtx,
         mut pass: RenderPass,
         pass_type: RenderPassType,
     ) {
-        let light_uniform = world.lights.uniform();
+        let light_uniform = self.lights.uniform();
 
         pass.set_bind_group(3, light_uniform.bind_group(), &[]);
 
         if pass_type == RenderPassType::Color {
-            let shadow_uniform = world.lights.shadow_uniform();
+            let shadow_uniform = self.lights.shadow_uniform();
             pass.set_bind_group(4, shadow_uniform.bind_group(), &[]);
         }
 
-        let draw_ctx = DrawCtx {
+        let draw_ctx = GPUDrawCtx {
             frame: frame_ctx,
             pass: RwLock::new(pass),
             pass_type,
         };
 
-        self.traverse_and_render(world, &world.children, &draw_ctx);
-
-        world.execute_component_func(|comp, world| comp.draw(world, &draw_ctx));
+        self.render_proxies(&draw_ctx);
 
         #[cfg(debug_assertions)]
-        if self.debug.light {
-            world.lights.draw_debug_lights(&draw_ctx);
+        if DebugRenderer::light() {
+            self.lights.render_debug_lights(self, &draw_ctx);
         }
-
-        drop(draw_ctx);
     }
 
-    fn traverse_and_update(
+    fn render_proxies(
         &self,
-        world: &mut World,
-        children: &[GameObjectId],
-        parent_world: Matrix4<f32>,
+        ctx: &GPUDrawCtx,
     ) {
-        for child in children {
-            let child_world = parent_world * child.transform.full_matrix().matrix();
-
-            for comp in child.components.iter().copied() {
-                if let Some(comp) = c_any_mut!(comp) {
-                    comp.update_draw(world, self, &child_world);
-                }
-            }
-
-            if let Some(drawable) = &mut child.clone().drawable {
-                drawable.update(world, child.clone(), &self, &child_world);
-            };
-
-            if !child.children.is_empty() {
-                self.traverse_and_update(
-                    world,
-                    &child.children,
-                    child_world,
-                );
-            }
-
+        for proxy in self.proxies.values().filter(|p| p.enabled) {
+            proxy.render(self, ctx);
         }
     }
 
-    fn traverse_and_render(&self, world: &World, children: &[GameObjectId], ctx: &DrawCtx) {
-        for child in children {
-            if !child.children.is_empty() {
-                self.traverse_and_render(world, &child.children, ctx);
-            }
+    fn end_render(&mut self, mut ctx: FrameCtx) {
+        self.render_final_pass(&mut ctx);
 
-            let Some(drawable) = &mut child.clone().drawable else {
-                continue;
-            };
-
-            drawable.draw(world, ctx);
-        }
-    }
-
-    fn end_render(&mut self, world: &mut World, mut ctx: FrameCtx) {
-        self.render_final_pass(world, &mut ctx);
+        self.window.pre_present_notify();
 
         ctx.output.present();
+
+        self.tick_delta_time();
 
         if self.cache.last_refresh().elapsed().as_secs_f32() > 5.0 {
             trace!("Refreshing cache...");
@@ -391,7 +354,7 @@ impl Renderer {
         }
     }
 
-    fn render_final_pass(&mut self, _world: &mut World, ctx: &mut FrameCtx) {
+    fn render_final_pass(&mut self, ctx: &mut FrameCtx) {
         let mut encoder = self
             .state
             .device
@@ -431,59 +394,23 @@ impl Renderer {
         &mut self.window
     }
 
-    fn update_render_data(&mut self, world: &mut World) -> Result<()> {
-        self.update_view_camera_data(world)?;
-        self.update_system_data(world);
-        world.lights.update(self);
-
-        Ok(())
+    fn update_render_data(&mut self) {
+        self.update_system_data();
+        self.lights.update(&self.cache, &self.state.queue, &self.state.device);
     }
 
-    fn update_view_camera_data(&mut self, world: &World) -> Result<()> {
-        let camera_rc = world
-            .active_camera
-            .as_ref()
-            .ok_or(RenderError::NoCameraSet)?;
-
-        let camera = camera_rc;
-        let camera_comp = camera
-            .get_component::<CameraComponent>()
-            .ok_or(RenderError::NoCameraComponentSet)?;
-
-        let projection_matrix = camera_comp.projection.as_matrix();
-        let camera_transform = &camera.transform;
-
-        self.render_data
-            .camera_data
-            .update_with_transform(projection_matrix, camera_transform);
+    fn update_view_camera_data(&mut self) {
         self.render_data.upload_camera_data(&self.state.queue);
-
-        Ok(())
     }
 
-    fn update_shadow_camera_for_spot(&mut self, light: &LightUniform) {
-        let fovy = (2.0 * light.outer_angle).clamp(0.0175, 3.12);
-        let near = 0.05_f32;
-        let far = light.range.max(near + 0.01);
-        let proj = Perspective3::new(1.0, fovy, near, far);
-
-        self.shadow_render_data.camera_data.update(
-            &proj.as_matrix(),
-            &light.position,
-            &light.view_mat,
-        );
-        self.shadow_render_data
-            .upload_camera_data(&self.state.queue);
-    }
-
-    fn update_system_data(&mut self, world: &World) {
+    fn update_system_data(&mut self) {
         let window_size = self.window.inner_size();
         let window_size = Vector2::new(window_size.width, window_size.height);
 
         let system_data = &mut self.render_data.system_data;
         system_data.screen_size = window_size;
-        system_data.time = world.time().as_secs_f32();
-        system_data.delta_time = world.delta_time().as_secs_f32();
+        system_data.time = self.start_time.elapsed().as_secs_f32();
+        system_data.delta_time = self.delta_time.as_secs_f32();
 
         self.render_data.upload_system_data(&self.state.queue);
     }
@@ -533,5 +460,30 @@ impl Renderer {
             }),
             ..RenderPassDescriptor::default()
         })
+    }
+
+    /// Updates the delta time based on the elapsed time since the last frame
+    pub fn tick_delta_time(&mut self) {
+        self.delta_time = self.last_frame_time.elapsed();
+        self.last_frame_time = Instant::now();
+    }
+
+    pub fn last_frame_time(&self) -> Instant {
+        self.last_frame_time
+    }
+
+    /// Returns the time elapsed since the last frame
+    pub fn delta_time(&self) -> Duration {
+        self.delta_time
+    }
+
+    /// Returns the instant in time when the world was created
+    pub fn start_time(&self) -> Instant {
+        self.start_time
+    }
+
+    /// Returns the total time elapsed since the world was created
+    pub fn time(&self) -> Duration {
+        self.start_time.elapsed()
     }
 }

@@ -16,6 +16,7 @@ pub struct CameraComponent {
     height: f32,
     parent: GameObjectId,
     pub zoom_speed: f32,
+    projection_dirty: bool,
 }
 
 impl CameraComponent {
@@ -105,6 +106,15 @@ impl CameraComponent {
             self.far,
         );
         self.projection_inverse = self.projection.inverse();
+        self.projection_dirty = true;
+    }
+
+    pub fn is_projection_dirty(&self) -> bool {
+        self.projection_dirty
+    }
+
+    pub fn clear_projection_dirty(&mut self) {
+        self.projection_dirty = false;
     }
 
     pub fn resize(&mut self, width: f32, height: f32) {
@@ -115,10 +125,9 @@ impl CameraComponent {
 
     #[cfg(debug_assertions)]
     pub fn push_debug_ray(&mut self, ray: Ray, max_toi: f32) {
-        use crate::drawables::CameraDebug;
+        use crate::components::CameraDebug;
 
-        let mut parent = self.parent();
-        let Some(debug) = parent.drawable_mut::<CameraDebug>() else {
+        let Some(mut debug) = self.parent().get_component::<CameraDebug>() else {
             log::warn!("No camera debug drawable found!");
             return;
         };
@@ -132,6 +141,7 @@ impl Component for CameraComponent {
         let projection = Perspective3::new(800.0 / 600.0, 60f32.to_radians(), 0.01, 1000.0);
         let projection_inverse = projection.inverse();
 
+        #[cfg(debug_assertions)]
         add_debug_drawable(parent);
 
         CameraComponent {
@@ -145,6 +155,7 @@ impl Component for CameraComponent {
             width: 800.0,
             height: 600.0,
             parent,
+            projection_dirty: true,
         }
     }
 
@@ -164,13 +175,10 @@ impl Component for CameraComponent {
     }
 }
 
-fn add_debug_drawable(_parent: GameObjectId) {
-    #[cfg(debug_assertions)]
-    {
-        use crate::drawables::CameraDebug;
+#[cfg(debug_assertions)]
+fn add_debug_drawable(mut parent: GameObjectId) {
+    use crate::components::CameraDebug;
 
-        let mut parent = _parent;
-        parent.set_drawable(CameraDebug::default());
-    }
+    parent.add_component::<CameraDebug>();
 }
 

@@ -1,6 +1,5 @@
-use crate::components::Component;
+use crate::components::{Component, MeshRenderer};
 use crate::core::{Bones, GameObjectId};
-use crate::drawables::MeshRenderer;
 use crate::World;
 use log::warn;
 use nalgebra::{Matrix4, Vector3};
@@ -28,7 +27,7 @@ impl Component for SkeletalComponent {
     }
 
     fn init(&mut self, world: &mut World) {
-        let Some(renderer) = self.parent.drawable::<MeshRenderer>() else {
+        let Some(renderer) = self.parent.get_component::<MeshRenderer>() else {
             warn!("No Mesh Renderer found on Skeletal Object");
             return;
         };

@@ -1,6 +1,6 @@
 use crate::assets::{HMaterial, HMesh};
+use crate::components::MeshRenderer;
 use crate::core::GameObjectId;
-use crate::drawables::MeshRenderer;
 use crate::prefabs::prefab::Prefab;
 use crate::World;
 
@@ -30,7 +30,7 @@ impl Prefab for SpherePrefab {
 
     fn build(&self, world: &mut World) -> GameObjectId {
         let mut sphere = world.new_object(self.prefab_name());
-        sphere.drawable = Some(MeshRenderer::new(HMesh::SPHERE, Some(vec![self.material])));
+        sphere.add_component::<MeshRenderer>().change_mesh(HMesh::SPHERE, Some(vec![self.material]));
 
         sphere
     }

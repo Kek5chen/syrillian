@@ -1,6 +1,6 @@
 use crate::assets::{HMaterial, HMesh};
+use crate::components::MeshRenderer;
 use crate::core::GameObjectId;
-use crate::drawables::MeshRenderer;
 use crate::prefabs::prefab::Prefab;
 use crate::World;
 
@@ -30,7 +30,7 @@ impl Prefab for CubePrefab {
 
     fn build(&self, world: &mut World) -> GameObjectId {
         let mut cube = world.new_object("Cube");
-        cube.drawable = Some(MeshRenderer::new(HMesh::UNIT_CUBE, Some(vec![self.material])));
+        cube.add_component::<MeshRenderer>().change_mesh(HMesh::UNIT_CUBE, Some(vec![self.material]));
 
         cube
     }

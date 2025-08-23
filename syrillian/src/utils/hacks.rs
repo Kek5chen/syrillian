@@ -1,6 +1,7 @@
 use slotmap::DenseSlotMap;
 use std::slice;
 
+#[allow(unused)]
 pub trait DenseSlotMapDirectAccess<V> {
     fn as_slice(&self) -> &[V];
 }

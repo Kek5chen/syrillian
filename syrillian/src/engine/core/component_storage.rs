@@ -8,13 +8,14 @@ use std::marker::PhantomData;
 #[allow(unused)]
 pub(crate) trait HopSlotMapUntyped<K>
 where
-    K: slotmap::Key + 'static,
+    K: slotmap::Key + Send + 'static,
 {
     fn as_dyn(&self) -> &dyn Any;
     fn as_dyn_mut(&mut self) -> &mut dyn Any;
     fn iter_comps<'a>(&'a self) -> Box<dyn Iterator<Item=&'a dyn Component> + 'a>;
     fn iter_comps_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item=&'a mut dyn Component> + 'a>;
     fn iter<'a>(&'a self) -> Box<dyn Iterator<Item=(K, &'a dyn Component)> + 'a>;
+    fn iter_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item=(K, &'a mut dyn Component)> + 'a>;
     fn get(&self, key: K) -> Option<&dyn Component>;
     fn get_mut(&mut self, key: K) -> Option<&mut dyn Component>;
     fn remove(&mut self, key: K);
@@ -22,7 +23,7 @@ where
 
 impl<K, V> HopSlotMapUntyped<K> for HopSlotMap<K, V>
 where
-    K: slotmap::Key + 'static,
+    K: slotmap::Key + Send + 'static,
     V: Component,
 {
     fn as_dyn(&self) -> &dyn Any {
@@ -45,6 +46,10 @@ where
         Box::new(self.iter().map(|(k, v)| (k, v as &dyn Component)))
     }
 
+    fn iter_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item=(K, &'a mut dyn Component)> + 'a> {
+        Box::new(self.iter_mut().map(|(k, v)| (k, v as &mut dyn Component)))
+    }
+
     fn get(&self, key: K) -> Option<&dyn Component> {
         self.get(key).map(|v| v as &dyn Component)
     }
@@ -61,6 +66,7 @@ where
 #[derive(Default)]
 pub struct ComponentStorage {
     inner: HashMap<TypeId, Box<dyn HopSlotMapUntyped<ComponentId>>>,
+    pub(crate) fresh: Vec<TypedComponentId>,
 }
 impl ComponentStorage {
     pub(crate) fn _get_from_id(&self, tid: TypeId) -> Option<&dyn HopSlotMapUntyped<ComponentId>> {
@@ -119,6 +125,23 @@ impl ComponentStorage {
         Some(self._get_mut()?.values_mut())
     }
 
+    pub fn iter(&self) -> impl Iterator<Item=(TypedComponentId, &dyn Component)> {
+        self.inner.iter().flat_map(|(tid, store)| {
+            store.iter().map(|(k, v)| {
+                (TypedComponentId(*tid, k), v)
+            })
+        })
+    }
+
+    pub fn iter_mut(&mut self) -> impl Iterator<Item=(TypedComponentId, &mut dyn Component)> {
+        self.inner.iter_mut().flat_map(|(tid, store)| {
+            store.iter_mut().map(|(k, v)| {
+                (TypedComponentId(*tid, k), v)
+            })
+        })
+    }
+
+
     pub fn values(&self) -> impl Iterator<Item=&dyn Component> {
         self.inner.values().flat_map(|store| store.iter_comps())
     }
@@ -129,10 +152,7 @@ impl ComponentStorage {
             .flat_map(|store| store.iter_comps_mut())
     }
 
-    pub(crate) fn map_mut<C>(&mut self) -> &mut HopSlotMap<ComponentId, C>
-    where
-        C: Component,
-    {
+    pub(crate) fn map_mut<C: Component>(&mut self) -> &mut HopSlotMap<ComponentId, C> {
         let tid = TypeId::of::<C>();
         self.inner
             .entry(tid)
@@ -143,7 +163,9 @@ impl ComponentStorage {
     }
 
     pub(crate) fn add<C: Component>(&mut self, component: C) -> CRef<C> {
-        CRef(self.map_mut().insert(component), PhantomData)
+        let comp: CRef<C> = CRef(self.map_mut().insert(component), PhantomData);
+        self.fresh.push(comp.into());
+        comp
     }
 
     pub(crate) fn remove(&mut self, comp: TypedComponentId) {

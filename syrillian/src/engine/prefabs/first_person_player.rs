@@ -1,6 +1,4 @@
-use crate::components::{
-    Collider3D, FirstPersonCameraController, FirstPersonMovementController, RigidBodyComponent,
-};
+use crate::components::{Collider3D, Component, FirstPersonCameraController, FirstPersonMovementController, RigidBodyComponent};
 use crate::core::GameObjectId;
 use crate::engine::prefabs::prefab::Prefab;
 use crate::World;
@@ -16,9 +14,10 @@ impl Prefab for FirstPersonPlayerPrefab {
 
     fn build(&self, world: &mut World) -> GameObjectId {
         // Prepare camera
-        let mut camera = world.new_camera();
-        camera.transform.set_position(0.0, 1.0, 0.0);
-        camera.add_component::<FirstPersonCameraController>();
+        let camera = world.new_camera();
+        let mut camera_obj = camera.parent();
+        camera_obj.transform.set_position(0.0, 1.0, 0.0);
+        camera_obj.add_component::<FirstPersonCameraController>();
 
         // Prepare character controller
         let mut char_controller = world.new_object(self.prefab_name());
@@ -39,10 +38,10 @@ impl Prefab for FirstPersonPlayerPrefab {
             warn!("Not able to set rigid body properties for First Person Player Prefab");
         }
 
-        char_controller.add_child(camera);
+        char_controller.add_child(camera_obj);
         char_controller.add_component::<FirstPersonMovementController>();
 
-        world.active_camera = Some(camera);
+        world.set_active_camera(camera);
 
         char_controller
     }

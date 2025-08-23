@@ -14,24 +14,21 @@ use std::error::Error;
 use syrillian::assets::scene_loader::SceneLoader;
 use syrillian::assets::{HMaterial, StoreType};
 use syrillian::assets::{Material, Shader};
-use syrillian::components::{
-    CRef, Collider3D, FirstPersonCameraController, PointLightComponent, RigidBodyComponent,
-    RopeComponent, RotateComponent, SpotLightComponent, SpringComponent,
-};
+use syrillian::components::glyph::TextAlignment;
+use syrillian::components::{CRef, Collider3D, Component, FirstPersonCameraController, PointLightComponent, RigidBodyComponent, RopeComponent, RotateComponent, SpotLightComponent, SpringComponent, Text2D, Text3D};
 use syrillian::core::{GameObjectExt, GameObjectId};
-use syrillian::drawables::text::glyph::TextAlignment;
-use syrillian::drawables::{Text2D, Text3D};
 use syrillian::prefabs::first_person_player::FirstPersonPlayerPrefab;
 use syrillian::prefabs::prefab::Prefab;
 use syrillian::prefabs::CubePrefab;
 use syrillian::rendering::lights::Light;
-use syrillian::rendering::renderer::Renderer;
 use syrillian::utils::frame_counter::FrameCounter;
 use syrillian::SyrillianApp;
 use syrillian::{AppState, World};
 use winit::event::MouseButton;
 use winit::keyboard::KeyCode;
-use winit::window::Window;
+
+#[cfg(debug_assertions)]
+use syrillian::rendering::DebugRenderer;
 // const NECO_IMAGE: &[u8; 1293] = include_bytes!("assets/neco.jpg");
 
 const SHADER1: &str = include_str!("dynamic_shader/shader.wgsl");
@@ -64,7 +61,7 @@ impl Default for MyMain {
 }
 
 impl AppState for MyMain {
-    fn init(&mut self, world: &mut World, _window: &Window) -> Result<(), Box<dyn Error>> {
+    fn init(&mut self, world: &mut World) -> Result<(), Box<dyn Error>> {
         world.input.set_auto_cursor_lock(true);
         world.input.set_quit_on_escape(true);
 
@@ -141,14 +138,14 @@ impl AppState for MyMain {
 
         {
             let mut text = world.new_object("Text 3D");
-            let mut text3d = Text3D::new("Meow 3D".to_string(), "Arial".to_string(), 1., None);
+            let mut text3d = text.add_component::<Text3D>();
 
+            text3d.set_size(1.0);
             text3d.set_alignment(TextAlignment::Center);
             text.transform.set_position(-10., 2., 0.);
             text.transform.set_euler_rotation(0., 90., 0.);
-            text3d.text_mut().rainbow_mode(true);
+            text3d.set_rainbow_mode(true);
 
-            text.set_drawable(text3d);
             world.add_child(text);
             self.text3d = text;
         }
@@ -156,11 +153,14 @@ impl AppState for MyMain {
         // fixme: render order matters because this is transparent and 2d
         {
             let mut text = world.new_object("Text");
-            let mut text2d = Text2D::new("Meow".to_string(), "Impact".to_string(), 50., None);
-            text2d.set_position(0., 50.);
-            text2d.text_mut().rainbow_mode(true);
+            let mut text2d = text.add_component::<Text2D>();
 
-            text.set_drawable(text2d);
+            text2d.set_text("Meow");
+            text2d.set_font("Impact");
+            text2d.set_size(50.);
+            text2d.set_position(0., 50.);
+            text2d.set_rainbow_mode(true);
+
             world.add_child(text);
         }
 
@@ -194,10 +194,10 @@ impl AppState for MyMain {
             .set_euler_rotation(0., 80., 0.);
 
         self.light1 = spot.add_component::<SpotLightComponent>();
-        self.light1.set_color(world, 1.0, 0.2, 0.2);
-        self.light1.set_intensity(world, 1000.);
-        self.light1.set_inner_angle(world, 20.);
-        self.light1.set_outer_angle(world, 30.);
+        self.light1.set_color(1.0, 0.2, 0.2);
+        self.light1.set_intensity(1000.);
+        self.light1.set_inner_angle(20.);
+        self.light1.set_outer_angle(30.);
 
         let mut spot = world.new_object("Spot 2");
         spot.at(5., 5., -10.)
@@ -205,19 +205,19 @@ impl AppState for MyMain {
             .set_euler_rotation(0., 100., 0.);
 
         self.light2 = spot.add_component::<SpotLightComponent>();
-        self.light2.set_color(world, 0.2, 0.2, 1.0);
-        self.light2.set_intensity(world, 1000.);
-        self.light2.set_inner_angle(world, 20.);
-        self.light2.set_outer_angle(world, 30.);
+        self.light2.set_color(0.2, 0.2, 1.0);
+        self.light2.set_intensity(1000.);
+        self.light2.set_inner_angle(20.);
+        self.light2.set_outer_angle(30.);
 
         world.print_objects();
 
         Ok(())
     }
 
-    fn update(&mut self, world: &mut World, window: &Window) -> Result<(), Box<dyn Error>> {
+    fn update(&mut self, world: &mut World) -> Result<(), Box<dyn Error>> {
         self.frame_counter.new_frame_from_world(world);
-        window.set_title(&self.format_title());
+        world.set_window_title(self.format_title());
 
         let mut zoom_down = world.input.gamepad.button(Button::LeftTrigger2);
         if world.input.is_button_pressed(MouseButton::Right) {
@@ -225,13 +225,14 @@ impl AppState for MyMain {
         }
 
         if let Some(mut camera) = world
-            .active_camera
-            .and_then(|cam| cam.get_component::<FirstPersonCameraController>())
+            .active_camera()
+            .upgrade(world)
+            .and_then(|cam| cam.parent().get_component::<FirstPersonCameraController>())
         {
             camera.set_zoom(zoom_down);
         }
 
-        let text3d = self.text3d.drawable_mut::<Text3D>().unwrap();
+        let mut text3d = self.text3d.get_component::<Text3D>().unwrap();
         text3d.set_text(format!(
             "There are {} Objects in the World",
             world.objects.len(),
@@ -244,29 +245,23 @@ impl AppState for MyMain {
 
         self.do_raycast_test(world);
 
-        Ok(())
-    }
-
-    #[cfg(debug_assertions)]
-    fn draw(
-        &mut self,
-        world: &mut World,
-        renderer: &mut Renderer,
-    ) -> Result<(), Box<dyn Error>> {
+        #[cfg(debug_assertions)]
         if world.input.is_key_down(KeyCode::KeyL) {
-            let mode = renderer.debug.next_mode();
+            let mode = DebugRenderer::next_mode();
 
             let Some(mut collider) = self.player.get_component::<Collider3D>() else {
                 return Ok(());
             };
-            if collider.is_debug_render_enabled() {
-                collider.set_debug_render(false);
+            if collider.is_local_debug_render_enabled() {
+                collider.set_local_debug_render_enabled(false);
             } else {
                 if mode == 0 {
-                    collider.set_debug_render(true);
+                    collider.set_local_debug_render_enabled(true);
                 }
             }
         }
+
+        // sleep(Duration::from_millis(100));
 
         Ok(())
     }
@@ -289,7 +284,8 @@ impl MyMain {
     }
 
     fn do_raycast_test(&mut self, world: &mut World) -> Option<()> {
-        let camera = world.active_camera?;
+        let camera = world.active_camera().upgrade(world)?;
+        let camera_obj = camera.parent();
 
         let pick_up = world.input.gamepad.is_button_down(Button::RightTrigger)
             || world.input.is_button_down(MouseButton::Left);
@@ -298,8 +294,8 @@ impl MyMain {
 
         if pick_up {
             let ray = Ray::new(
-                camera.transform.position().into(),
-                camera.transform.forward(),
+                camera_obj.transform.position().into(),
+                camera_obj.transform.forward(),
             );
             let player_collider = self.player.get_component::<Collider3D>()?.phys_handle;
             let intersect = world.physics.cast_ray(
@@ -311,10 +307,8 @@ impl MyMain {
 
             #[cfg(debug_assertions)]
             {
-                use syrillian::components::CameraComponent;
-                if let Some(mut camera) = camera.get_component::<CameraComponent>() {
-                    camera.push_debug_ray(ray, 5.);
-                }
+                let mut camera = camera;
+                camera.push_debug_ray(ray, 5.);
             }
 
             match intersect {
@@ -333,16 +327,17 @@ impl MyMain {
         }
 
         if let Some(mut obj) = self.picked_up {
+            let delta = world.delta_time().as_secs_f32();
             let scale = obj.transform.scale();
-            let target_position = camera.transform.position()
-                + camera.transform.forward() * scale.magnitude().max(1.) * 2.;
+            let target_position = camera_obj.transform.position()
+                + camera_obj.transform.forward() * scale.magnitude().max(1.) * 2.;
             let position = obj.transform.position();
             let target_rotation =
-                UnitQuaternion::face_towards(&camera.transform.up(), &camera.transform.forward());
+                UnitQuaternion::face_towards(&camera_obj.transform.up(), &camera_obj.transform.forward());
             let rotation = obj.transform.rotation();
-            let unit_quat = UnitQuaternion::from_quaternion(rotation.lerp(&target_rotation, 0.03));
+            let unit_quat = UnitQuaternion::from_quaternion(rotation.lerp(&target_rotation, 1.03 * delta));
             obj.transform
-                .set_position_vec(position.lerp(&target_position, 1.03));
+                .set_position_vec(position.lerp(&target_position, 10.03 * delta));
             obj.transform.set_rotation(unit_quat);
             let mut rb = obj.get_component::<RigidBodyComponent>()?;
             rb.set_kinematic(true);
@@ -351,7 +346,7 @@ impl MyMain {
         if world.input.is_key_down(KeyCode::KeyC)
             || world.input.gamepad.is_button_down(Button::West)
         {
-            let pos = camera.transform.position() + camera.transform.forward() * 3.;
+            let pos = camera_obj.transform.position() + camera_obj.transform.forward() * 3.;
             world
                 .spawn(&CubePrefab {
                     material: HMaterial::DEFAULT,

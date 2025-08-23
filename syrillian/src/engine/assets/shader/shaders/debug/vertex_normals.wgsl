@@ -1,23 +1,18 @@
 #use model
+#use default_vertex
 
-struct VSIn {
-    @builtin(vertex_index) index: u32,
-    @location(0) position: vec3<f32>,
-    @location(1) normal: vec3<f32>,
-}
-
-struct VSOut {
+struct FIn {
     @builtin(position) position: vec4<f32>,
     @location(0) color: vec4<f32>,
 }
 
 @vertex
-fn vs_main(in: VSIn) -> VSOut {
-    var out: VSOut;
+fn vs_main(in: VInput, @builtin(vertex_index) vid: u32) -> FIn {
+    var out: FIn;
 
     var world_pos = vec4(in.position, 1.0);
 
-    if in.index == 0 {
+    if vid == 0 {
         out.color = vec4(0.5, 0.0, 1.0, 1.0);
     } else {
         world_pos += vec4(normalize(in.normal) / 2, 0.0);
@@ -30,6 +25,6 @@ fn vs_main(in: VSIn) -> VSOut {
 }
 
 @fragment
-fn fs_main(in: VSOut) -> @location(0) vec4<f32> {
+fn fs_main(in: FIn) -> @location(0) vec4<f32> {
     return in.color;
 }

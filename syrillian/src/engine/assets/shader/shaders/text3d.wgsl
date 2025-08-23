@@ -1,4 +1,5 @@
 #use model
+#use material
 
 struct GlyphIn {
     @location(0) pos_em: vec2<f32>,

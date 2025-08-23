@@ -20,7 +20,7 @@ pub struct AssetStore {
 }
 
 impl AssetStore {
-    pub fn empty() -> Arc<AssetStore> {
+    pub fn new() -> Arc<AssetStore> {
         Arc::new(AssetStore {
             meshes: Arc::new(Store::populated()),
             shaders: Arc::new(Store::populated()),

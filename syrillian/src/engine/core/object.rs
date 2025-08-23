@@ -1,10 +1,8 @@
-use std::any::Any;
 use std::collections::HashSet;
 use std::fmt::Debug;
 use std::ops::{Deref, DerefMut};
 
 use crate::components::{CRef, Component, TypedComponentId};
-use crate::drawables::drawable::Drawable;
 use crate::world::World;
 use crate::{c_any_mut, ensure_aligned};
 use itertools::Itertools;
@@ -61,7 +59,6 @@ pub struct GameObject {
     pub(crate) children: Vec<GameObjectId>,
     pub(crate) parent: Option<GameObjectId>,
     pub transform: Transform,
-    pub(crate) drawable: Option<Box<dyn Drawable>>,
     pub(crate) components: HashSet<TypedComponentId>,
 }
 
@@ -90,29 +87,6 @@ impl GameObject {
 
         self.children.push(child);
         child.parent = Some(self.id);
-    }
-
-    pub fn set_drawable(&mut self, drawable: impl Drawable) {
-        self.set_drawable_box(Box::new(drawable));
-    }
-
-    #[inline]
-    pub fn set_drawable_box(&mut self, drawable: Box<dyn Drawable>) {
-        self.drawable = Some(drawable);
-    }
-
-    pub fn remove_drawable(&mut self) {
-        self.drawable = None;
-    }
-
-    pub fn drawable<D: Drawable>(&self) -> Option<&D> {
-        let drawable = self.drawable.as_ref()?.as_ref();
-        Some((drawable as &dyn Any).downcast_ref::<D>()?)
-    }
-
-    pub fn drawable_mut<D: Drawable>(&mut self) -> Option<&mut D> {
-        let drawable = self.drawable.as_mut()?.as_mut();
-        Some((drawable as &mut dyn Any).downcast_mut::<D>()?)
     }
 
     pub fn add_component<'b, C>(&mut self) -> CRef<C>
@@ -232,9 +206,9 @@ impl ModelUniform {
         }
     }
 
-    pub fn from_translation(translation: Translation3<f32>) -> Self {
+    pub fn from_matrix(translation: &Matrix4<f32>) -> Self {
         ModelUniform {
-            model_mat: translation.to_homogeneous(),
+            model_mat: *translation,
         }
     }
 

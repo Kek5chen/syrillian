@@ -16,37 +16,20 @@
 //! where you can put your raw data, which is then initialized by the AssetCache on the GPU.
 //!
 //! You'll usually only interact with the Cache or something like that, in a
-//! [`Drawable`](crate::drawables::Drawable), which is syrillians abstraction for
-//! "components" / systems, that know how to "render stuff".
+//! [`Render Proxy`](proxies::SceneProxy), which is Syrillians abstraction for
+//! render-side drawable world state, which knows how to render the state the proxy represents.
 //!
-//! In a [`Drawable`](crate::drawables::Drawable) you'll want to interact with the
-//! [`DrawCtx`] object that contains all info for the frame, and inner-frame draw call.
+//! In a [`Scene Proxy`](proxies::SceneProxy) you'll want to interact with the
+//! [`GPUDrawCtx`] object that contains all info for the frame, and inner-frame draw call.
 //!
-//! This is how you'd interact with the asset cache in a [`Drawable`](crate::drawables::Drawable)
+//! Creating a scene proxy is or >should< usually not be necessary as you can just spawn a builtin
+//! scene proxy in your Component
 //!
-//! ```rust
-//! use syrillian::assets::{HMaterial, HShader};
-//! use syrillian::drawables::Drawable;
-//! use syrillian::rendering::DrawCtx;
-//! use syrillian::World;
-//!
-//! struct Something {
-//!     material: HMaterial,
-//! }
-//!
-//! impl Drawable for Something {
-//!     fn draw(&self, _world: &World, ctx: &DrawCtx) {
-//!         let unit_square = ctx.frame.cache.mesh_unit_square();
-//!         let shader = ctx.frame.cache.shader(HShader::DIM3);
-//!         let material = ctx.frame.cache.material(self.material);
-//!         let predefined = ctx.frame.cache.material(HMaterial::DEFAULT);
-//!     }
-//! }
-//! ```
+//! You can create scene proxies in [`Components`](crate::components)
 
 pub mod cache;
 mod context;
-mod error;
+pub mod error;
 mod offscreen_surface;
 mod post_process_pass;
 pub mod renderer;
@@ -54,8 +37,19 @@ pub mod state;
 pub(crate) mod uniform;
 pub mod lights;
 pub(crate) mod render_data;
+pub mod proxies;
+pub mod message;
+pub mod light_manager;
+
+#[cfg(debug_assertions)]
+pub mod debug_renderer;
 
 pub use cache::*;
 pub use context::*;
+pub use message::*;
+
+#[cfg(debug_assertions)]
+pub use debug_renderer::*;
+
 pub(crate) use renderer::*;
 pub(crate) use state::*;

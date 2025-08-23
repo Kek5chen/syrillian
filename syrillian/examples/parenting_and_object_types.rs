@@ -2,10 +2,8 @@
 
 use std::error::Error;
 
-use winit::window::Window;
-
 use syrillian::assets::scene_loader::SceneLoader;
-use syrillian::components::RotateComponent;
+use syrillian::components::{Component, RotateComponent};
 use syrillian::utils::frame_counter::FrameCounter;
 use syrillian::world::World;
 use syrillian::{AppState, ENGINE_STR};
@@ -17,32 +15,32 @@ struct ParentingAndObjectTypes {
 }
 
 impl AppState for ParentingAndObjectTypes {
-    fn init(&mut self, world: &mut World, _window: &Window) -> Result<(), Box<dyn Error>> {
+    fn init(&mut self, world: &mut World) -> Result<(), Box<dyn Error>> {
         let mut obj2 = SceneLoader::load(world, "testmodels/parenting_and_object_types.fbx")?;
         let mut obj1 = world.new_object("Mow");
-        let mut camera = world.new_camera();
+        let camera = world.new_camera();
 
-        camera.transform.set_position(0.0, 1.0, 50.0);
+        camera.parent().transform.set_position(0.0, 1.0, 50.0);
 
         obj2.transform.set_scale(0.03);
         obj2.add_component::<RotateComponent>();
         obj1.add_child(obj2);
         world.add_child(obj1);
-        world.add_child(camera);
 
         world.print_objects();
 
         Ok(())
     }
 
-    fn update(&mut self, world: &mut World, window: &Window) -> Result<(), Box<dyn Error>> {
+    fn update(&mut self, world: &mut World) -> Result<(), Box<dyn Error>> {
         self.frame_counter.new_frame_from_world(world);
 
-        window.set_title(&format!(
+        let title = format!(
             "{} - FPS: [ {} ]",
             ENGINE_STR,
             self.frame_counter.fps(),
-        ));
+        );
+        world.set_window_title(title);
 
         Ok(())
     }
