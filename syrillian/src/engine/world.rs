@@ -117,7 +117,11 @@ impl World {
 
     // SAFETY: View [`World::new`]. This function will just set up data structures around the world
     // needed for initialization. Mostly useful for tests.
-    pub unsafe fn fresh() -> (Box<World>, mpsc::Receiver<RenderMsg>, mpsc::Receiver<GameAppEvent>) {
+    pub unsafe fn fresh() -> (
+        Box<World>,
+        mpsc::Receiver<RenderMsg>,
+        mpsc::Receiver<GameAppEvent>,
+    ) {
         let (tx1, rx1) = mpsc::channel();
         let (tx2, rx2) = mpsc::channel();
         let store = AssetStore::new();
@@ -247,6 +251,7 @@ impl World {
     /// If you're using the App runtime, this will be handled for you. Only call this function
     /// if you are trying to use a detached world context.
     pub fn post_update(&mut self) {
+        let mut frame_proxy_batch = Vec::with_capacity(self.components.len());
         self.execute_component_func(Component::post_update);
         let mut fresh = Vec::new();
         swap(&mut fresh, &mut self.components.fresh);
@@ -273,18 +278,15 @@ impl World {
                 continue;
             }
             for ctid in obj.components.iter().copied() {
-                self.render_tx
-                    .send(RenderMsg::UpdateTransform(
-                        ctid,
-                        obj.transform.get_global_transform_matrix(),
-                    ))
-                    .unwrap();
+                frame_proxy_batch.push(RenderMsg::UpdateTransform(
+                    ctid,
+                    obj.transform.get_global_transform_matrix(),
+                ));
             }
         }
-
         let world = self as *mut World;
         for (ctid, comp) in self.components.iter_mut() {
-            let ctx = CPUDrawCtx::new(ctid, self.render_tx.clone());
+            let ctx = CPUDrawCtx::new(ctid, &mut frame_proxy_batch);
             unsafe {
                 comp.update_proxy(&mut *world, ctx);
             }
@@ -296,26 +298,26 @@ impl World {
                 let pos = obj.transform.position();
                 let view_mat = obj.transform.view_matrix_rigid().to_matrix();
                 let view_proj_mat = active_camera.projection.as_matrix() * view_mat;
-                self.render_tx
-                    .send(RenderMsg::UpdateActiveCamera(Box::new(move |cam| {
-                        cam.view_mat = view_mat;
-                        cam.proj_view_mat = view_proj_mat;
-                        cam.pos = pos;
-                    })))
-                    .unwrap();
+                frame_proxy_batch.push(RenderMsg::UpdateActiveCamera(Box::new(move |cam| {
+                    cam.view_mat = view_mat;
+                    cam.proj_view_mat = view_proj_mat;
+                    cam.pos = pos;
+                })));
             }
 
             if active_camera.is_projection_dirty() {
                 let proj_mat = active_camera.projection;
-                self.render_tx
-                    .send(RenderMsg::UpdateActiveCamera(Box::new(move |cam| {
-                        cam.proj_view_mat = proj_mat.as_matrix() * cam.view_mat;
-                        cam.projection_mat = proj_mat;
-                    })))
-                    .unwrap();
+                frame_proxy_batch.push(RenderMsg::UpdateActiveCamera(Box::new(move |cam| {
+                    cam.proj_view_mat = proj_mat.as_matrix() * cam.view_mat;
+                    cam.projection_mat = proj_mat;
+                })));
                 active_camera.clear_projection_dirty();
             }
         }
+
+        self.render_tx
+            .send(RenderMsg::CommandBatch(frame_proxy_batch))
+            .unwrap();
     }
 
     /// Prepares for the next frame by resetting the input state

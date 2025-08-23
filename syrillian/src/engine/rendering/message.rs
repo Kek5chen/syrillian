@@ -17,4 +17,5 @@ pub enum RenderMsg {
     LightProxyUpdate(TypedComponentId, LightProxyCommand),
     UpdateActiveCamera(CameraUpdateCommand),
     ProxyState(TypedComponentId, bool), // enabled
+    CommandBatch(Vec<RenderMsg>),
 }

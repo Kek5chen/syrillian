@@ -133,7 +133,7 @@ impl Component for Collider3D {
     }
 
     #[cfg(debug_assertions)]
-    fn update_proxy(&mut self, _world: &World, ctx: CPUDrawCtx) {
+    fn update_proxy(&mut self, _world: &World, mut ctx: CPUDrawCtx) {
         if !DebugRenderer::collider_mesh() && self.was_debug_enabled {
             ctx.disable_proxy();
             self.was_debug_enabled = false;

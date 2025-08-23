@@ -90,7 +90,7 @@ impl Component for MeshRenderer {
         }))
     }
 
-    fn update_proxy(&mut self, _world: &World, ctx: CPUDrawCtx) {
+    fn update_proxy(&mut self, _world: &World, mut ctx: CPUDrawCtx) {
         if let Some(mut skel) = self.parent().get_component::<SkeletalComponent>()
             && skel.update_palette()
         {
