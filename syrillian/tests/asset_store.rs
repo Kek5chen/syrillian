@@ -1,7 +1,5 @@
 use nalgebra::{Vector2, Vector3};
-use syrillian::assets::{
-    AssetStore, Font, HMaterial, HMesh, HShader, HTexture, Material, Mesh, Shader, Texture,
-};
+use syrillian::assets::{AssetStore, Font, HMaterial, HMesh, HShader, HTexture, Material, Mesh, Shader, Sound, Texture};
 use syrillian::core::Vertex3D;
 
 #[test]
@@ -98,6 +96,15 @@ fn test_font_store() {
 }
 
 #[test]
+fn test_sound_store() {
+    let store = AssetStore::empty();
+    let sound = Sound::load_sound("examples/assets/pop.wav").expect("Failed to load sound");
+    let handle = store.sounds.add(sound);
+    let retrieved_sound = store.sounds.try_get(handle);
+    assert!(retrieved_sound.is_some());
+}
+
+#[test]
 #[ignore]
 fn test_find_font() {
     let store = AssetStore::empty();
@@ -127,10 +134,19 @@ fn test_predefined_shaders() {
     store.shaders.try_get(HShader::TEXT_2D).unwrap();
     store.shaders.try_get(HShader::TEXT_3D).unwrap();
     store.shaders.try_get(HShader::DEBUG_EDGES).unwrap();
-    store.shaders.try_get(HShader::DEBUG_VERTEX_NORMALS).unwrap();
+    store
+        .shaders
+        .try_get(HShader::DEBUG_VERTEX_NORMALS)
+        .unwrap();
     store.shaders.try_get(HShader::DEBUG_RAYS).unwrap();
-    store.shaders.try_get(HShader::DEBUG_TEXT2D_GEOMETRY).unwrap();
-    store.shaders.try_get(HShader::DEBUG_TEXT3D_GEOMETRY).unwrap();
+    store
+        .shaders
+        .try_get(HShader::DEBUG_TEXT2D_GEOMETRY)
+        .unwrap();
+    store
+        .shaders
+        .try_get(HShader::DEBUG_TEXT3D_GEOMETRY)
+        .unwrap();
 }
 
 #[test]
@@ -146,16 +162,14 @@ fn test_predefined_textures() {
 fn test_remove_asset() {
     let store = AssetStore::empty();
 
-    let vertices = vec![
-        Vertex3D::new(
-            Vector3::new(0.0, 0.0, 0.0),
-            Vector2::new(0.0, 0.0),
-            Vector3::new(0.0, 1.0, 0.0),
-            Vector3::new(1.0, 0.0, 0.0),
-            &[0u32],
-            &[0.0f32],
-        ),
-    ];
+    let vertices = vec![Vertex3D::new(
+        Vector3::new(0.0, 0.0, 0.0),
+        Vector2::new(0.0, 0.0),
+        Vector3::new(0.0, 1.0, 0.0),
+        Vector3::new(1.0, 0.0, 0.0),
+        &[0u32],
+        &[0.0f32],
+    )];
 
     let mesh = Mesh::builder(vertices).build();
     let mesh2 = mesh.clone();
@@ -176,16 +190,14 @@ fn test_remove_asset() {
 fn test_iterate_assets() {
     let store = AssetStore::empty();
 
-    let vertices = vec![
-        Vertex3D::new(
-            Vector3::new(0.0, 0.0, 0.0),
-            Vector2::new(0.0, 0.0),
-            Vector3::new(0.0, 1.0, 0.0),
-            Vector3::new(1.0, 0.0, 0.0),
-            &[0u32],
-            &[0.0f32],
-        ),
-    ];
+    let vertices = vec![Vertex3D::new(
+        Vector3::new(0.0, 0.0, 0.0),
+        Vector2::new(0.0, 0.0),
+        Vector3::new(0.0, 1.0, 0.0),
+        Vector3::new(1.0, 0.0, 0.0),
+        &[0u32],
+        &[0.0f32],
+    )];
 
     let mesh1 = Mesh::builder(vertices.clone()).build();
     let mesh2 = Mesh::builder(vertices.clone()).build();

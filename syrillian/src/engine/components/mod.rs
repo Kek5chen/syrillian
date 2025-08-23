@@ -38,6 +38,8 @@
 //! }
 //! ```
 
+pub mod animation;
+pub mod audio;
 pub mod camera;
 pub mod collider;
 pub mod fp_camera;
@@ -48,9 +50,8 @@ pub mod light;
 pub mod rigid_body;
 pub mod rope;
 pub mod rotate;
-pub mod spring;
 pub mod skeletal;
-pub mod animation;
+pub mod spring;
 
 pub use animation::*;
 pub use camera::*;
@@ -66,12 +67,12 @@ pub use rotate::*;
 pub use skeletal::*;
 pub use spring::*;
 
+use crate::World;
 use crate::core::GameObjectId;
 use crate::rendering::{DrawCtx, Renderer};
-use crate::World;
 use delegate::delegate;
 use nalgebra::Matrix4;
-use slotmap::{new_key_type, Key};
+use slotmap::{Key, new_key_type};
 use std::any::{Any, TypeId};
 use std::fmt::{Debug, Formatter};
 use std::hash::Hash;

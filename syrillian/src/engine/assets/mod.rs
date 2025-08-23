@@ -33,11 +33,11 @@ mod asset_store;
 pub(crate) mod generic_store;
 
 mod bind_group_layout;
+mod font;
 mod material;
 mod mesh;
 mod shader;
 mod texture;
-mod font;
 
 mod handle;
 mod key;
@@ -58,7 +58,6 @@ pub use generic_store::StoreType;
 
 pub(crate) use self::generic_store::*;
 pub(crate) use self::key::*;
-
 
 pub type HBGL = H<BGL>;
 pub type HMaterial = H<Material>;

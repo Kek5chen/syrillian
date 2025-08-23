@@ -4,7 +4,8 @@
 //! It maintains the scene graph, input state and physics simulation and
 //! offers utilities such as methods to create, find and remove game objects.
 
-use crate::assets::{Material, Mesh, Shader, Store, Texture, BGL};
+use crate::assets::{BGL, Material, Mesh, Shader, Sound, Store, Texture};
+use crate::audio::AudioScene;
 use crate::components::{CRef, Component};
 use crate::core::component_storage::ComponentStorage;
 use crate::core::{GameObject, GameObjectId, Transform};
@@ -47,6 +48,8 @@ pub struct World {
     pub lights: LightManager,
     /// Asset storage containing meshes, textures, materials, etc.
     pub assets: Arc<AssetStore>,
+    /// Spatial audio
+    pub audio: AudioScene,
 
     /// Time when the world was created
     start_time: Instant,
@@ -77,6 +80,7 @@ impl World {
             input: InputManager::default(),
             lights: LightManager::default(),
             assets: AssetStore::empty(),
+            audio: AudioScene::new(),
             start_time: Instant::now(),
             delta_time: Duration::default(),
             last_frame_time: Instant::now(),
@@ -195,7 +199,8 @@ impl World {
         }
 
         let rem = self.physics.last_update.elapsed();
-        self.physics.alpha = (rem.as_secs_f32() / self.physics.timestep.as_secs_f32()).clamp(0.0, 1.0);
+        self.physics.alpha =
+            (rem.as_secs_f32() / self.physics.timestep.as_secs_f32()).clamp(0.0, 1.0);
     }
 
     /// Updates all game objects and their components
@@ -376,6 +381,12 @@ impl AsRef<Store<Material>> for World {
 impl AsRef<Store<BGL>> for World {
     fn as_ref(&self) -> &Store<BGL> {
         &self.assets.bgls
+    }
+}
+
+impl AsRef<Store<Sound>> for World {
+    fn as_ref(&self) -> &Store<Sound> {
+        &self.assets.sounds
     }
 }
 

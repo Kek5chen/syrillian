@@ -6,15 +6,17 @@
 
 use gilrs::Button;
 use log::info;
-use nalgebra::{UnitQuaternion, Vector3};
+use nalgebra::{UnitQuaternion};
 use rapier3d::parry::query::Ray;
 use rapier3d::prelude::QueryFilter;
 use slotmap::Key;
 use std::error::Error;
 
+use syrillian::SyrillianApp;
 use syrillian::assets::scene_loader::SceneLoader;
-use syrillian::assets::{HMaterial, StoreType};
+use syrillian::assets::{HMaterial, Sound, StoreType, HSound};
 use syrillian::assets::{Material, Shader};
+use syrillian::components::audio::{AudioEmitter, AudioReceiver};
 use syrillian::components::{
     CRef, Collider3D, FirstPersonCameraController, PointLightComponent, RigidBodyComponent,
     RopeComponent, RotateComponent, SpotLightComponent, SpringComponent,
@@ -22,13 +24,12 @@ use syrillian::components::{
 use syrillian::core::{GameObjectExt, GameObjectId};
 use syrillian::drawables::text::glyph::TextAlignment;
 use syrillian::drawables::{Text2D, Text3D};
+use syrillian::prefabs::CubePrefab;
 use syrillian::prefabs::first_person_player::FirstPersonPlayerPrefab;
 use syrillian::prefabs::prefab::Prefab;
-use syrillian::prefabs::CubePrefab;
 use syrillian::rendering::lights::Light;
 use syrillian::rendering::renderer::Renderer;
 use syrillian::utils::frame_counter::FrameCounter;
-use syrillian::SyrillianApp;
 use syrillian::{AppState, World};
 use winit::event::MouseButton;
 use winit::keyboard::KeyCode;
@@ -48,6 +49,9 @@ struct MyMain {
     text3d: GameObjectId,
     light1: CRef<SpotLightComponent>,
     light2: CRef<SpotLightComponent>,
+    pop_sound: Option<HSound>,
+    sound_cube: GameObjectId,
+    sound_cube2: GameObjectId
 }
 
 impl Default for MyMain {
@@ -60,22 +64,27 @@ impl Default for MyMain {
             text3d: GameObjectId::null(),
             light1: CRef::null(),
             light2: CRef::null(),
+            pop_sound: None,
+            sound_cube: GameObjectId::null(),
+            sound_cube2: GameObjectId::null(),
         }
     }
 }
 
 impl AppState for MyMain {
     fn init(&mut self, world: &mut World, _window: &Window) -> Result<(), Box<dyn Error>> {
-        world.audio_scene.load_sound("pop", "examples/assets/pop.wav");
-
         world.input.set_auto_cursor_lock(true);
         world.input.set_quit_on_escape(true);
 
-        //world.active_camera.unwrap().get_component::<FirstPersonCameraController>().unwrap();
         world.spawn(&City);
 
         self.player = world.spawn(&FirstPersonPlayerPrefab);
         self.player_rb = self.player.get_component::<RigidBodyComponent>().unwrap();
+
+        world
+            .active_camera
+            .unwrap()
+            .add_component::<AudioReceiver>();
 
         // or freecam if you want
         // self.player = world.new_camera();
@@ -104,11 +113,14 @@ impl AppState for MyMain {
         let cube_prefab2 = CubePrefab::new(shader_mat_2);
         let cube_prefab3 = CubePrefab::new(shader_mat_3);
 
+
         let mut big_cube_left = world.spawn(&cube_prefab1);
         let mut big_cube_right = world.spawn(&cube_prefab3);
         let mut cube = world.spawn(&cube_prefab2);
         let mut cube2 = world.spawn(&cube_prefab2);
         let mut cube3 = world.spawn(&cube_prefab2);
+
+
 
         cube.at(20., 3.9, -20.)
             .build_component::<PointLightComponent>()
@@ -142,6 +154,40 @@ impl AppState for MyMain {
         big_cube_left.at(100.0, 10.0, 200.0).scale(100.);
 
         big_cube_right.at(-100.0, 10.0, 200.0).scale(100.);
+
+
+        self.pop_sound = Some(Sound::load_sound("./examples/assets/pop.wav")?.store(world));
+
+        let sound_cube_prefab = CubePrefab::new(shader_mat_1);
+
+        self.sound_cube = world.spawn(&sound_cube_prefab);
+        self.sound_cube2 = world.spawn(&sound_cube_prefab);
+
+
+        self.sound_cube
+            .at(10.0, 150.0, 10.0)
+            .build_component::<Collider3D>()
+            .build_component::<RigidBodyComponent>()
+            .enable_ccd();
+
+        self.sound_cube.add_component::<AudioEmitter>();
+        self.sound_cube
+            .get_component::<AudioEmitter>()
+            .unwrap()
+            .init(self.pop_sound.unwrap(), world);
+
+        self.sound_cube2
+            .at(10.0, 150.0, 10.0)
+            .build_component::<Collider3D>()
+            .build_component::<RigidBodyComponent>()
+            .enable_ccd();
+
+        self.sound_cube2.add_component::<AudioEmitter>();
+        self.sound_cube2
+            .get_component::<AudioEmitter>()
+            .unwrap()
+            .init(self.pop_sound.unwrap(), world);
+
 
         {
             let mut text = world.new_object("Text 3D");
@@ -223,8 +269,6 @@ impl AppState for MyMain {
         self.frame_counter.new_frame_from_world(world);
         window.set_title(&self.format_title());
 
-
-
         let mut zoom_down = world.input.gamepad.button(Button::LeftTrigger2);
         if world.input.is_button_pressed(MouseButton::Right) {
             zoom_down = 1.0;
@@ -250,25 +294,30 @@ impl AppState for MyMain {
 
         self.do_raycast_test(world);
 
-
-        // If q is pressed, emit a sound at the origin
         if world.input.is_key_down(KeyCode::KeyQ) {
-            let origin = Vector3::new(0.0,0.0,0.0);
-            world.audio_scene.play_sound("pop", origin);
+            self.sound_cube2
+                .get_component::<AudioEmitter>()
+                .unwrap()
+                .start_looping(world);
         }
-
-        // Set receiver source to the camera / player
-        world.audio_scene.set_receiver_position(world.active_camera.unwrap().transform.position());
+        if world.input.is_key_down(KeyCode::KeyE) {
+            self.sound_cube2
+                .get_component::<AudioEmitter>()
+                .unwrap()
+                .stop_looping();
+        }
+        if world.input.is_key_down(KeyCode::KeyR) {
+            self.sound_cube
+                .get_component::<AudioEmitter>()
+                .unwrap()
+                .play(world);
+        }
 
         Ok(())
     }
 
     #[cfg(debug_assertions)]
-    fn draw(
-        &mut self,
-        world: &mut World,
-        renderer: &mut Renderer,
-    ) -> Result<(), Box<dyn Error>> {
+    fn draw(&mut self, world: &mut World, renderer: &mut Renderer) -> Result<(), Box<dyn Error>> {
         if world.input.is_key_down(KeyCode::KeyL) {
             let mode = renderer.debug.next_mode();
 
