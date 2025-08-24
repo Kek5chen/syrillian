@@ -6,7 +6,7 @@
 
 use gilrs::Button;
 use log::info;
-use nalgebra::{UnitQuaternion};
+use nalgebra::UnitQuaternion;
 use rapier3d::parry::query::Ray;
 use rapier3d::prelude::QueryFilter;
 use slotmap::Key;
@@ -14,7 +14,7 @@ use std::error::Error;
 
 use syrillian::SyrillianApp;
 use syrillian::assets::scene_loader::SceneLoader;
-use syrillian::assets::{HMaterial, Sound, StoreType, HSound};
+use syrillian::assets::{HMaterial, HSound, Sound, StoreType};
 use syrillian::assets::{Material, Shader};
 use syrillian::components::audio::{AudioEmitter, AudioReceiver};
 use syrillian::components::{
@@ -50,8 +50,8 @@ struct MyMain {
     light1: CRef<SpotLightComponent>,
     light2: CRef<SpotLightComponent>,
     pop_sound: Option<HSound>,
-    sound_cube: GameObjectId,
-    sound_cube2: GameObjectId
+    sound_cube_emitter: CRef<AudioEmitter>,
+    sound_cube2_emitter: CRef<AudioEmitter>,
 }
 
 impl Default for MyMain {
@@ -65,8 +65,8 @@ impl Default for MyMain {
             light1: CRef::null(),
             light2: CRef::null(),
             pop_sound: None,
-            sound_cube: GameObjectId::null(),
-            sound_cube2: GameObjectId::null(),
+            sound_cube_emitter: CRef::null(),
+            sound_cube2_emitter: CRef::null(),
         }
     }
 }
@@ -113,14 +113,11 @@ impl AppState for MyMain {
         let cube_prefab2 = CubePrefab::new(shader_mat_2);
         let cube_prefab3 = CubePrefab::new(shader_mat_3);
 
-
         let mut big_cube_left = world.spawn(&cube_prefab1);
         let mut big_cube_right = world.spawn(&cube_prefab3);
         let mut cube = world.spawn(&cube_prefab2);
         let mut cube2 = world.spawn(&cube_prefab2);
         let mut cube3 = world.spawn(&cube_prefab2);
-
-
 
         cube.at(20., 3.9, -20.)
             .build_component::<PointLightComponent>()
@@ -155,39 +152,37 @@ impl AppState for MyMain {
 
         big_cube_right.at(-100.0, 10.0, 200.0).scale(100.);
 
-
         self.pop_sound = Some(Sound::load_sound("./examples/assets/pop.wav")?.store(world));
 
         let sound_cube_prefab = CubePrefab::new(shader_mat_1);
 
-        self.sound_cube = world.spawn(&sound_cube_prefab);
-        self.sound_cube2 = world.spawn(&sound_cube_prefab);
+        let mut sound_cube = world.spawn(&sound_cube_prefab);
+        let mut sound_cube2 = world.spawn(&sound_cube_prefab);
 
-
-        self.sound_cube
+        sound_cube
             .at(10.0, 150.0, 10.0)
             .build_component::<Collider3D>()
             .build_component::<RigidBodyComponent>()
             .enable_ccd();
 
-        self.sound_cube.add_component::<AudioEmitter>();
-        self.sound_cube
+        self.sound_cube_emitter = sound_cube.add_component::<AudioEmitter>();
+
+        sound_cube
             .get_component::<AudioEmitter>()
             .unwrap()
             .init(self.pop_sound.unwrap(), world);
 
-        self.sound_cube2
+        sound_cube2
             .at(10.0, 150.0, 10.0)
             .build_component::<Collider3D>()
             .build_component::<RigidBodyComponent>()
             .enable_ccd();
 
-        self.sound_cube2.add_component::<AudioEmitter>();
-        self.sound_cube2
+        self.sound_cube2_emitter = sound_cube2.add_component::<AudioEmitter>();
+        sound_cube2
             .get_component::<AudioEmitter>()
             .unwrap()
             .init(self.pop_sound.unwrap(), world);
-
 
         {
             let mut text = world.new_object("Text 3D");
@@ -295,22 +290,13 @@ impl AppState for MyMain {
         self.do_raycast_test(world);
 
         if world.input.is_key_down(KeyCode::KeyQ) {
-            self.sound_cube2
-                .get_component::<AudioEmitter>()
-                .unwrap()
-                .start_looping(world);
+            self.sound_cube2_emitter.start_looping();
         }
         if world.input.is_key_down(KeyCode::KeyE) {
-            self.sound_cube2
-                .get_component::<AudioEmitter>()
-                .unwrap()
-                .stop_looping();
+            self.sound_cube2_emitter.stop_looping();
         }
         if world.input.is_key_down(KeyCode::KeyR) {
-            self.sound_cube
-                .get_component::<AudioEmitter>()
-                .unwrap()
-                .play(world);
+            self.sound_cube_emitter.play(world);
         }
 
         Ok(())
