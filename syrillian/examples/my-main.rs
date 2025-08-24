@@ -5,18 +5,18 @@
 //!    using this for reference.
 
 use gilrs::Button;
+use kira::effect::reverb::ReverbBuilder;
+use kira::track::SpatialTrackBuilder;
 use log::info;
 use nalgebra::UnitQuaternion;
 use rapier3d::parry::query::Ray;
 use rapier3d::prelude::QueryFilter;
 use slotmap::Key;
 use std::error::Error;
-
-use syrillian::SyrillianApp;
 use syrillian::assets::scene_loader::SceneLoader;
 use syrillian::assets::{HMaterial, HSound, Sound, StoreType};
 use syrillian::assets::{Material, Shader};
-use syrillian::components::audio::{AudioEmitter, AudioReceiver};
+use syrillian::components::audio::AudioEmitter;
 use syrillian::components::{
     CRef, Collider3D, FirstPersonCameraController, PointLightComponent, RigidBodyComponent,
     RopeComponent, RotateComponent, SpotLightComponent, SpringComponent,
@@ -24,16 +24,20 @@ use syrillian::components::{
 use syrillian::core::{GameObjectExt, GameObjectId};
 use syrillian::drawables::text::glyph::TextAlignment;
 use syrillian::drawables::{Text2D, Text3D};
-use syrillian::prefabs::CubePrefab;
 use syrillian::prefabs::first_person_player::FirstPersonPlayerPrefab;
 use syrillian::prefabs::prefab::Prefab;
+use syrillian::prefabs::CubePrefab;
 use syrillian::rendering::lights::Light;
-use syrillian::rendering::renderer::Renderer;
 use syrillian::utils::frame_counter::FrameCounter;
+use syrillian::SyrillianApp;
 use syrillian::{AppState, World};
 use winit::event::MouseButton;
 use winit::keyboard::KeyCode;
 use winit::window::Window;
+
+#[cfg(debug_assertions)]
+use syrillian::rendering::renderer::Renderer;
+
 // const NECO_IMAGE: &[u8; 1293] = include_bytes!("assets/neco.jpg");
 
 const SHADER1: &str = include_str!("dynamic_shader/shader.wgsl");
@@ -80,11 +84,6 @@ impl AppState for MyMain {
 
         self.player = world.spawn(&FirstPersonPlayerPrefab);
         self.player_rb = self.player.get_component::<RigidBodyComponent>().unwrap();
-
-        world
-            .active_camera
-            .unwrap()
-            .add_component::<AudioReceiver>();
 
         // or freecam if you want
         // self.player = world.new_camera();
@@ -152,7 +151,11 @@ impl AppState for MyMain {
 
         big_cube_right.at(-100.0, 10.0, 200.0).scale(100.);
 
-        self.pop_sound = Some(Sound::load_sound("./examples/assets/pop.wav")?.store(world));
+        let mut pop_sound = Sound::load_sound("./examples/assets/pop.wav")?;
+        pop_sound.set_start_position(0.2);
+
+        let pop_sound = pop_sound.store(world);
+        self.pop_sound = Some(pop_sound);
 
         let sound_cube_prefab = CubePrefab::new(shader_mat_1);
 
@@ -166,11 +169,7 @@ impl AppState for MyMain {
             .enable_ccd();
 
         self.sound_cube_emitter = sound_cube.add_component::<AudioEmitter>();
-
-        sound_cube
-            .get_component::<AudioEmitter>()
-            .unwrap()
-            .init(self.pop_sound.unwrap(), world);
+        self.sound_cube_emitter.set_sound(pop_sound);
 
         sound_cube2
             .at(10.0, 150.0, 10.0)
@@ -178,11 +177,10 @@ impl AppState for MyMain {
             .build_component::<RigidBodyComponent>()
             .enable_ccd();
 
+        let mut reverb_track = SpatialTrackBuilder::new();
+        reverb_track.add_effect(ReverbBuilder::new());
         self.sound_cube2_emitter = sound_cube2.add_component::<AudioEmitter>();
-        sound_cube2
-            .get_component::<AudioEmitter>()
-            .unwrap()
-            .init(self.pop_sound.unwrap(), world);
+        self.sound_cube2_emitter.set_track(world, reverb_track).set_sound(pop_sound);
 
         {
             let mut text = world.new_object("Text 3D");
@@ -289,14 +287,25 @@ impl AppState for MyMain {
 
         self.do_raycast_test(world);
 
-        if world.input.is_key_down(KeyCode::KeyQ) {
-            self.sound_cube2_emitter.start_looping();
+        if world.input.is_key_down(KeyCode::KeyU) {
+            self.sound_cube_emitter.toggle_looping();
         }
-        if world.input.is_key_down(KeyCode::KeyE) {
-            self.sound_cube2_emitter.stop_looping();
+        if world.input.is_key_down(KeyCode::KeyI) {
+            self.sound_cube2_emitter.toggle_looping();
         }
-        if world.input.is_key_down(KeyCode::KeyR) {
-            self.sound_cube_emitter.play(world);
+        if world.input.is_key_down(KeyCode::KeyP) {
+            if world.input.is_key_pressed(KeyCode::ShiftLeft) {
+                self.sound_cube_emitter.stop();
+            } else {
+                self.sound_cube_emitter.play();
+            }
+        }
+        if world.input.is_key_down(KeyCode::KeyO) {
+            if world.input.is_key_pressed(KeyCode::ShiftLeft) {
+                self.sound_cube2_emitter.stop();
+            } else {
+                self.sound_cube2_emitter.play();
+            }
         }
 
         Ok(())

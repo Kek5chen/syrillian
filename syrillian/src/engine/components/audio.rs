@@ -1,13 +1,12 @@
-use crate::World;
 use crate::assets::HSound;
 use crate::components::Component;
 use crate::core::GameObjectId;
-use kira::Tween;
+use crate::World;
+use kira::sound::static_sound::StaticSoundHandle;
 use kira::sound::PlaybackState;
-use kira::sound::static_sound::{StaticSoundHandle, StaticSoundSettings};
-use kira::track::SpatialTrackHandle;
-use log::{error, warn};
-use nalgebra::Vector3;
+use kira::track::{SpatialTrackBuilder, SpatialTrackHandle};
+use kira::Tween;
+use log::{trace, warn};
 
 pub struct AudioReceiver {
     parent: GameObjectId,
@@ -19,11 +18,7 @@ pub struct AudioEmitter {
     sound_handle: Option<StaticSoundHandle>,
     track_handle: Option<SpatialTrackHandle>,
     looping: bool,
-    position: Vector3<f32>,
-    initialized: bool,
-    start_offset: f64,
-    playback_rate: f64,
-    volume: f32,
+    play_triggered: bool,
 }
 
 impl Component for AudioEmitter {
@@ -34,28 +29,25 @@ impl Component for AudioEmitter {
             sound_handle: None,
             track_handle: None,
             looping: false,
-            position: Vector3::zeros(),
-            initialized: false,
-            start_offset: 0.0,
-            playback_rate: 1.0,
-            volume: 0.0,
+            play_triggered: false,
         }
     }
 
+    fn init(&mut self, world: &mut World) {
+        trace!("Initializing new Spatial Track");
+        self.track_handle = world.audio.add_spatial_track(self.parent.transform.position(), SpatialTrackBuilder::new());
+    }
+
     fn update(&mut self, world: &mut World) {
-        if !self.initialized {
+        let Some(track) = self.track_handle.as_mut() else {
             return;
-        }
+        };
 
-        self.position = self.parent.transform.position();
+        let position = self.parent.transform.position();
+        track.set_position(position, Tween::default());
 
-        self.track_handle
-            .as_mut()
-            .expect("Spatial track missing")
-            .set_position(self.position, Tween::default());
-
-        if self.looping {
-            self.play(world);
+        if self.play_triggered || (self.looping && !self.is_playing()) {
+            self._play(world);
         }
     }
 
@@ -65,93 +57,87 @@ impl Component for AudioEmitter {
 }
 
 impl AudioEmitter {
-    pub fn init(&mut self, handle: HSound, world: &mut World) {
-        self.set_sound(handle);
-        self.track_handle = world.audio.add_spatial_track();
-
-        self.initialized = true;
-    }
-
-    pub fn play(&mut self, world: &mut World) {
+    pub fn toggle_play(&mut self) {
         if self.is_playing() {
-            return;
-        }
-
-        let track = match self.track_handle.as_mut() {
-            Some(track) => track,
-            None => {
-                error!("AudioEmitter play had no track handle");
-                return;
-            }
-        };
-
-        let h = match self.asset_handle {
-            Some(h) => h,
-            None => {
-                error!("AudioEmitter play had no asset handle");
-                return;
-            }
-        };
-
-        if let Some(sound) = world.assets.sounds.try_get(h) {
-            let mut settings = StaticSoundSettings::new()
-                .start_position(self.start_offset)
-                .volume(self.volume)
-                .playback_rate(self.playback_rate);
-
-            if self.looping {
-                settings = StaticSoundSettings::new()
-                    .loop_region(self.start_offset..)
-                    .volume(self.volume)
-                    .playback_rate(self.playback_rate);
-            }
-
-            self.sound_handle = world
-                .audio
-                .play_sound(sound.sound_data.with_settings(settings), track)
-                .ok();
+            self.play();
         } else {
-            warn!("AudioEmitter play had no sound handle");
+            self.stop();
         }
-        return;
     }
 
-    pub fn set_volume(&mut self, volume: f32) {
-        self.volume = volume;
+    pub fn play(&mut self) {
+        self.play_triggered = true;
     }
 
-    pub fn set_playback_rate(&mut self, playback_rate: f64) {
-        self.playback_rate = playback_rate;
+    fn _play(&mut self, world: &mut World) {
+        if self.is_playing() {
+            self.stop();
+            debug_assert!(self.sound_handle.is_none());
+        }
+
+        let Some(track) = self.track_handle.as_mut() else {
+            return;
+        };
+
+        let Some(h) = self.asset_handle else {
+            warn!("AudioEmitter play had no asset handle");
+            return;
+        };
+
+        let Some(sound) = world.assets.sounds.try_get(h) else {
+            warn!("AudioEmitter play had no sound handle");
+            return;
+        };
+
+        self.play_triggered = false;
+
+        match track.play(sound.inner()) {
+            Ok(handle) => self.sound_handle = Some(handle),
+            Err(e) => {
+                warn!("Error when playing sound: {e}")
+            },
+        }
     }
 
-    pub fn set_start_offset(&mut self, start_offset: f64) {
-        self.start_offset = start_offset;
+    pub fn toggle_looping(&mut self) {
+        self.set_looping(!self.looping)
     }
 
-    pub fn start_looping(&mut self) {
-        self.looping = true;
+    pub fn set_looping(&mut self, looping: bool) {
+        if self.looping && !looping {
+            self.stop();
+        }
+        self.looping = looping;
     }
 
-    pub fn stop_looping(&mut self) {
-        self.looping = false;
-        match self.sound_handle.take() {
-            Some(mut handle) => handle.stop(Tween::default()),
-            None => {}
+    pub fn stop(&mut self) {
+        self.stop_fade(Tween::default())
+    }
+
+    pub fn stop_fade(&mut self, tween: Tween) {
+        if let Some(mut handle) = self.sound_handle.take() {
+            handle.stop(tween);
         }
     }
 
     pub fn is_playing(&self) -> bool {
-        let sound = match self.sound_handle.as_ref() {
-            Some(track) => track,
-            None => {
-                return false;
-            }
-        };
-        sound.state() == PlaybackState::Playing
+        self.sound_handle
+            .as_ref()
+            .is_some_and(|p| p.state() == PlaybackState::Playing)
     }
 
     pub fn set_sound(&mut self, sound: HSound) {
+        self.stop();
         self.asset_handle = Some(sound.clone());
+    }
+
+    pub fn set_track(&mut self, world: &mut World, track: SpatialTrackBuilder) -> &mut Self {
+        let pos = self.parent.transform.position();
+        self.track_handle = world.audio.add_spatial_track(pos, track);
+        if self.track_handle.is_none() {
+            warn!("Spatial track limit reached");
+        }
+        self
     }
 }
 

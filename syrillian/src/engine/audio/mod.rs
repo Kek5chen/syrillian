@@ -1,10 +1,6 @@
 use kira::listener::ListenerHandle;
-use kira::sound::static_sound::StaticSoundHandle;
 use kira::track::{SpatialTrackBuilder, SpatialTrackHandle};
-use kira::{
-    AudioManager, AudioManagerSettings, DefaultBackend, PlaySoundError, Tween,
-    sound::static_sound::StaticSoundData,
-};
+use kira::{AudioManager, AudioManagerSettings, DefaultBackend, Tween};
 use nalgebra::{Quaternion, Vector3};
 
 pub struct AudioScene {
@@ -37,18 +33,14 @@ impl AudioScene {
             .set_orientation(receiver_orientation, Tween::default());
     }
 
-    pub fn play_sound(
+    /// Returns none if the spatial track limit was reached
+    pub fn add_spatial_track(
         &mut self,
-        sound: StaticSoundData,
-        track: &mut SpatialTrackHandle,
-    ) -> Result<StaticSoundHandle, PlaySoundError<()>> {
-        track.play(sound)
-    }
-
-    pub fn add_spatial_track(&mut self) -> Option<SpatialTrackHandle> {
-        let position = Vector3::zeros();
+        initial_position: Vector3<f32>,
+        track: SpatialTrackBuilder,
+    ) -> Option<SpatialTrackHandle> {
         self.manager
-            .add_spatial_sub_track(self.listener.id(), position, SpatialTrackBuilder::default())
+            .add_spatial_sub_track(self.listener.id(), initial_position, track)
             .ok()
     }
 }

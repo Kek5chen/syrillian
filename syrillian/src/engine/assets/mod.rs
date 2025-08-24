@@ -51,9 +51,9 @@ pub use self::font::*;
 pub use self::material::*;
 pub use self::mesh::*;
 pub use self::shader::*;
+pub use self::sound::*;
 pub use self::texture::*;
 
-pub use self::sound::*;
 pub use generic_store::StoreType;
 
 pub(crate) use self::generic_store::*;
