@@ -20,7 +20,7 @@ readme = "../README.md"
 winit = { version = "0.30", features = ["x11"] }
 bytemuck = "1.23"
 log = "0.4"
-nalgebra = { version = "0.33", features = ["bytemuck"] }
+nalgebra = { version = "0.33", features = ["bytemuck", "mint"] }
 num-traits = "0.2"
 itertools = "0.14"
 image = "0.25"
@@ -46,6 +46,7 @@ pathfinder_geometry = "0.5.1"
 delegate = "0.13"
 slotmap = "1.0"
 num_enum = "0.7"
+kira = "0.10.8"
 
 [build-dependencies]
 chrono = "0.4"

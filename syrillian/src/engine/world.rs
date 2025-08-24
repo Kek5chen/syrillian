@@ -4,7 +4,8 @@
 //! It maintains the scene graph, input state and physics simulation and
 //! offers utilities such as methods to create, find and remove game objects.
 
-use crate::assets::{Material, Mesh, Shader, Store, Texture, BGL};
+use crate::assets::{Material, Mesh, Shader, Sound, Store, Texture, BGL};
+use crate::audio::AudioScene;
 use crate::components::{CRef, CWeak, CameraComponent, Component};
 use crate::core::component_storage::ComponentStorage;
 use crate::core::{GameObject, GameObjectId, Transform};
@@ -47,6 +48,8 @@ pub struct World {
     pub input: InputManager,
     /// Asset storage containing meshes, textures, materials, etc.
     pub assets: Arc<AssetStore>,
+    /// Spatial audio
+    pub audio: AudioScene,
 
     /// Time when the world was created
     start_time: Instant,
@@ -83,6 +86,7 @@ impl World {
             physics: PhysicsManager::default(),
             input: InputManager::new(game_event_tx.clone()),
             assets,
+            audio: AudioScene::new(),
 
             start_time: Instant::now(),
             delta_time: Duration::default(),
@@ -467,6 +471,12 @@ impl AsRef<Store<Material>> for World {
 impl AsRef<Store<BGL>> for World {
     fn as_ref(&self) -> &Store<BGL> {
         &self.assets.bgls
+    }
+}
+
+impl AsRef<Store<Sound>> for World {
+    fn as_ref(&self) -> &Store<Sound> {
+        &self.assets.sounds
     }
 }
 

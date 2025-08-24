@@ -38,6 +38,8 @@
 //! }
 //! ```
 
+pub mod animation;
+pub mod audio;
 pub mod camera;
 pub mod collider;
 pub mod fp_camera;
@@ -48,9 +50,8 @@ pub mod light;
 pub mod rigid_body;
 pub mod rope;
 pub mod rotate;
-pub mod spring;
 pub mod skeletal;
-pub mod animation;
+pub mod spring;
 pub mod text;
 pub mod mesh_renderer;
 pub mod image;

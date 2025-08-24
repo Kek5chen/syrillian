@@ -1,4 +1,5 @@
 use crate::components::{Collider3D, Component, FirstPersonCameraController, FirstPersonMovementController, RigidBodyComponent};
+use crate::components::audio::AudioReceiver;
 use crate::core::GameObjectId;
 use crate::engine::prefabs::prefab::Prefab;
 use crate::World;
@@ -18,6 +19,7 @@ impl Prefab for FirstPersonPlayerPrefab {
         let mut camera_obj = camera.parent();
         camera_obj.transform.set_position(0.0, 1.0, 0.0);
         camera_obj.add_component::<FirstPersonCameraController>();
+        camera_obj.add_component::<AudioReceiver>();
 
         // Prepare character controller
         let mut char_controller = world.new_object(self.prefab_name());
