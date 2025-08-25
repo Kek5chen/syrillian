@@ -80,6 +80,7 @@ the [SyrillianApp Proc Macro](https://docs.rs/syrillian_macros/latest/syrillian_
 Usage example:
 
 ```rust
+//make sure to get your imports and dependencies right, (for the dependencies, syrillian, env_logger, log), (for the imports use std::Error, and necessary modules from syrillian)
 // The macro will provide you with a simple main runtime and (optional) logging
 #[derive(Debug, Default, SyrillianApp)]
 struct YourGame;
@@ -90,15 +91,15 @@ impl AppState for YourGame {
         window.set_title("Example App");
 
         world.new_camera();
-        world.spawn(&CubePrefab).at(0, 0, -10); // Spawn Cube at (0, 0, -10).
+        world.spawn(&CubePrefab::default()).at(0, 0, -10); // Spawn Cube at (0, 0, -10).
         world.print_objects(); // Print Scene Hierarchy to Console
 
         Ok(())
     }
 
     // will be called once per frame
-    fn update(&mut self, world: &mut World, window: &Window) -> Result<(), Box<dyn Error>> { ... }
-
+    //fn update(&mut self, world: &mut World, window: &Window) -> Result<(), Box<dyn Error>> { ... }
+    //uncomment this and the above line, if you are making updates to the game state every frame, replace the ... with your code 
     // there's also "late_update", "draw", and more...
 }
 ```
