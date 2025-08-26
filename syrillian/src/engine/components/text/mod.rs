@@ -1,4 +1,4 @@
-use crate::assets::{Font, HFont, DEFAULT_GLYPH_SIZE};
+use crate::assets::{Font, HFont, DEFAULT_ATLAS_SIZE};
 use crate::components::glyph::TextAlignment;
 use crate::components::Component;
 use crate::core::GameObjectId;
@@ -20,7 +20,7 @@ pub struct Text<const D: u8, DIM: TextDim<D>> {
     parent: GameObjectId,
     proxy: TextProxy<D, DIM>,
     family_name: String,
-    glyph_size: i32,
+    glyph_size: u32,
     font_dirty: bool,
 }
 
@@ -63,7 +63,7 @@ impl<const D: u8, DIM: TextDim<D> + 'static> Component for Text<D, DIM> {
             parent,
             proxy: TextProxy::new("".to_string(), HFont::DEFAULT, 100.0),
             family_name: "Arial".to_string(),
-            glyph_size: DEFAULT_GLYPH_SIZE,
+            glyph_size: DEFAULT_ATLAS_SIZE,
             font_dirty: false,
         }
     }

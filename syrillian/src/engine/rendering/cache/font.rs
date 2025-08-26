@@ -15,7 +15,7 @@ impl CacheType for Font {
     fn upload(&self, _device: &Device, queue: &Queue, cache: &AssetCache) -> Self::Hot {
         let world = World::instance();
 
-        let mut msdf = MsdfAtlas::new(self.font_bytes.clone(), 1024, 16.0, 4.0, &world);
+        let mut msdf = MsdfAtlas::new(self.font_bytes.clone(), self.atlas_em_px, 16.0, 4.0, &world);
 
         msdf.ensure_glyphs(cache, FONT_ATLAS_CHARS.iter().flatten().copied(), queue);
 
