@@ -21,7 +21,7 @@ impl AppState for BonesExample {
     fn init(&mut self, world: &mut World) -> Result<(), Box<dyn Error>> {
         world.new_camera();
 
-        let mut boney_obj = SceneLoader::load(world, "./testmodels/hampter/hampter.fbx")?;
+        let mut boney_obj = SceneLoader::load(world, "./testmodels/hampter/hampter.glb")?;
         boney_obj.name = "Boney thing".to_owned();
 
         boney_obj.transform.set_position(0.0, -5.0, -20.0);

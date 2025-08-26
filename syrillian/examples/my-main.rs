@@ -436,13 +436,11 @@ impl Prefab for City {
     }
 
     fn build(&self, world: &mut World) -> GameObjectId {
-        let Ok(mut city) = SceneLoader::load(world, "./testmodels/testmap/testmap.fbx") else {
+        let Ok(mut city) = SceneLoader::load(world, "./testmodels/testmap/testmap.glb") else {
             panic!(
                 "Failed to load the city file. Please run this example from the project root directory."
             );
         };
-
-        city.transform.set_scale(0.01);
 
         // add colliders to city
         city.add_child_components_then(Collider3D::please_use_mesh);

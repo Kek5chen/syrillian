@@ -242,7 +242,7 @@ impl Collider3D {
         };
 
         let (vertices, indices) = collider.shared_shape().to_trimesh();
-        let vertices: Vec<_> = vertices.iter().map(|v| Vertex3D::basic(v.coords)).collect();
+        let vertices: Vec<_> = vertices.iter().map(|v| Vertex3D::position_only(v.coords)).collect();
 
         Mesh::builder(vertices)
             .with_indices(indices.into_flattened())

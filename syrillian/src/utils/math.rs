@@ -1,6 +1,5 @@
 use nalgebra::{Matrix3, Matrix4, RealField, Rotation3, SimdRealField, UnitQuaternion, Vector3};
 use num_traits::Float;
-use russimp_ng::{Color3D, Vector3D};
 
 pub const VECTOR3_ID: Vector3<f32> = Vector3::new(0.0, 0.0, 0.0);
 #[rustfmt::skip]
@@ -85,28 +84,6 @@ pub trait FloatMathExt {
 impl FloatMathExt for f32 {
     fn lerp(self, other: Self, t: f32) -> Self {
         self * (1.0 - t) + other * t
-    }
-}
-
-pub trait VecCompat<T> {
-    fn from(&self) -> Vector3<T>;
-}
-
-impl VecCompat<f32> for Vector3D {
-    fn from(&self) -> Vector3<f32> {
-        Vector3::new(self.x, self.y, self.z)
-    }
-}
-
-impl VecCompat<f32> for Color3D {
-    fn from(&self) -> Vector3<f32> {
-        Vector3::new(self.r, self.g, self.b)
-    }
-}
-
-impl<N> From<&dyn VecCompat<N>> for Vector3<N> {
-    fn from(value: &dyn VecCompat<N>) -> Self {
-        value.from()
     }
 }
 

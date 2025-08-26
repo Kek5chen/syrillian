@@ -1,508 +1,151 @@
-use log::trace;
-use std::cell::RefCell;
-use std::collections::HashMap;
-use std::error::Error;
-use std::rc::Rc;
-
 use crate::assets::{HMaterial, HShader, HTexture, Material, Mesh, StoreType, Texture};
 use crate::components::{
     AnimationComponent, MeshRenderer, PointLightComponent, SkeletalComponent, SpotLightComponent,
+    SunLightComponent,
 };
 use crate::core::{Bones, GameObjectId, Vertex3D};
 use crate::rendering::lights::Light;
 use crate::utils::animation::{AnimationClip, Channel, TransformKeys};
-use crate::utils::iter::interpolate_zeros;
-use crate::utils::{light_range, ExtraMatrixMath, VecCompat};
+use crate::utils::ExtraMatrixMath;
 use crate::World;
+use gltf::animation::util::ReadOutputs;
+use gltf::image::Format;
+use gltf::khr_lights_punctual::Kind;
+use gltf::{self, buffer::Data as BufferData, image::Data as ImageData};
+use gltf::{mesh, Document, Node};
 use itertools::izip;
-use log::warn;
+use log::{trace, warn};
 use nalgebra::{Matrix4, Quaternion, UnitQuaternion, Vector2, Vector3};
-use russimp_ng::light::LightSourceType;
-use russimp_ng::material::{DataContent, MaterialProperty, PropertyTypeInfo, TextureType};
-use russimp_ng::node::Node;
-use russimp_ng::scene::{PostProcess, Scene};
-use russimp_ng::sys::{aiShadingMode_aiShadingMode_PBR_BRDF, aiShadingMode_aiShadingMode_Unlit};
-use russimp_ng::{Matrix4x4, Vector3D};
+use std::collections::HashMap;
+use std::error::Error;
+use syrillian_utils::debug_panic;
+use wgpu::TextureFormat;
 
-const POST_STEPS: &[PostProcess] = &[
-    PostProcess::CalculateTangentSpace,
-    PostProcess::FindInstances,
-    PostProcess::Triangulate,
-    PostProcess::SortByPrimitiveType,
-    PostProcess::GenerateNormals,
-    PostProcess::GenerateUVCoords,
-    PostProcess::EmbedTextures,
-    PostProcess::LimitBoneWeights,
-];
+pub struct GltfScene {
+    pub doc: Document,
+    pub buffers: Vec<BufferData>,
+    pub images: Vec<ImageData>,
+}
+
+impl GltfScene {
+    pub fn import(path: &str) -> Result<Self, Box<dyn Error>> {
+        let (doc, buffers, images) = gltf::import(path)?;
+        Ok(Self {
+            doc,
+            buffers,
+            images,
+        })
+    }
+    pub fn from_slice(bytes: &[u8]) -> Result<Self, Box<dyn Error>> {
+        let (doc, buffers, images) = gltf::import_slice(bytes)?;
+        Ok(Self {
+            doc,
+            buffers,
+            images,
+        })
+    }
+}
 
 pub struct SceneLoader;
 
-#[rustfmt::skip]
-fn mat4_from_assimp(m: &Matrix4x4) -> Matrix4<f32> {
-    Matrix4::new(
-        m.a1, m.a2, m.a3, m.a4,
-        m.b1, m.b2, m.b3, m.b4,
-        m.c1, m.c2, m.c3, m.c4,
-        m.d1, m.d2, m.d3, m.d4,
-    )
-}
-
-// Build a name->(parent_name, local_matrix) map for the scene graph.
-fn build_node_map<'a>(
-    node: &'a Node,
-    parent: Option<&'a str>,
-    out: &mut HashMap<String, (Option<String>, Matrix4<f32>)>,
-) {
-    out.insert(
-        node.name.clone(),
-        (
-            parent.map(|s| s.to_string()),
-            mat4_from_assimp(&node.transformation),
-        ),
-    );
-    for c in node.children.borrow().iter() {
-        build_node_map(c, Some(&node.name), out);
-    }
-}
-
-/// Dedupe bones by name and remember inverse bind matrices (the Assimp "offset" matrix).
-struct BoneTable {
-    names: Vec<String>,
-    inverse_bind: Vec<Matrix4<f32>>,
-    index_of: HashMap<String, usize>,
-}
-
-impl BoneTable {
-    fn new() -> Self {
-        Self {
-            names: Vec::new(),
-            inverse_bind: Vec::new(),
-            index_of: HashMap::new(),
-        }
-    }
-
-    /// Get global bone index for this name; create if missing.
-    fn ensure(&mut self, name: &str, inv_bind: Matrix4<f32>) -> usize {
-        if let Some(&i) = self.index_of.get(name) {
-            return i;
-        }
-        let i = self.names.len();
-        self.names.push(name.to_string());
-        self.inverse_bind.push(inv_bind);
-        self.index_of.insert(name.to_string(), i);
-        i
-    }
-
-    fn into_bones_with_hierarchy(self, scene: &Scene) -> Bones {
-        let mut node_map = HashMap::<String, (Option<String>, Matrix4<f32>)>::new();
-        if let Some(root) = &scene.root {
-            build_node_map(root, None, &mut node_map);
-        }
-
-        let mut parents = vec![None; self.names.len()];
-
-        for (i, name) in self.names.iter().enumerate() {
-            let mut cur = name.as_str();
-            while let Some((parent_name_opt, _)) = node_map.get(cur) {
-                if let Some(parent_name) = parent_name_opt {
-                    if let Some(&pi) = self.index_of.get(parent_name) {
-                        parents[i] = Some(pi);
-                        break;
-                    }
-                    cur = parent_name;
-                } else {
-                    break;
-                }
-            }
-        }
-
-        Bones {
-            names: self.names,
-            parents,
-            inverse_bind: self.inverse_bind,
-            bind_global: Vec::new(), // finalize later
-            bind_local: Vec::new(),  // finalize later
-            index_of: self.index_of,
-        }
-    }
-}
-
-fn compute_global_transform(
-    name: &str,
-    node_map: &HashMap<String, (Option<String>, Matrix4<f32>)>,
-) -> Matrix4<f32> {
-    let mut m = Matrix4::identity();
-    let mut cur = Some(name);
-    while let Some(cn) = cur {
-        if let Some((p, local)) = node_map.get(cn) {
-            m = *local * m;
-            cur = p.as_deref();
-        } else {
-            break;
-        }
-    }
-    m
-}
-
-fn finalize_bones(scene: &Scene, mesh_node: &Node, bones: &mut Bones) {
-    let mut node_map = HashMap::<String, (Option<String>, Matrix4<f32>)>::new();
-    if let Some(root) = &scene.root {
-        build_node_map(root, None, &mut node_map);
-    }
-
-    let mesh_global = compute_global_transform(&mesh_node.name, &node_map);
-    let mesh_inv = mesh_global.try_inverse().unwrap_or(Matrix4::identity());
-
-    let n = bones.len();
-    bones.bind_global = vec![Matrix4::identity(); n];
-    bones.bind_local = vec![Matrix4::identity(); n];
-
-    for (i, name) in bones.names.iter().enumerate() {
-        let g_world = compute_global_transform(name, &node_map);
-        let g_model = mesh_inv * g_world; // *** convert to mesh MODEL space ***
-        bones.bind_global[i] = g_model;
-    }
-    for i in 0..n {
-        bones.bind_local[i] = match bones.parents[i] {
-            None => bones.bind_global[i],
-            Some(p) => {
-                bones.bind_global[p]
-                    .try_inverse()
-                    .unwrap_or(Matrix4::identity())
-                    * bones.bind_global[i]
-            }
-        };
-    }
-}
-
-/// Keep top-4 weights, sort descending, renormalize.
-fn pack_top4(mut pairs: Vec<(usize, f32)>) -> (Vec<u32>, Vec<f32>) {
-    if pairs.is_empty() {
-        return (Vec::new(), Vec::new());
-    }
-    pairs.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-    pairs.truncate(4);
-    let sum = pairs.iter().map(|p| p.1).sum::<f32>().max(1e-8);
-    let idx: Vec<u32> = pairs.iter().map(|p| p.0 as u32).collect();
-    let wts: Vec<f32> = pairs.iter().map(|p| p.1 / sum).collect();
-    (idx, wts)
-}
-
-fn clip_group_key(anim_name: &str) -> String {
-    let mut parts = anim_name.split('|').collect::<Vec<_>>();
-    if parts.len() >= 2 {
-        let last = parts.pop().unwrap();
-        let prev = parts.pop().unwrap();
-        format!("{prev}|{last}")
-    } else {
-        anim_name.to_owned()
-    }
-}
-
-fn merge_channels(dest: &mut Vec<Channel>, mut src: Vec<Channel>) {
-    let mut idx = HashMap::<String, usize>::new();
-    for (i, ch) in dest.iter().enumerate() {
-        idx.insert(ch.target_name.clone(), i);
-    }
-    for ch in src.drain(..) {
-        if let Some(i) = idx.get(&ch.target_name).copied() {
-            dest[i] = ch;
-        } else {
-            idx.insert(ch.target_name.clone(), dest.len());
-            dest.push(ch);
-        }
-    }
-}
-
-fn animations_from_scene(scene: &Scene) -> Vec<AnimationClip> {
-    let mut groups: HashMap<String, AnimationClip> = HashMap::new();
-
-    for a in &scene.animations {
-        let tps = if a.ticks_per_second > 0.0 {
-            a.ticks_per_second as f32
-        } else {
-            25.0
-        };
-        let dur = (a.duration as f32) / tps;
-        let key = clip_group_key(&a.name);
-
-        let mut channels = Vec::<Channel>::new();
-        for ch in &a.channels {
-            let mut keys = TransformKeys::default();
-
-            for k in &ch.position_keys {
-                keys.t_times.push((k.time as f32) / tps);
-                keys.t_values
-                    .push(Vector3::new(k.value.x, k.value.y, k.value.z));
-            }
-            for k in &ch.rotation_keys {
-                keys.r_times.push((k.time as f32) / tps);
-                keys.r_values
-                    .push(UnitQuaternion::from_quaternion(Quaternion::new(
-                        k.value.w, k.value.x, k.value.y, k.value.z,
-                    )));
-            }
-            for k in &ch.scaling_keys {
-                keys.s_times.push((k.time as f32) / tps);
-                keys.s_values
-                    .push(Vector3::new(k.value.x, k.value.y, k.value.z));
-            }
-
-            channels.push(Channel {
-                target_name: ch.name.clone(),
-                keys,
-            });
-        }
-
-        groups
-            .entry(key.clone())
-            .and_modify(|clip| {
-                clip.duration = clip.duration.max(dur);
-                merge_channels(&mut clip.channels, channels.clone());
-            })
-            .or_insert(AnimationClip {
-                name: key,
-                duration: dur.max(0.0),
-                channels,
-            });
-    }
-
-    groups.into_values().collect()
-}
-
 impl SceneLoader {
     pub fn load(world: &mut World, path: &str) -> Result<GameObjectId, Box<dyn Error>> {
-        let scene = Self::load_scene(path)?;
-
-        let root = match &scene.root {
-            Some(node) => node.clone(),
-            None => return Ok(world.new_object("Empty Scene")),
-        };
-
-        let materials = load_materials(&scene, world);
-        trace!("Loaded materials for {path:?}");
-
-        let root_object = Self::spawn_deep_object(world, &scene, &root, Some(&materials));
-        SceneLoader::load_animations(&scene, root_object);
-        Ok(root_object)
+        let scene = GltfScene::import(path)?;
+        Self::load_into_world(world, &scene)
     }
 
-    fn load_animations(scene: &Scene, mut object: GameObjectId) {
-        let clips = animations_from_scene(&scene);
+    pub fn load_scene_from_buffer(model: &[u8], _hint: &str) -> Result<GltfScene, Box<dyn Error>> {
+        GltfScene::from_slice(model)
+    }
+
+    pub fn load_first_mesh(path: &str) -> Result<Option<(Mesh, Vec<u32>)>, Box<dyn Error>> {
+        let scene = GltfScene::import(path)?;
+        Ok(Self::load_first_from_scene(&scene))
+    }
+
+    pub fn load_first_mesh_from_buffer(
+        model: &[u8],
+    ) -> Result<Option<(Mesh, Vec<u32>)>, Box<dyn Error>> {
+        let scene = GltfScene::from_slice(model)?;
+        Ok(Self::load_first_from_scene(&scene))
+    }
+
+    fn load_into_world(
+        world: &mut World,
+        gltf_scene: &GltfScene,
+    ) -> Result<GameObjectId, Box<dyn Error>> {
+        let doc = &gltf_scene.doc;
+
+        let root_scene = doc
+            .default_scene()
+            .or_else(|| doc.scenes().next())
+            .ok_or("glTF contains no scenes")?;
+
+        let materials = load_materials(gltf_scene, world);
+        trace!("Loaded materials");
+
+        let mut root = world.new_object("glTF Scene");
+        for node in root_scene.nodes() {
+            let child = Self::spawn_node(world, gltf_scene, node, Some(&materials));
+            root.add_child(child);
+        }
+
+        Self::load_animations(gltf_scene, root);
+
+        Ok(root)
+    }
+
+    fn load_animations(gltf_scene: &GltfScene, mut root: GameObjectId) {
+        let clips = animations_from_scene(gltf_scene);
         if !clips.is_empty() {
-            let mut anim = object.add_component::<AnimationComponent>();
+            let mut anim = root.add_component::<AnimationComponent>();
             anim.set_clips(clips);
             anim.play_index(0, true, 1.0, 1.0);
         }
     }
 
-    pub fn load_scene(path: &str) -> Result<Scene, Box<dyn Error>> {
-        trace!("Started loading {path:?}");
-        let scene = Scene::from_file(path, POST_STEPS.to_vec())?;
-        trace!("Finished parsing {path:?}");
-
-        Ok(scene)
+    pub fn load_first_from_scene(scene: &GltfScene) -> Option<(Mesh, Vec<u32>)> {
+        let doc = &scene.doc;
+        let scene0 = doc.default_scene().or_else(|| doc.scenes().next())?;
+        for node in scene0.nodes() {
+            if let Some(m) = load_first_from_node(scene, node) {
+                return Some(m);
+            }
+        }
+        None
     }
 
-    pub fn load_scene_from_buffer(model: &[u8], hint: &str) -> Result<Scene, Box<dyn Error>> {
-        trace!("Start loading scene from memory");
-        let scene = Scene::from_buffer(model, POST_STEPS.to_vec(), hint)?;
-
-        Ok(scene)
-    }
-
-    pub fn spawn_deep_object(
+    fn spawn_node(
         world: &mut World,
-        scene: &Scene,
-        node: &Node,
+        scene: &GltfScene,
+        node: Node,
         materials: Option<&HashMap<u32, HMaterial>>,
     ) -> GameObjectId {
-        struct SpawnData<'a, 'b> {
-            world: &'a mut World,
-            scene: &'b Scene,
-            materials: Option<&'b HashMap<u32, HMaterial>>,
+        let name = node.name().unwrap_or("Unnamed").to_string();
+        trace!("Starting to build scene object {name:?}");
+        let mut obj = world.new_object(name);
+
+        if let Some((mesh, mats)) = load_mesh(scene, node.clone()) {
+            Self::attach_mesh(world, materials, &mut obj, mesh, mats);
         }
 
-        let mut data = SpawnData {
-            world,
-            scene,
-            materials,
-        };
+        let m = Matrix4::from(node.transform().matrix());
+        let (position, rotation, scale) = m.decompose();
+        obj.transform.set_local_position_vec(position);
+        obj.transform.set_local_rotation(rotation);
+        obj.transform.set_nonuniform_local_scale(scale);
 
-        fn inner(ctx: &mut SpawnData, node: &Node, depth: u32) -> GameObjectId {
-            let mut node_obj = SceneLoader::build_object(ctx.world, ctx.scene, node, ctx.materials);
+        load_node_light(node.clone(), obj);
 
-            if depth >= 1000 {
-                warn!("Node Object Iteration Depth reached 1000");
-                return node_obj;
-            }
-
-            for child in node.children.borrow().iter() {
-                let child_obj = inner(ctx, child, depth + 1);
-                trace!("Loaded new scene object {}", child_obj.name);
-                node_obj.add_child(child_obj);
-            }
-
-            node_obj
+        for child in node.children() {
+            let c = Self::spawn_node(world, scene, child, materials);
+            obj.add_child(c);
         }
 
-        inner(&mut data, node, 1)
+        obj
     }
 
-    pub fn load_first_mesh_from_buffer(
-        model: &[u8],
-        hint: &str,
-    ) -> Result<Option<(Mesh, Vec<u32>)>, Box<dyn Error>> {
-        let scene = Self::load_scene_from_buffer(model, hint)?;
-        Ok(Self::load_first_from_scene(&scene))
-    }
-
-    pub fn load_first_mesh(path: &str) -> Result<Option<(Mesh, Vec<u32>)>, Box<dyn Error>> {
-        let scene = Self::load_scene(path)?;
-        Ok(Self::load_first_from_scene(&scene))
-    }
-
-    pub fn load_first_from_scene(scene: &Scene) -> Option<(Mesh, Vec<u32>)> {
-        load_first_from_node(&scene, scene.root.as_ref()?, 0)
-    }
-
-    pub fn load_mesh(scene: &Scene, node: &Node) -> Option<(Mesh, Vec<u32>)> {
-        if node.meshes.is_empty() {
-            return None;
-        }
-
-        let mut bones_tbl = BoneTable::new();
-
-        let mut positions: Vec<Vector3<f32>> = Vec::new();
-        let mut tex_coords: Vec<Vector2<f32>> = Vec::new();
-        let mut normals: Vec<Vector3<f32>> = Vec::new();
-        let mut tangents: Vec<Vector3<f32>> = Vec::new();
-        let mut bitangents: Vec<Vector3<f32>> = Vec::new();
-        let mut bone_idxs: Vec<Vec<u32>> = Vec::new();
-        let mut bone_wts: Vec<Vec<f32>> = Vec::new();
-
-        let mut material_ranges = Vec::new();
-        let mut materials = Vec::new();
-
-        for mesh_id in node.meshes.iter().copied() {
-            let amesh = scene.meshes.get(mesh_id as usize)?;
-            let start_vertex = positions.len();
-
-            let mut weights_by_vertex: HashMap<u32, Vec<(usize, f32)>> = HashMap::new();
-            for b in &amesh.bones {
-                let inv_bind = mat4_from_assimp(&b.offset_matrix);
-                let gidx = bones_tbl.ensure(&b.name, inv_bind);
-                for w in &b.weights {
-                    weights_by_vertex
-                        .entry(w.vertex_id)
-                        .or_default()
-                        .push((gidx, w.weight));
-                }
-            }
-
-            let faces = amesh.faces.iter().filter(|f| f.0.len() == 3);
-            let tc0 = amesh.texture_coords.first().and_then(|opt| opt.as_ref());
-
-            for f in faces {
-                for &vi in &f.0 {
-                    let p = vec3_from_vec3d(&amesh.vertices[vi as usize]);
-                    let n = amesh
-                        .normals
-                        .get(vi as usize)
-                        .map(vec3_from_vec3d)
-                        .unwrap_or(Vector3::zeros());
-                    let t = amesh
-                        .tangents
-                        .get(vi as usize)
-                        .map(vec3_from_vec3d)
-                        .unwrap_or(Vector3::zeros());
-                    let bt = amesh
-                        .bitangents
-                        .get(vi as usize)
-                        .map(vec3_from_vec3d)
-                        .unwrap_or(Vector3::zeros());
-                    let uv = tc0
-                        .and_then(|tc| tc.get(vi as usize))
-                        .map(vec2_from_vec3d)
-                        .unwrap_or(Vector2::zeros());
-
-                    positions.push(p);
-                    normals.push(n);
-                    tangents.push(t);
-                    bitangents.push(bt);
-                    tex_coords.push(uv);
-
-                    let (idxs, wts) = weights_by_vertex
-                        .remove(&vi)
-                        .map(pack_top4)
-                        .unwrap_or_else(|| (Vec::new(), Vec::new()));
-
-                    bone_idxs.push(idxs);
-                    bone_wts.push(wts);
-                }
-            }
-
-            let end_vertex = positions.len();
-            material_ranges.push(start_vertex as u32..end_vertex as u32);
-            materials.push(amesh.material_index);
-        }
-
-        if positions.is_empty() {
-            return None;
-        }
-
-        interpolate_zeros(
-            positions.len(),
-            &mut [
-                &mut tex_coords,
-                &mut normals,
-                &mut tangents,
-                &mut bitangents,
-            ],
-        );
-
-        let vertices: Vec<Vertex3D> = izip!(
-            positions, tex_coords, normals, tangents, bitangents, &bone_idxs, &bone_wts
-        )
-        .map(Vertex3D::from)
-        .collect();
-
-        let mut bones: Bones = bones_tbl.into_bones_with_hierarchy(scene);
-        finalize_bones(scene, node, &mut bones);
-
-        let mesh = Mesh::builder(vertices)
-            .with_many_textures(material_ranges)
-            .with_bones(bones)
-            .build();
-
-        Some((mesh, materials))
-    }
-
-    pub fn build_object(
-        world: &mut World,
-        scene: &Scene,
-        node: &Node,
-        scene_materials: Option<&HashMap<u32, HMaterial>>,
-    ) -> GameObjectId {
-        trace!("Starting to build scene object {:?}", node.name);
-        let mut node_obj = world.new_object(&node.name);
-
-        if let Some((mesh, materials)) = SceneLoader::load_mesh(scene, node) {
-            Self::load_node_mesh(world, scene_materials, &mut node_obj, mesh, materials);
-        }
-
-        let (position, rotation, scale) = mat4_from_assimp(&node.transformation).decompose();
-
-        node_obj.transform.set_local_position_vec(position);
-        node_obj.transform.set_local_rotation(rotation);
-        node_obj.transform.set_nonuniform_local_scale(scale);
-
-        Self::load_node_light(&scene, node, node_obj);
-
-        node_obj
-    }
-
-    fn load_node_mesh(
+    fn attach_mesh(
         world: &mut World,
         scene_materials: Option<&HashMap<u32, HMaterial>>,
         node_obj: &mut GameObjectId,
@@ -511,8 +154,9 @@ impl SceneLoader {
     ) {
         let has_bones = !mesh.bones.is_empty();
         let handle = world.assets.meshes.add(mesh);
+
         if let Some(scene_materials) = scene_materials {
-            let materials = materials
+            let m = materials
                 .iter()
                 .map(|&id| {
                     scene_materials
@@ -523,7 +167,7 @@ impl SceneLoader {
                 .collect();
             node_obj
                 .add_component::<MeshRenderer>()
-                .change_mesh(handle, Some(materials));
+                .change_mesh(handle, Some(m));
         } else {
             node_obj
                 .add_component::<MeshRenderer>()
@@ -534,212 +178,498 @@ impl SceneLoader {
             node_obj.add_component::<SkeletalComponent>();
         }
     }
-
-    fn load_node_light(scene: &Scene, node: &Node, mut obj: GameObjectId) {
-        let Some(light) = scene.lights.iter().find(|l| l.name == node.name) else {
-            return;
-        };
-
-        let color_premultiplied: Vector3<f32> = VecCompat::from(&light.color_diffuse);
-        let i_max = color_premultiplied.max().max(f32::EPSILON);
-        let color = color_premultiplied / i_max;
-        let luminance = 0.2126 * color_premultiplied.x
-            + 0.7152 * color_premultiplied.y
-            + 0.0722 * color_premultiplied.z;
-
-        let radius_m = {
-            let sx = light.size.x.max(0.0);
-            let sy = light.size.y.max(0.0);
-            let r = sx.max(sy);
-            if r > 0.0 { r } else { 0.05 }
-        };
-
-        let e_for_range = if luminance > 0.0 { luminance } else { i_max };
-        let range = light_range(
-            e_for_range,
-            light.attenuation_constant,
-            light.attenuation_linear,
-            light.attenuation_quadratic,
-            1.0,
-        )
-            .unwrap_or_else(|| {
-                warn!("Light had 0 or infinite range using 100.0");
-                100.0
-            });
-
-        if light.light_source_type == LightSourceType::Spot {
-            let mut spot = obj.add_component::<SpotLightComponent>();
-            let data = spot.data_mut(true);
-
-            data.color = color;
-            data.inner_angle = light.angle_inner_cone;
-            data.outer_angle = light.angle_outer_cone;
-            data.range = range;
-            data.radius = radius_m;
-            data.intensity = luminance / 100.0;
-        } else if light.light_source_type == LightSourceType::Point {
-            let mut point = obj.add_component::<PointLightComponent>();
-            let data = point.data_mut(true);
-
-            data.color = color;
-            data.range = range;
-            data.radius = radius_m;
-            data.intensity = luminance / 100.0;
-        }
-    }
 }
 
-fn load_first_from_node(scene: &Scene, node: &Node, iter: u32) -> Option<(Mesh, Vec<u32>)> {
-    if iter > 1000 {
-        return None;
+fn load_first_from_node(scene: &GltfScene, node: Node) -> Option<(Mesh, Vec<u32>)> {
+    if let Some(m) = load_mesh(scene, node.clone()) {
+        return Some(m);
     }
-
-    if let Some(mesh) = SceneLoader::load_mesh(scene, node) {
-        return Some(mesh);
-    }
-
-    for child in node.children.borrow().iter() {
-        if let Some(mesh) = load_first_from_node(scene, child, iter + 1) {
-            return Some(mesh);
+    for c in node.children() {
+        if let Some(m) = load_first_from_node(scene, c) {
+            return Some(m);
         }
     }
-
     None
 }
 
-fn load_texture(
-    world: &mut World,
-    texture: Rc<RefCell<russimp_ng::material::Texture>>,
-) -> HTexture {
-    // TODO: Don't load textures that were loaded before and are just shared between two materials
-    let texture = texture.borrow();
-    match &texture.data {
-        DataContent::Texel(_) => panic!("I CAN'T ADD TEXLESLSSE YET PLS HELP"),
-        DataContent::Bytes(data) => Texture::load_image_from_memory(data)
-            .map(|t| t.store(world))
-            .unwrap_or_else(|e| {
-                warn!("Failed to load texture: {e}. Using fallback texture.");
-                HTexture::FALLBACK_DIFFUSE
-            }),
-    }
-}
+fn load_mesh(scene: &GltfScene, node: Node) -> Option<(Mesh, Vec<u32>)> {
+    let mesh = node.mesh()?;
+    let skin = node.skin();
 
-fn extract_vec3_property<F>(properties: &[MaterialProperty], key: &str, default: F) -> Vector3<f32>
-where
-    F: Fn() -> Vector3<f32>,
-{
-    let prop = properties.iter().find(|prop| prop.key.contains(key));
-    match prop {
-        None => default(),
-        Some(prop) => match &prop.data {
-            PropertyTypeInfo::FloatArray(arr) => {
-                if arr.len() >= 3 {
-                    Vector3::new(arr[0], arr[1], arr[2])
+    let mut positions: Vec<Vector3<f32>> = Vec::new();
+    let mut tex_coords: Vec<Vector2<f32>> = Vec::new();
+    let mut normals: Vec<Vector3<f32>> = Vec::new();
+    let mut tangents: Vec<Vector3<f32>> = Vec::new();
+    let mut bitangents: Vec<Vector3<f32>> = Vec::new();
+    let mut bone_idxs: Vec<Vec<u32>> = Vec::new();
+    let mut bone_wts: Vec<Vec<f32>> = Vec::new();
+
+    let mut ranges = Vec::<std::ops::Range<u32>>::new();
+    let mut materials = Vec::<u32>::new();
+
+    let mut bones = Bones::default();
+    let mut joint_node_index_of: HashMap<usize, usize> = HashMap::new();
+    if let Some(s) = skin {
+        build_bones_from_skin(scene, s, node, &mut bones, &mut joint_node_index_of);
+    }
+
+    let get_buf = |b: gltf::Buffer| -> Option<&[u8]> { Some(&scene.buffers[b.index()].0) };
+
+    let mut start_vertex = 0u32;
+    for prim in mesh.primitives() {
+        let reader = prim.reader(get_buf);
+
+        let pos = reader.read_positions()?.collect::<Vec<_>>();
+        let nrm = reader.read_normals().map(|it| it.collect::<Vec<_>>());
+        let tan = reader.read_tangents().map(|it| it.collect::<Vec<_>>());
+        let uv0 = reader.read_tex_coords(0).map(|tc| match tc {
+            mesh::util::ReadTexCoords::F32(i) => i.collect::<Vec<_>>(),
+            mesh::util::ReadTexCoords::U16(i) => i
+                .map(|v| [v[0] as f32 / 65535.0, v[1] as f32 / 65535.0])
+                .collect(),
+            mesh::util::ReadTexCoords::U8(i) => i
+                .map(|v| [v[0] as f32 / 255.0, v[1] as f32 / 255.0])
+                .collect(),
+        });
+
+        let indices: Vec<u32> = if let Some(ind) = reader.read_indices() {
+            ind.into_u32().collect()
+        } else {
+            (0u32..pos.len() as u32).collect()
+        };
+
+        let (joints, weights): (Option<Vec<[u16; 4]>>, Option<Vec<[f32; 4]>>) =
+            match (reader.read_joints(0), reader.read_weights(0)) {
+                (Some(js), Some(ws)) => {
+                    let js = match js {
+                        mesh::util::ReadJoints::U8(i) => i
+                            .map(|j| [j[0] as u16, j[1] as u16, j[2] as u16, j[3] as u16])
+                            .collect(),
+                        mesh::util::ReadJoints::U16(i) => i.collect(),
+                    };
+                    let ws = match ws {
+                        mesh::util::ReadWeights::F32(i) => i.collect(),
+                        mesh::util::ReadWeights::U16(i) => i
+                            .map(|w| {
+                                [
+                                    w[0] as f32 / 65535.0,
+                                    w[1] as f32 / 65535.0,
+                                    w[2] as f32 / 65535.0,
+                                    w[3] as f32 / 65535.0,
+                                ]
+                            })
+                            .collect(),
+                        mesh::util::ReadWeights::U8(i) => i
+                            .map(|w| {
+                                [
+                                    w[0] as f32 / 255.0,
+                                    w[1] as f32 / 255.0,
+                                    w[2] as f32 / 255.0,
+                                    w[3] as f32 / 255.0,
+                                ]
+                            })
+                            .collect(),
+                    };
+                    (Some(js), Some(ws))
+                }
+                _ => (None, None),
+            };
+
+        if prim.mode() != mesh::Mode::Triangles {
+            warn!("Non-triangle primitive encountered; skipping.");
+            continue;
+        }
+
+        for tri in indices.chunks_exact(3) {
+            for &vi in tri {
+                let p = pos[vi as usize];
+                positions.push(Vector3::new(p[0], p[1], p[2]));
+
+                if let Some(n) = &nrm {
+                    let n = n[vi as usize];
+                    normals.push(Vector3::new(n[0], n[1], n[2]));
                 } else {
-                    warn!(
-                        "Property {} was expected to have 3 values but only had {}",
-                        key,
-                        arr.len()
-                    );
-                    default()
+                    normals.push(Vector3::zeros());
+                }
+
+                if let Some(t) = &tan {
+                    let t4 = t[vi as usize];
+                    let t3 = Vector3::new(t4[0], t4[1], t4[2]);
+                    tangents.push(t3);
+                    let n3 = *normals.last().unwrap();
+                    let b = n3.cross(&t3).normalize() * t4[3].signum();
+                    bitangents.push(b);
+                } else {
+                    tangents.push(Vector3::zeros());
+                    bitangents.push(Vector3::zeros());
+                }
+
+                if let Some(uv) = &uv0 {
+                    let uv = uv[vi as usize];
+                    tex_coords.push(Vector2::new(uv[0], uv[1]));
+                } else {
+                    tex_coords.push(Vector2::zeros());
+                }
+
+                if let (Some(js), Some(ws)) = (&joints, &weights) {
+                    let j = js[vi as usize];
+                    let w = ws[vi as usize];
+                    let idxs = [
+                        *joint_node_index_of.get(&(j[0] as usize)).unwrap_or(&0),
+                        *joint_node_index_of.get(&(j[1] as usize)).unwrap_or(&0),
+                        *joint_node_index_of.get(&(j[2] as usize)).unwrap_or(&0),
+                        *joint_node_index_of.get(&(j[3] as usize)).unwrap_or(&0),
+                    ];
+                    bone_idxs.push(vec![
+                        idxs[0] as u32,
+                        idxs[1] as u32,
+                        idxs[2] as u32,
+                        idxs[3] as u32,
+                    ]);
+                    let s = (w[0] + w[1] + w[2] + w[3]).max(1e-8);
+                    bone_wts.push(vec![w[0] / s, w[1] / s, w[2] / s, w[3] / s]);
+                } else {
+                    bone_idxs.push(Vec::new());
+                    bone_wts.push(Vec::new());
                 }
             }
-            _ => default(),
-        },
+        }
+
+        let end = positions.len() as u32;
+        ranges.push(start_vertex..end);
+        start_vertex = end;
+
+        materials.push(prim.material().index().map(|i| i as u32).unwrap_or(0));
     }
-}
 
-fn load_material(world: &mut World, material: &russimp_ng::material::Material) -> HMaterial {
-    let name = get_string_property_or(&material.properties, "name", || "Material".to_string());
+    if positions.is_empty() {
+        return None;
+    }
 
-    let color = extract_vec3_property(&material.properties, "diffuse", || {
-        Vector3::new(0.788, 0.788, 0.788)
-    });
-
-    let diffuse_tex = material.textures.get(&TextureType::Diffuse);
-    let diffuse_texture = diffuse_tex.map(|tex| load_texture(world, tex.clone()));
-
-    let normal_tex = material.textures.get(&TextureType::Normals);
-    let normal_texture = normal_tex.map(|tex| load_texture(world, tex.clone()));
-
-    let roughness_tex = material.textures.get(&TextureType::Roughness);
-    let roughness_texture = roughness_tex.map(|tex| load_texture(world, tex.clone()));
-
-    let roughness = get_float_property_or(&material.properties, "roughness", 0.5);
-    let metallic = get_float_property_or(&material.properties, "metallic", 0.0);
-    let alpha = get_float_property_or(&material.properties, "opacity", 1.0);
-    let shading_mode = get_int_property_or(
-        &material.properties,
-        "shadingm",
-        aiShadingMode_aiShadingMode_PBR_BRDF,
+    crate::utils::iter::interpolate_zeros(
+        positions.len(),
+        &mut [
+            &mut tex_coords,
+            &mut normals,
+            &mut tangents,
+            &mut bitangents,
+        ],
     );
 
-    let lit = shading_mode != aiShadingMode_aiShadingMode_Unlit;
-    let new_material = Material {
-        name,
-        color,
-        roughness,
-        metallic,
-        diffuse_texture,
-        normal_texture,
-        roughness_texture,
-        alpha,
-        lit,
-        cast_shadows: true,
-        shader: HShader::DIM3,
-    };
-    world.assets.materials.add(new_material)
+    let vertices: Vec<Vertex3D> = izip!(
+        positions, tex_coords, normals, tangents, bitangents, &bone_idxs, &bone_wts
+    )
+        .map(Vertex3D::from)
+        .collect();
+
+    let mesh = Mesh::builder(vertices)
+        .with_many_textures(ranges)
+        .with_bones(bones)
+        .build();
+
+    Some((mesh, materials))
 }
 
-fn load_materials(scene: &Scene, world: &mut World) -> HashMap<u32, HMaterial> {
-    let mut mapping = HashMap::new();
-    for (i, material) in scene.materials.iter().enumerate() {
-        let mat_id = load_material(world, material);
-        mapping.insert(i as u32, mat_id);
+fn build_bones_from_skin(
+    scene: &GltfScene,
+    skin: gltf::Skin,
+    mesh_node: Node,
+    out: &mut Bones,
+    joint_map: &mut HashMap<usize, usize>,
+) {
+    let mut names = Vec::<String>::new();
+    let mut parents = Vec::<Option<usize>>::new();
+    let mut inverse_bind = Vec::<Matrix4<f32>>::new();
+    let mut index_of = HashMap::<String, usize>::new();
+
+    let mut node_map = HashMap::<usize, (Option<usize>, Matrix4<f32>)>::new();
+    for scene0 in scene.doc.scenes() {
+        for n in scene0.nodes() {
+            build_node_map_recursive(n, None, &mut node_map);
+        }
     }
-    mapping
+
+    let get_buf = |b: gltf::Buffer| -> Option<&[u8]> { Some(&scene.buffers[b.index()].0) };
+    let inv_mats: Vec<Matrix4<f32>> = skin
+        .reader(get_buf)
+        .read_inverse_bind_matrices()
+        .map(|iter| iter.map(|m| Matrix4::from(m)).collect())
+        .unwrap_or_else(|| Vec::new());
+
+    for (joint_idx, joint_node) in skin.joints().enumerate() {
+        let name = joint_node.name().unwrap_or("<unnamed>").to_string();
+        let my_index = names.len();
+        names.push(name.clone());
+        index_of.insert(name.clone(), my_index);
+        joint_map.insert(joint_idx, my_index);
+
+        let parent = node_map
+            .get(&joint_node.index())
+            .and_then(|(p, _)| *p)
+            .and_then(|pi| {
+                skin.joints()
+                    .position(|jn| jn.index() == pi)
+                    .map(|local| joint_map.get(&local).copied())
+                    .flatten()
+            });
+        parents.push(parent);
+
+        let ib = inv_mats
+            .get(joint_idx)
+            .cloned()
+            .unwrap_or_else(|| Matrix4::identity());
+        inverse_bind.push(ib);
+    }
+
+    let mesh_global = global_transform_of(mesh_node.index(), &node_map);
+    let mesh_global_inv = mesh_global.try_inverse().unwrap_or(Matrix4::identity());
+
+    let mut bind_global = vec![Matrix4::identity(); names.len()];
+    for (i, joint_node) in skin.joints().enumerate() {
+        let g_world = global_transform_of(joint_node.index(), &node_map);
+        bind_global[i] = mesh_global_inv * g_world;
+    }
+
+    let mut bind_local = vec![Matrix4::identity(); names.len()];
+    for i in 0..names.len() {
+        bind_local[i] = match parents[i] {
+            None => bind_global[i],
+            Some(p) => bind_global[p].try_inverse().unwrap_or(Matrix4::identity()) * bind_global[i],
+        };
+    }
+
+    out.names = names;
+    out.parents = parents;
+    out.inverse_bind = inverse_bind;
+    out.bind_global = bind_global;
+    out.bind_local = bind_local;
+    out.index_of = index_of;
 }
 
-fn get_string_property_or<F>(properties: &[MaterialProperty], key: &str, default: F) -> String
+fn build_node_map_recursive(
+    node: Node,
+    parent: Option<usize>,
+    out: &mut HashMap<usize, (Option<usize>, Matrix4<f32>)>,
+) {
+    out.insert(
+        node.index(),
+        (parent, Matrix4::from(node.transform().matrix())),
+    );
+    for c in node.children() {
+        build_node_map_recursive(c, Some(node.index()), out);
+    }
+}
+
+fn global_transform_of(
+    node_idx: usize,
+    node_map: &HashMap<usize, (Option<usize>, Matrix4<f32>)>,
+) -> Matrix4<f32> {
+    let mut m = Matrix4::identity();
+    let mut cur = Some(node_idx);
+    while let Some(ci) = cur {
+        if let Some((p, local)) = node_map.get(&ci) {
+            m = *local * m;
+            cur = *p;
+        } else {
+            break;
+        }
+    }
+    m
+}
+
+fn animations_from_scene(scene: &GltfScene) -> Vec<AnimationClip> {
+    let mut clips = Vec::<AnimationClip>::new();
+    let get_buf = |b: gltf::Buffer| -> Option<&[u8]> { Some(&scene.buffers[b.index()].0) };
+
+    for anim in scene.doc.animations() {
+        let name = anim.name().unwrap_or("Animation").to_string();
+        let mut channels_out = Vec::<Channel>::new();
+        let mut max_time = 0.0f32;
+
+        for ch in anim.channels() {
+            let target = ch.target();
+            let node = target.node();
+            let target_name = node
+                .name()
+                .unwrap_or(&format!("node{}", node.index()))
+                .to_string();
+
+            let reader = ch.reader(get_buf);
+
+            if let Some(times) = reader.read_inputs() {
+                let times: Vec<f32> = times.collect();
+                max_time = max_time.max(times.last().copied().unwrap_or(0.0));
+
+                let mut keys = TransformKeys::default();
+                match reader.read_outputs().expect("outputs") {
+                    ReadOutputs::Translations(v) => {
+                        let vals: Vec<[f32; 3]> = v.collect();
+                        keys.t_times = times.clone();
+                        keys.t_values = vals
+                            .into_iter()
+                            .map(|v| Vector3::new(v[0], v[1], v[2]))
+                            .collect();
+                    }
+                    ReadOutputs::Rotations(v) => {
+                        let vals: Vec<_> = v.into_f32().collect();
+                        keys.r_times = times.clone();
+                        keys.r_values = vals
+                            .into_iter()
+                            .map(|q| {
+                                UnitQuaternion::from_quaternion(Quaternion::new(
+                                    q[3], q[0], q[1], q[2],
+                                ))
+                            })
+                            .collect();
+                    }
+                    ReadOutputs::Scales(v) => {
+                        let vals: Vec<[f32; 3]> = v.collect();
+                        keys.s_times = times.clone();
+                        keys.s_values = vals
+                            .into_iter()
+                            .map(|v| Vector3::new(v[0], v[1], v[2]))
+                            .collect();
+                    }
+                    _ => {} // TODO: weights
+                }
+
+                channels_out.push(Channel { target_name, keys });
+            }
+        }
+
+        clips.push(AnimationClip {
+            name,
+            duration: max_time,
+            channels: channels_out,
+        });
+    }
+
+    clips
+}
+
+fn load_materials(scene: &GltfScene, world: &mut World) -> HashMap<u32, HMaterial> {
+    let mut map = HashMap::new();
+
+    for (i, mat) in scene.doc.materials().enumerate() {
+        let name = mat.name().unwrap_or("Material").to_string();
+        let pbr = mat.pbr_metallic_roughness();
+
+        let base = pbr.base_color_factor();
+        let color = Vector3::new(base[0], base[1], base[2]);
+        let alpha = base[3];
+        let metallic = pbr.metallic_factor();
+        let roughness = pbr.roughness_factor();
+
+        let diffuse_texture = load_texture(scene, world, pbr.base_color_texture());
+        let normal_texture = load_texture(scene, world, mat.normal_texture());
+        let roughness_texture = load_texture(scene, world, pbr.metallic_roughness_texture());
+
+        let lit = !mat.unlit();
+
+        let new_mat = Material {
+            name,
+            color,
+            roughness,
+            metallic,
+            diffuse_texture,
+            normal_texture,
+            roughness_texture,
+            alpha,
+            lit,
+            cast_shadows: true,
+            shader: HShader::DIM3,
+        };
+        map.insert(i as u32, world.assets.materials.add(new_mat));
+    }
+
+    map
+}
+
+fn load_texture<'a, T>(scene: &'a GltfScene, world: &mut World, info: Option<T>) -> Option<HTexture>
 where
-    F: Fn() -> String,
+    T: AsRef<gltf::texture::Texture<'a>>,
 {
-    let prop = properties.iter().find(|prop| prop.key.contains(key));
-    match prop {
-        None => default(),
-        Some(prop) => match &prop.data {
-            PropertyTypeInfo::String(str) => str.clone(),
-            _ => default(),
-        },
+    let tex = info.as_ref()?.as_ref();
+    let img = tex.source();
+    let idx = img.index();
+
+    let pixels = &scene.images[idx].pixels;
+    let mut data = Vec::new();
+    let (w, h) = (scene.images[idx].width, scene.images[idx].height);
+
+    let original_format = scene.images[idx].format;
+
+    let format = match original_format {
+        Format::R8 => TextureFormat::R8Unorm,
+        Format::R8G8 => TextureFormat::Rg8Unorm,
+        Format::R8G8B8 => TextureFormat::Rgba8UnormSrgb,
+        Format::R8G8B8A8 => TextureFormat::Rgba8UnormSrgb,
+        Format::R16 => TextureFormat::R16Unorm,
+        Format::R16G16 => TextureFormat::Rg16Snorm,
+        Format::R16G16B16 => {
+            debug_panic!("Cannot use RGB16 (no alpha) Texture");
+            return None;
+        }
+        Format::R16G16B16A16 => TextureFormat::Rgba16Unorm,
+        Format::R32G32B32FLOAT => {
+            debug_panic!("Cannot use RGB32 (no alpha) Texture");
+            return None;
+        }
+        Format::R32G32B32A32FLOAT => TextureFormat::Rgba32Float,
+    };
+
+    if original_format == Format::R8G8B8 {
+        for rgb in pixels.chunks(3) {
+            data.extend(rgb);
+            data.push(255);
+        }
+    } else {
+        data = pixels.clone();
     }
+
+    debug_assert_eq!(
+        data.len(),
+        w as usize * h as usize * format.block_copy_size(None).unwrap() as usize
+    );
+
+    Some(Texture::load_pixels(data, w, h, TextureFormat::Rgba8UnormSrgb).store(world))
 }
 
-fn get_float_property_or(properties: &[MaterialProperty], key: &str, default: f32) -> f32 {
-    let prop = properties.iter().find(|prop| prop.key.contains(key));
-    match prop {
-        None => default,
-        Some(prop) => match &prop.data {
-            PropertyTypeInfo::FloatArray(f) => f.first().copied().unwrap_or(default),
-            _ => default,
-        },
+fn load_node_light(node: Node, mut obj: GameObjectId) {
+    if let Some(nl) = node.light() {
+        let color = Vector3::new(nl.color()[0], nl.color()[1], nl.color()[2]);
+        let intensity = nl.intensity(); // point/spot: candela (lm/sr); directional: lux (lx)
+        let range = nl.range().unwrap_or(100.0);
+        match nl.kind() {
+            Kind::Spot {
+                inner_cone_angle,
+                outer_cone_angle,
+            } => {
+                let mut spot = obj.add_component::<SpotLightComponent>();
+                let d = spot.data_mut(true);
+                d.color = color;
+                d.inner_angle = inner_cone_angle;
+                d.outer_angle = outer_cone_angle;
+                d.range = range;
+                d.radius = 0.05;
+                d.intensity = intensity;
+            }
+            Kind::Point => {
+                let mut p = obj.add_component::<PointLightComponent>();
+                let d = p.data_mut(true);
+                d.color = color;
+                d.range = range;
+                d.radius = 0.05;
+                d.intensity = intensity;
+            }
+            Kind::Directional => {
+                let mut p = obj.add_component::<SunLightComponent>();
+                let d = p.data_mut(true);
+                d.color = color;
+                d.range = range;
+                d.radius = 0.05;
+                d.intensity = intensity;
+            }
+        }
     }
-}
-
-fn get_int_property_or(properties: &[MaterialProperty], key: &str, default: u32) -> u32 {
-    let prop = properties.iter().find(|prop| prop.key.contains(key));
-    match prop {
-        None => default,
-        Some(prop) => match &prop.data {
-            PropertyTypeInfo::Buffer(f) => f.first().map(|b| *b as u32).unwrap_or(default),
-            _ => default,
-        },
-    }
-}
-
-fn vec3_from_vec3d(v: &Vector3D) -> Vector3<f32> {
-    Vector3::new(v.x, v.y, v.z)
-}
-
-fn vec2_from_vec3d(v: &Vector3D) -> Vector2<f32> {
-    Vector2::new(v.x, v.y)
 }
