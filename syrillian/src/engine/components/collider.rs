@@ -212,10 +212,14 @@ impl Collider3D {
             .meshes
             .try_get(handle)
             .ok_or(InvalidMeshRef)?;
-        let collider = self.get_collider_mut().ok_or(DesyncedCollider)?;
-        let collider_shape = SharedShape::mesh(&mesh).ok_or(InvalidMesh)?;
 
-        collider.set_shape(collider_shape);
+        let scale = self.parent.transform.local_scale();
+        let collider_shape = SharedShape::mesh(&mesh).ok_or(InvalidMesh)?;
+        let shape = collider_shape.scale_dyn(scale, 1).ok_or(InvalidMesh)?;
+
+        self.get_collider_mut()
+            .ok_or(DesyncedCollider)?
+            .set_shape(SharedShape(shape.into()));
 
         Ok(())
     }
