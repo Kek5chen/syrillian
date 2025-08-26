@@ -30,7 +30,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Test
-        run: 'cargo llvm-cov --workspace'
+        run: 'cargo llvm-cov --workspace --no-default-features --features derive'
 
       - name: Gather Test Coverage
         run: 'cargo llvm-cov report --codecov --output-path cov.json'
