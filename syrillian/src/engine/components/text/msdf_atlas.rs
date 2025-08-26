@@ -54,9 +54,7 @@ pub struct MsdfAtlas {
     shrinkage: f64,
     range: f64,
 
-    // IMPORTANT: Locking this here is necessary because the face is linked to it
-    _face_bytes: Arc<Vec<u8>>,
-    face: Face<'static>,
+    face_bytes: Arc<Vec<u8>>,
 
     pub texture: HTexture,
     pub material: HMaterial,
@@ -70,10 +68,7 @@ impl MsdfAtlas {
         range: f64,
         world: &World,
     ) -> Self {
-        // This is probably safe because we store it with the face
-        let face_bytes_static: &'static [u8] =
-            unsafe { std::mem::transmute(face_bytes.as_slice()) };
-        let face = Face::parse(&face_bytes_static, 0).expect("parse face");
+        let face = Face::parse(&face_bytes, 0).expect("parse face");
         let units_per_em = face.units_per_em() as f32;
 
         let ascent_em = face.ascender() as f32 / units_per_em;
@@ -115,8 +110,7 @@ impl MsdfAtlas {
             },
             shrinkage,
             range,
-            _face_bytes: face_bytes,
-            face,
+            face_bytes,
             texture,
             material,
         }
@@ -170,10 +164,10 @@ impl MsdfAtlas {
         ch: char,
         queue: &Queue,
     ) -> Option<GlyphAtlasEntry> {
-        let gid = self.face.glyph_index(ch)?;
+        let face = Face::parse(&self.face_bytes, 0).expect("parse face");
+        let gid = face.glyph_index(ch)?;
         // bbox in font units; if None (space), make a tiny box so we still allocate padding
-        let bbox = self
-            .face
+        let bbox = face
             .glyph_bounding_box(gid)
             .unwrap_or(ttf_parser::Rect {
                 x_min: 0,
@@ -206,7 +200,7 @@ impl MsdfAtlas {
             s, 0.0, tx, 0.0, -s, ty, 0.0, 0.0, 1.0,
         ));
 
-        let mut shape: Shape<_> = fdsm_tt::load_shape_from_face(&self.face, gid);
+        let mut shape: Shape<_> = fdsm_tt::load_shape_from_face(&face, gid);
         shape.transform(&transform);
 
         let colored = Shape::edge_coloring_simple(shape, 0.03, 0xD15EA5u64);
@@ -280,7 +274,7 @@ impl MsdfAtlas {
             ((dest_y + height_px) as f32) / (self.height as f32),
         ];
 
-        let adv_units = self.face.glyph_hor_advance(gid).unwrap_or(0) as f32;
+        let adv_units = face.glyph_hor_advance(gid).unwrap_or(0) as f32;
         let advance_em = adv_units / self.metrics.units_per_em;
 
         Some(GlyphAtlasEntry {
