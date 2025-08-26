@@ -11,13 +11,25 @@ pub struct Material {
     pub color: Vector3<f32>,
     pub diffuse_texture: Option<HTexture>,
     pub normal_texture: Option<HTexture>,
-    pub shininess_texture: Option<HTexture>,
+    pub roughness_texture: Option<HTexture>,
+    #[builder(default = 0.5)]
+    pub roughness: f32,
     #[builder(default = 0.0)]
-    pub shininess: f32,
+    pub metallic: f32,
     #[builder(default = 1.0)]
-    pub opacity: f32,
+    pub alpha: f32,
+    #[builder(default = true)]
+    pub lit: bool,
+    #[builder(default = true)]
+    pub cast_shadows: bool,
     #[builder(default = HShader::DIM3)]
     pub shader: HShader,
+}
+
+impl Material {
+    pub fn is_transparent(&self) -> bool {
+        self.alpha < 1.0
+    }
 }
 
 impl<S: material_builder::State> MaterialBuilder<S>
@@ -36,10 +48,13 @@ impl StoreDefaults for Material {
             color: Vector3::new(1.0, 1.0, 1.0),
             diffuse_texture: None,
             normal_texture: None,
-            shininess_texture: None,
-            shininess: 0.0,
+            roughness_texture: None,
+            roughness: 0.5,
+            metallic: 0.0,
             shader: HShader::FALLBACK,
-            opacity: 1.0,
+            alpha: 1.0,
+            lit: true,
+            cast_shadows: true,
         };
 
         store_add_checked!(store, HMaterial::FALLBACK_ID, fallback);
@@ -49,10 +64,13 @@ impl StoreDefaults for Material {
             color: Vector3::new(0.7, 0.7, 0.7),
             diffuse_texture: None,
             normal_texture: None,
-            shininess_texture: None,
-            shininess: 0.3,
+            roughness_texture: None,
+            roughness: 0.5,
+            metallic: 0.4,
             shader: HShader::DIM3,
-            opacity: 1.0,
+            alpha: 1.0,
+            lit: true,
+            cast_shadows: true,
         };
 
         store_add_checked!(store, HMaterial::DEFAULT_ID, default);

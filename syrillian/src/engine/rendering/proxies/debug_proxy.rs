@@ -1,8 +1,8 @@
-use crate::assets::{HMesh, HShader};
+use crate::assets::{AssetStore, HMesh, HShader};
 use crate::components::BoneData;
 use crate::core::ModelUniform;
 use crate::rendering::proxies::mesh_proxy::{MeshUniformIndex, RuntimeMeshData};
-use crate::rendering::proxies::SceneProxy;
+use crate::rendering::proxies::{SceneProxy, PROXY_PRIORITY_SOLID};
 use crate::rendering::uniform::ShaderUniform;
 use crate::rendering::{AssetCache, GPUDrawCtx, Renderer};
 use crate::{must_pipeline, proxy_data, proxy_data_mut};
@@ -74,6 +74,10 @@ impl SceneProxy for DebugSceneProxy {
         let cache = &renderer.cache;
         self.render_lines(data, cache, ctx);
         self.render_meshes(data, cache, ctx)
+    }
+
+    fn priority(&self, _store: &AssetStore) -> u32 {
+        PROXY_PRIORITY_SOLID
     }
 }
 
@@ -192,7 +196,7 @@ impl DebugSceneProxy {
             };
 
             let shader = cache.shader(HShader::DEBUG_EDGES);
-            crate::must_pipeline!(pipeline = shader, ctx.pass_type => return);
+            must_pipeline!(pipeline = shader, ctx.pass_type => return);
 
             let mut pass = ctx.pass.write().unwrap();
 

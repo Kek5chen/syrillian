@@ -1,9 +1,9 @@
-use crate::assets::{HMaterial, HMesh, HShader, Mesh, Shader, H};
+use crate::assets::{AssetStore, HMaterial, HMesh, HShader, Mesh, Shader, H};
 use crate::components::BoneData;
 use crate::core::ModelUniform;
-use crate::rendering::proxies::SceneProxy;
+use crate::rendering::proxies::{SceneProxy, PROXY_PRIORITY_SOLID, PROXY_PRIORITY_TRANSPARENT};
 use crate::rendering::uniform::ShaderUniform;
-use crate::rendering::{AssetCache, GPUDrawCtx, Renderer, RuntimeMesh};
+use crate::rendering::{AssetCache, GPUDrawCtx, RenderPassType, Renderer, RuntimeMesh};
 use crate::{must_pipeline, proxy_data, proxy_data_mut};
 use nalgebra::Matrix4;
 use std::any::Any;
@@ -30,6 +30,7 @@ pub struct RuntimeMeshData {
     pub uniform: ShaderUniform<MeshUniformIndex>,
 }
 
+#[derive(Debug, Clone)]
 pub struct MeshSceneProxy {
     pub mesh: HMesh,
     pub materials: Vec<HMaterial>,
@@ -42,7 +43,13 @@ impl SceneProxy for MeshSceneProxy {
         Box::new(self.setup_mesh_data(renderer, local_to_world))
     }
 
-    fn update_render(&mut self, renderer: &Renderer, data: &mut dyn Any, _window: &Window, local_to_world: &Matrix4<f32>) {
+    fn update_render(
+        &mut self,
+        renderer: &Renderer,
+        data: &mut dyn Any,
+        _window: &Window,
+        local_to_world: &Matrix4<f32>,
+    ) {
         let data: &mut RuntimeMeshData = proxy_data_mut!(data);
 
         // TODO: Consider Rigid Body render isometry interpolation for mesh local to world
@@ -65,7 +72,13 @@ impl SceneProxy for MeshSceneProxy {
         );
     }
 
-    fn render<'a>(&self, renderer: &Renderer, data: &dyn Any, ctx: &GPUDrawCtx, _local_to_world: &Matrix4<f32>) {
+    fn render<'a>(
+        &self,
+        renderer: &Renderer,
+        data: &dyn Any,
+        ctx: &GPUDrawCtx,
+        _local_to_world: &Matrix4<f32>,
+    ) {
         let data: &RuntimeMeshData = proxy_data!(data);
 
         let Some(mesh) = renderer.cache.mesh(self.mesh) else {
@@ -91,6 +104,17 @@ impl SceneProxy for MeshSceneProxy {
         if DebugRenderer::mesh_vertex_normals() {
             draw_vertex_normals(ctx, &renderer.cache, &mesh, &mut pass);
         }
+    }
+
+    fn priority(&self, store: &AssetStore) -> u32 {
+        self.materials
+            .iter()
+            .any(|m| {
+                let material = store.materials.get(*m);
+                material.is_transparent()
+            })
+            .then_some(PROXY_PRIORITY_TRANSPARENT)
+            .unwrap_or(PROXY_PRIORITY_SOLID)
     }
 }
 
@@ -134,6 +158,10 @@ impl MeshSceneProxy {
                 .unwrap_or(HMaterial::FALLBACK);
             let material = cache.material(h_mat);
 
+            if ctx.pass_type == RenderPassType::Shadow && material.data.cast_shadows == 0 {
+                continue;
+            }
+
             if material.shader != current_shader {
                 let shader = cache.shader(material.shader);
                 must_pipeline!(pipeline = shader, ctx.pass_type => continue);
@@ -151,7 +179,11 @@ impl MeshSceneProxy {
         }
     }
 
-    fn setup_mesh_data(&mut self, renderer: &Renderer, local_to_world: &Matrix4<f32>) -> RuntimeMeshData {
+    fn setup_mesh_data(
+        &mut self,
+        renderer: &Renderer,
+        local_to_world: &Matrix4<f32>,
+    ) -> RuntimeMeshData {
         let device = &renderer.state.device;
         let model_bgl = renderer.cache.bgl_model();
         let mesh_data = ModelUniform::from_matrix(local_to_world);
@@ -161,10 +193,7 @@ impl MeshSceneProxy {
             .with_buffer_data_slice(self.bone_data.bones.as_slice())
             .build(device);
 
-        RuntimeMeshData {
-            mesh_data,
-            uniform,
-        }
+        RuntimeMeshData { mesh_data, uniform }
     }
 }
 
@@ -216,4 +245,3 @@ fn draw_vertex_normals(
         pass.draw(0..2, 0..mesh.vertex_count());
     }
 }
-

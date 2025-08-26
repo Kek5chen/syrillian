@@ -16,20 +16,26 @@ pub(crate) enum MaterialUniformIndex {
     DiffuseSampler = 2,
     NormalView = 3,
     NormalSampler = 4,
+    RoughnessView = 5,
+    RoughnessSampler = 6,
 }
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct MaterialUniform {
-    diffuse: Vector3<f32>,
-    use_diffuse_texture: u32,
-    use_normal_texture: u32,
-    shininess: f32,
-    opacity: f32,
-    _padding: u32,
+    pub diffuse: Vector3<f32>,
+    pub roughness: f32,
+    pub metallic: f32,
+    pub alpha: f32,
+    pub lit: u32, // bool
+    pub cast_shadows: u32, // bool
+    pub use_diffuse_texture: u32,
+    pub use_normal_texture: u32,
+    pub use_roughness_texture: u32,
+    pub _padding: u32,
 }
 
-ensure_aligned!(MaterialUniform { diffuse }, align <= 16 * 2 => size);
+ensure_aligned!(MaterialUniform { diffuse }, align <= 16 * 3 => size);
 
 #[allow(dead_code)]
 #[derive(Debug)]
@@ -52,19 +58,21 @@ impl CacheType for Material {
     fn upload(&self, device: &Device, _queue: &Queue, cache: &AssetCache) -> Self::Hot {
         let data = MaterialUniform {
             diffuse: self.color,
-            _padding: 0xFFFFFFFF,
+            roughness: self.roughness,
+            metallic: self.metallic,
+            alpha: self.alpha,
+            lit: self.lit as u32,
+            cast_shadows: self.cast_shadows as u32,
             use_diffuse_texture: self.diffuse_texture.is_some() as u32,
             use_normal_texture: self.normal_texture.is_some() as u32,
-            shininess: self.shininess,
-            opacity: self.opacity,
+            use_roughness_texture: self.roughness_texture.is_some() as u32,
+            _padding: 0x0,
         };
 
         let mat_bgl = cache.bgl_material();
         let diffuse = cache.texture_opt(self.diffuse_texture, HTexture::FALLBACK_DIFFUSE);
         let normal = cache.texture_opt(self.normal_texture, HTexture::FALLBACK_NORMAL);
-
-        // TODO: Add shininess
-        let _shininess = cache.texture_opt(self.shininess_texture, HTexture::FALLBACK_SHININESS);
+        let roughness = cache.texture_opt(self.roughness_texture, HTexture::FALLBACK_ROUGHNESS);
 
         // TODO: Add additional material mapping properties and such
         let sampler = device.create_sampler(&SamplerDescriptor {
@@ -82,6 +90,8 @@ impl CacheType for Material {
             .with_texture(&diffuse.view)
             .with_sampler(&sampler)
             .with_texture(&normal.view)
+            .with_sampler(&sampler)
+            .with_texture(&roughness.view)
             .with_sampler(&sampler)
             .build(device);
 

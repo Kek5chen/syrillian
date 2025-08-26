@@ -6,12 +6,12 @@ use num_enum::TryFromPrimitive;
 use syrillian_macros::UniformIndex;
 
 #[repr(C)]
-#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct LightProxy {
     pub position: Vector3<f32>,
     pub _p0: u32,
     pub up: Vector3<f32>,
-    pub _p1: u32,
+    pub radius: f32,
     pub direction: Vector3<f32>,
     pub range: f32,
     pub color: Vector3<f32>,
@@ -29,11 +29,11 @@ impl LightProxy {
             position: Vector3::new(0.0, 0.0, 0.0),
             _p0: 0,
             up: Vector3::new(0.0, 0.0, 0.0),
-            _p1: 0,
+            radius: 10.0,
             direction: Vector3::new(0.0, -1.0, 0.0),
             range: 10.0,
             color: Vector3::new(1.0, 1.0, 1.0),
-            intensity: 10.0,
+            intensity: 1000.0,
             inner_angle: 0.0,
             outer_angle: 0.0,
             type_id: LightType::Point as u32,

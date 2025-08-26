@@ -1,8 +1,8 @@
-use crate::assets::HMaterial;
+use crate::assets::{AssetStore, HMaterial};
 use crate::components::{BoneData, ImageScalingMode};
 use crate::core::ModelUniform;
 use crate::rendering::proxies::mesh_proxy::{MeshUniformIndex, RuntimeMeshData};
-use crate::rendering::proxies::SceneProxy;
+use crate::rendering::proxies::{SceneProxy, PROXY_PRIORITY_2D};
 use crate::rendering::uniform::ShaderUniform;
 use crate::rendering::{GPUDrawCtx, RenderPassType, Renderer};
 use crate::{proxy_data, proxy_data_mut};
@@ -71,6 +71,10 @@ impl SceneProxy for ImageSceneProxy {
         pass.set_bind_group(1, data.uniform.bind_group(), &[]);
         pass.set_bind_group(2, material_bind_group, &[]);
         pass.draw(0..vertices_count, 0..1)
+    }
+
+    fn priority(&self, _store: &AssetStore) -> u32 {
+        PROXY_PRIORITY_2D
     }
 }
 

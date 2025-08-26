@@ -2172,7 +2172,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "07033963ba89ebaf1584d767badaa2e8fcec21aedea6b8c0346d487d49c28667"
 dependencies = [
  "cfg-if",
- "windows-targets 0.48.5",
+ "windows-targets 0.53.3",
 ]
 
 [[package]]
@@ -3638,9 +3638,9 @@ checksum = "ad8388ea1a9e0ea807e442e8263a699e7edcb320ecbcd21b4fa8ff859acce3ba"
 
 [[package]]
 name = "russimp-ng"
-version = "3.2.5"
+version = "3.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c05f8274542e5db169484cb2fdbee184c2a1b44ab50ce4ac5b33d93fee564424"
+checksum = "cf1f3538c60f196cb93876164c9b1a630fd59d0a4bab4729040e61f26829b6e2"
 dependencies = [
  "derivative",
  "num-derive",

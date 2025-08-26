@@ -77,7 +77,7 @@ const TWO_DEFAULT_ENTRIES: [BindGroupLayoutEntry; 2] = [
     },
 ];
 
-const MATERIAL_ENTRIES: [BindGroupLayoutEntry; 5] = [
+const MATERIAL_ENTRIES: [BindGroupLayoutEntry; 7] = [
     BindGroupLayoutEntry {
         binding: 0,
         visibility: ShaderStages::FRAGMENT,
@@ -116,6 +116,22 @@ const MATERIAL_ENTRIES: [BindGroupLayoutEntry; 5] = [
     },
     BindGroupLayoutEntry {
         binding: 4,
+        visibility: ShaderStages::FRAGMENT,
+        ty: BindingType::Sampler(SamplerBindingType::Filtering),
+        count: None,
+    },
+    BindGroupLayoutEntry {
+        binding: 5,
+        visibility: ShaderStages::FRAGMENT,
+        ty: BindingType::Texture {
+            sample_type: TextureSampleType::Float { filterable: true },
+            view_dimension: TextureViewDimension::D2,
+            multisampled: false,
+        },
+        count: None,
+    },
+    BindGroupLayoutEntry {
+        binding: 6,
         visibility: ShaderStages::FRAGMENT,
         ty: BindingType::Sampler(SamplerBindingType::Filtering),
         count: None,

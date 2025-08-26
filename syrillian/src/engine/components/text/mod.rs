@@ -12,24 +12,24 @@ use nalgebra::{Vector2, Vector3};
 pub mod glyph;
 pub mod msdf_atlas;
 
-pub type Text3D = Text<ThreeD>;
-pub type Text2D = Text<TwoD>;
+pub type Text3D = Text<3, ThreeD>;
+pub type Text2D = Text<2, TwoD>;
 
 #[derive(Debug)]
-pub struct Text<DIM: TextDim> {
+pub struct Text<const D: u8, DIM: TextDim<D>> {
     parent: GameObjectId,
-    proxy: TextProxy<DIM>,
+    proxy: TextProxy<D, DIM>,
     family_name: String,
     glyph_size: i32,
     font_dirty: bool,
 }
 
-impl<DIM: TextDim> Text<DIM> {
-    pub const fn text(&self) -> &TextProxy<DIM> {
+impl<const D: u8, DIM: TextDim<D>> Text<D, DIM> {
+    pub const fn text(&self) -> &TextProxy<D, DIM> {
         &self.proxy
     }
 
-    pub const fn text_mut(&mut self) -> &mut TextProxy<DIM> {
+    pub const fn text_mut(&mut self) -> &mut TextProxy<D, DIM> {
         &mut self.proxy
     }
 
@@ -54,7 +54,7 @@ impl<DIM: TextDim> Text<DIM> {
     }
 }
 
-impl<DIM: TextDim + 'static> Component for Text<DIM> {
+impl<const D: u8, DIM: TextDim<D> + 'static> Component for Text<D, DIM> {
     fn new(parent: GameObjectId) -> Self
     where
         Self: Sized,

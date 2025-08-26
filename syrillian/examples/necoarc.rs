@@ -42,7 +42,6 @@ impl AppState for NecoArc {
             Material::builder()
                 .name("Neco Arc".into())
                 .diffuse_texture(texture)
-                .opacity(1.0)
                 .build(),
         );
 

@@ -11,8 +11,7 @@ struct SystemData {
     delta_time: f32,
 }
 
-@group(0) @binding(0)
-var<uniform> camera: CameraData;
-
-@group(0) @binding(1)
-var<uniform> system: SystemData;
+@group(0) @binding(0) var<uniform> camera: CameraData;
+@group(0) @binding(1) var<uniform> system: SystemData;
+//@group(0) @binding(2) var g_normals: texture_storage_2d<rgba8unorm, write>;
+//@group(0) @binding(3) var g_position: texture_storage_2d<rgba8unorm, write>;

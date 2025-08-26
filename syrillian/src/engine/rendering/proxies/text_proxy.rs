@@ -1,9 +1,9 @@
-use crate::assets::{HFont, HShader};
+use crate::assets::{AssetStore, HFont, HShader};
 use crate::components::glyph::{generate_glyph_geometry_stream, GlyphRenderData, TextAlignment};
 use crate::components::BoneData;
 use crate::core::ModelUniform;
 use crate::rendering::proxies::mesh_proxy::MeshUniformIndex;
-use crate::rendering::proxies::SceneProxy;
+use crate::rendering::proxies::{SceneProxy, PROXY_PRIORITY_2D, PROXY_PRIORITY_TRANSPARENT};
 use crate::rendering::uniform::ShaderUniform;
 use crate::rendering::{AssetCache, CPUDrawCtx, GPUDrawCtx, RenderPassType, Renderer};
 use crate::utils::hsv_to_rgb;
@@ -43,14 +43,15 @@ pub struct ThreeD;
 #[derive(Debug, Copy, Clone)]
 pub struct TwoD;
 
-pub trait TextDim: Copy + Clone + Send + 'static {
+pub trait TextDim<const D: u8>: Copy + Clone + Send + 'static {
     fn shader() -> HShader;
     #[cfg(debug_assertions)]
     fn debug_shader() -> HShader;
+    fn dimensions() -> u8 { D }
 }
 
 #[derive(Debug, Clone)]
-pub struct TextProxy<DIM> {
+pub struct TextProxy<const D: u8, DIM: TextDim<D>> {
     text: String,
     alignment: TextAlignment,
     last_text_len: usize,
@@ -67,7 +68,7 @@ pub struct TextProxy<DIM> {
     _dim: PhantomData<DIM>,
 }
 
-impl<DIM: TextDim> TextProxy<DIM> {
+impl<const D: u8, DIM: TextDim<D>> TextProxy<D, DIM> {
     pub fn new(text: String, font: HFont, em_scale: f32) -> Self {
         Self {
             text,
@@ -278,7 +279,7 @@ impl<DIM: TextDim> TextProxy<DIM> {
     }
 }
 
-impl<DIM: TextDim> SceneProxy for TextProxy<DIM> {
+impl<const D: u8, DIM: TextDim<D>> SceneProxy for TextProxy<D, DIM> {
     fn setup_render(&mut self, renderer: &Renderer, _local_to_world: &Matrix4<f32>) -> Box<dyn Any> {
         let hot_font = renderer.cache.font(self.font);
 
@@ -318,9 +319,17 @@ impl<DIM: TextDim> SceneProxy for TextProxy<DIM> {
         let data: &TextRenderData = proxy_data!(data);
         self.render(renderer, data, ctx);
     }
+
+    fn priority(&self, _store: &AssetStore) -> u32 {
+        if D == 2 {
+            PROXY_PRIORITY_2D
+        } else {
+            PROXY_PRIORITY_TRANSPARENT
+        }
+    }
 }
 
-impl TextDim for ThreeD {
+impl TextDim<3> for ThreeD {
     fn shader() -> HShader {
         HShader::TEXT_3D
     }
@@ -331,7 +340,7 @@ impl TextDim for ThreeD {
     }
 }
 
-impl TextDim for TwoD {
+impl TextDim<2> for TwoD {
     fn shader() -> HShader {
         HShader::TEXT_2D
     }

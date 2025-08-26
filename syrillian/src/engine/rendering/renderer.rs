@@ -17,6 +17,7 @@ use crate::rendering::message::RenderMsg;
 use crate::rendering::proxies::SceneProxyBinding;
 use crate::rendering::render_data::RenderUniformData;
 use crate::rendering::{GPUDrawCtx, RenderPassType, State};
+use itertools::Itertools;
 use log::{error, trace};
 use nalgebra::Vector2;
 use snafu::ResultExt;
@@ -50,6 +51,7 @@ pub struct Renderer {
 
     game_rx: mpsc::Receiver<RenderMsg>,
     proxies: HashMap<TypedComponentId, SceneProxyBinding>,
+    sorted_proxies: Vec<TypedComponentId>,
     pub(super) lights: LightManager,
 
     start_time: Instant,
@@ -60,7 +62,11 @@ pub struct Renderer {
 }
 
 impl Renderer {
-    pub fn new(game_rx: mpsc::Receiver<RenderMsg>, window: Window, store: Arc<AssetStore>) -> Result<Self> {
+    pub fn new(
+        game_rx: mpsc::Receiver<RenderMsg>,
+        window: Window,
+        store: Arc<AssetStore>,
+    ) -> Result<Self> {
         let state = Box::new(State::new(&window).context(StateErr)?);
         let offscreen_surface = OffscreenSurface::new(&state.device, &state.config);
         let cache = Arc::new(AssetCache::new(store, &state));
@@ -88,6 +94,7 @@ impl Renderer {
 
             game_rx,
             proxies: HashMap::new(),
+            sorted_proxies: Vec::new(),
             lights,
 
             start_time: Instant::now(),
@@ -130,7 +137,7 @@ impl Renderer {
             RenderMsg::UpdateActiveCamera(camera_data) => {
                 camera_data(&mut self.render_data.camera_data);
                 self.update_view_camera_data();
-            },
+            }
             RenderMsg::ProxyState(cid, enabled) => {
                 if let Some(binding) = self.proxies.get_mut(&cid) {
                     binding.enabled = enabled;
@@ -162,6 +169,7 @@ impl Renderer {
         }
 
         self.proxies = proxies;
+        self.resort_proxies();
         self.update_render_data();
     }
 
@@ -242,7 +250,8 @@ impl Renderer {
     }
 
     fn shadow_pass(&mut self, ctx: &mut FrameCtx) {
-        self.lights.update(&self.cache, &self.state.queue, &self.state.device);
+        self.lights
+            .update(&self.cache, &self.state.queue, &self.state.device);
 
         let shadow_layers = self
             .lights
@@ -258,7 +267,8 @@ impl Renderer {
             };
 
             if light.type_id == LightType::Spot as u32 {
-                self.shadow_render_data.update_shadow_camera_for_spot(light, &self.state.queue);
+                self.shadow_render_data
+                    .update_shadow_camera_for_spot(light, &self.state.queue);
                 self.prepare_shadow_map(ctx, layer);
             } else {
                 // TODO: Other Light Type Shadow Maps
@@ -303,12 +313,7 @@ impl Renderer {
         self.state.queue.submit(Some(encoder.finish()));
     }
 
-    fn render_scene(
-        &self,
-        frame_ctx: &FrameCtx,
-        mut pass: RenderPass,
-        pass_type: RenderPassType,
-    ) {
+    fn render_scene(&self, frame_ctx: &FrameCtx, mut pass: RenderPass, pass_type: RenderPassType) {
         let light_uniform = self.lights.uniform();
 
         pass.set_bind_group(3, light_uniform.bind_group(), &[]);
@@ -332,11 +337,27 @@ impl Renderer {
         }
     }
 
-    fn render_proxies(
-        &self,
-        ctx: &GPUDrawCtx,
-    ) {
-        for proxy in self.proxies.values().filter(|p| p.enabled) {
+    fn resort_proxies(&mut self) {
+        self.sorted_proxies.clear();
+        self.sorted_proxies.extend(
+            self.proxies
+                .iter()
+                .filter(|(_, p)| p.enabled)
+                .sorted_by_key(|(_, proxy)| proxy.proxy.priority(self.cache.store()))
+                .map(|(tid, _)| *tid),
+        );
+    }
+
+    fn render_proxies(&self, ctx: &GPUDrawCtx) {
+        for proxy in self
+            .sorted_proxies
+            .iter()
+            .map(|ctid| self.proxies.get(ctid))
+        {
+            let Some(proxy) = proxy else {
+                debug_panic!("Sorted proxy not in proxy list");
+                continue;
+            };
             proxy.render(self, ctx);
         }
     }
@@ -401,7 +422,8 @@ impl Renderer {
 
     fn update_render_data(&mut self) {
         self.update_system_data();
-        self.lights.update(&self.cache, &self.state.queue, &self.state.device);
+        self.lights
+            .update(&self.cache, &self.state.queue, &self.state.device);
     }
 
     fn update_view_camera_data(&mut self) {

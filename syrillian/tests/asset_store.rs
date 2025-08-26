@@ -150,7 +150,7 @@ fn test_predefined_textures() {
 
     let _ = store.textures.try_get(HTexture::FALLBACK_DIFFUSE);
     let _ = store.textures.try_get(HTexture::FALLBACK_NORMAL);
-    let _ = store.textures.try_get(HTexture::FALLBACK_SHININESS);
+    let _ = store.textures.try_get(HTexture::FALLBACK_ROUGHNESS);
 }
 
 #[test]

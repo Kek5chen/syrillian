@@ -183,7 +183,7 @@ impl AppState for MyMain {
             text3d.set_size(1.0);
             text3d.set_alignment(TextAlignment::Center);
             text.transform.set_position(-10., 2., 0.);
-            text.transform.set_euler_rotation(0., 90., 0.);
+            text.transform.set_euler_rotation_deg(0., 90., 0.);
             text3d.set_rainbow_mode(true);
 
             world.add_child(text);
@@ -231,22 +231,22 @@ impl AppState for MyMain {
         let mut spot = world.new_object("Spot");
         spot.at(5., 5., -5.)
             .transform
-            .set_euler_rotation(0., 80., 0.);
+            .set_euler_rotation_deg(0., 80., 0.);
 
         self.light1 = spot.add_component::<SpotLightComponent>();
         self.light1.set_color(1.0, 0.2, 0.2);
-        self.light1.set_intensity(1000.);
+        self.light1.set_intensity(10000.);
         self.light1.set_inner_angle(20.);
         self.light1.set_outer_angle(30.);
 
         let mut spot = world.new_object("Spot 2");
         spot.at(5., 5., -10.)
             .transform
-            .set_euler_rotation(0., 100., 0.);
+            .set_euler_rotation_deg(0., 100., 0.);
 
         self.light2 = spot.add_component::<SpotLightComponent>();
         self.light2.set_color(0.2, 0.2, 1.0);
-        self.light2.set_intensity(1000.);
+        self.light2.set_intensity(10000.);
         self.light2.set_inner_angle(20.);
         self.light2.set_outer_angle(30.);
 

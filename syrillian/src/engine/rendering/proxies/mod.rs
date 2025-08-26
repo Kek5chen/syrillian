@@ -15,6 +15,7 @@ pub use image::*;
 pub use mesh_proxy::*;
 pub use text_proxy::*;
 
+use crate::assets::AssetStore;
 #[cfg(debug_assertions)]
 pub use debug_proxy::*;
 
@@ -42,10 +43,15 @@ macro_rules! proxy_data {
     };
 }
 
+pub const PROXY_PRIORITY_SOLID: u32 = 99;
+pub const PROXY_PRIORITY_TRANSPARENT: u32 = 999;
+pub const PROXY_PRIORITY_2D: u32 = 9999;
+
 pub trait SceneProxy: Send + Any {
     fn setup_render(&mut self, renderer: &Renderer, local_to_world: &Matrix4<f32>) -> Box<dyn Any>;
     fn update_render(&mut self, renderer: &Renderer, data: &mut dyn Any, window: &Window, local_to_world: &Matrix4<f32>);
     fn render<'a>(&self, renderer: &Renderer, data: &dyn Any, ctx: &GPUDrawCtx, local_to_world: &Matrix4<f32>);
+    fn priority(&self, store: &AssetStore) -> u32;
 }
 
 pub struct SceneProxyBinding {

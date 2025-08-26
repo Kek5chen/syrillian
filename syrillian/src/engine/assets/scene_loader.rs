@@ -5,12 +5,14 @@ use std::error::Error;
 use std::rc::Rc;
 
 use crate::assets::{HMaterial, HShader, HTexture, Material, Mesh, StoreType, Texture};
-use crate::components::{AnimationComponent, MeshRenderer, SkeletalComponent, SpotLightComponent};
+use crate::components::{
+    AnimationComponent, MeshRenderer, PointLightComponent, SkeletalComponent, SpotLightComponent,
+};
 use crate::core::{Bones, GameObjectId, Vertex3D};
 use crate::rendering::lights::Light;
 use crate::utils::animation::{AnimationClip, Channel, TransformKeys};
 use crate::utils::iter::interpolate_zeros;
-use crate::utils::ExtraMatrixMath;
+use crate::utils::{light_range, ExtraMatrixMath, VecCompat};
 use crate::World;
 use itertools::izip;
 use log::warn;
@@ -19,6 +21,7 @@ use russimp_ng::light::LightSourceType;
 use russimp_ng::material::{DataContent, MaterialProperty, PropertyTypeInfo, TextureType};
 use russimp_ng::node::Node;
 use russimp_ng::scene::{PostProcess, Scene};
+use russimp_ng::sys::{aiShadingMode_aiShadingMode_PBR_BRDF, aiShadingMode_aiShadingMode_Unlit};
 use russimp_ng::{Matrix4x4, Vector3D};
 
 const POST_STEPS: &[PostProcess] = &[
@@ -280,7 +283,6 @@ impl SceneLoader {
         trace!("Loaded materials for {path:?}");
 
         let root_object = Self::spawn_deep_object(world, &scene, &root, Some(&materials));
-        Self::load_lights(world, &scene, root_object);
         SceneLoader::load_animations(&scene, root_object);
         Ok(root_object)
     }
@@ -476,36 +478,6 @@ impl SceneLoader {
         Some((mesh, materials))
     }
 
-    pub fn load_lights(world: &mut World, scene: &Scene, mut root: GameObjectId) {
-        for light in &scene.lights {
-            if light.light_source_type == LightSourceType::Spot {
-                let mut obj = world.new_object(&light.name);
-                let mut spot = obj.add_component::<SpotLightComponent>();
-                let data = spot.data_mut(true);
-
-                obj.transform
-                    .set_position(light.pos.x, light.pos.y, light.pos.z);
-                obj.transform.set_euler_rotation(
-                    light.direction.x,
-                    light.direction.y,
-                    light.direction.z,
-                );
-
-                data.color = Vector3::new(
-                    light.color_diffuse.r,
-                    light.color_diffuse.g,
-                    light.color_diffuse.b,
-                );
-                data.inner_angle = light.angle_inner_cone;
-                data.outer_angle = light.angle_outer_cone;
-                data.range = light.attenuation_linear;
-                data.intensity = light.size.x;
-
-                root.add_child(obj);
-            }
-        }
-    }
-
     pub fn build_object(
         world: &mut World,
         scene: &Scene,
@@ -516,30 +488,7 @@ impl SceneLoader {
         let mut node_obj = world.new_object(&node.name);
 
         if let Some((mesh, materials)) = SceneLoader::load_mesh(scene, node) {
-            let has_bones = !mesh.bones.is_empty();
-            let handle = world.assets.meshes.add(mesh);
-            if let Some(scene_materials) = scene_materials {
-                let materials = materials
-                    .iter()
-                    .map(|&id| {
-                        scene_materials
-                            .get(&id)
-                            .copied()
-                            .unwrap_or(HMaterial::FALLBACK)
-                    })
-                    .collect();
-                node_obj
-                    .add_component::<MeshRenderer>()
-                    .change_mesh(handle, Some(materials));
-            } else {
-                node_obj
-                    .add_component::<MeshRenderer>()
-                    .change_mesh(handle, None);
-            }
-
-            if has_bones {
-                node_obj.add_component::<SkeletalComponent>();
-            }
+            Self::load_node_mesh(world, scene_materials, &mut node_obj, mesh, materials);
         }
 
         let (position, rotation, scale) = mat4_from_assimp(&node.transformation).decompose();
@@ -548,7 +497,95 @@ impl SceneLoader {
         node_obj.transform.set_local_rotation(rotation);
         node_obj.transform.set_nonuniform_local_scale(scale);
 
+        Self::load_node_light(&scene, node, node_obj);
+
         node_obj
+    }
+
+    fn load_node_mesh(
+        world: &mut World,
+        scene_materials: Option<&HashMap<u32, HMaterial>>,
+        node_obj: &mut GameObjectId,
+        mesh: Mesh,
+        materials: Vec<u32>,
+    ) {
+        let has_bones = !mesh.bones.is_empty();
+        let handle = world.assets.meshes.add(mesh);
+        if let Some(scene_materials) = scene_materials {
+            let materials = materials
+                .iter()
+                .map(|&id| {
+                    scene_materials
+                        .get(&id)
+                        .copied()
+                        .unwrap_or(HMaterial::FALLBACK)
+                })
+                .collect();
+            node_obj
+                .add_component::<MeshRenderer>()
+                .change_mesh(handle, Some(materials));
+        } else {
+            node_obj
+                .add_component::<MeshRenderer>()
+                .change_mesh(handle, None);
+        }
+
+        if has_bones {
+            node_obj.add_component::<SkeletalComponent>();
+        }
+    }
+
+    fn load_node_light(scene: &Scene, node: &Node, mut obj: GameObjectId) {
+        let Some(light) = scene.lights.iter().find(|l| l.name == node.name) else {
+            return;
+        };
+
+        let color_premultiplied: Vector3<f32> = VecCompat::from(&light.color_diffuse);
+        let i_max = color_premultiplied.max().max(f32::EPSILON);
+        let color = color_premultiplied / i_max;
+        let luminance = 0.2126 * color_premultiplied.x
+            + 0.7152 * color_premultiplied.y
+            + 0.0722 * color_premultiplied.z;
+
+        let radius_m = {
+            let sx = light.size.x.max(0.0);
+            let sy = light.size.y.max(0.0);
+            let r = sx.max(sy);
+            if r > 0.0 { r } else { 0.05 }
+        };
+
+        let e_for_range = if luminance > 0.0 { luminance } else { i_max };
+        let range = light_range(
+            e_for_range,
+            light.attenuation_constant,
+            light.attenuation_linear,
+            light.attenuation_quadratic,
+            1.0,
+        )
+            .unwrap_or_else(|| {
+                warn!("Light had 0 or infinite range using 100.0");
+                100.0
+            });
+
+        if light.light_source_type == LightSourceType::Spot {
+            let mut spot = obj.add_component::<SpotLightComponent>();
+            let data = spot.data_mut(true);
+
+            data.color = color;
+            data.inner_angle = light.angle_inner_cone;
+            data.outer_angle = light.angle_outer_cone;
+            data.range = range;
+            data.radius = radius_m;
+            data.intensity = luminance / 100.0;
+        } else if light.light_source_type == LightSourceType::Point {
+            let mut point = obj.add_component::<PointLightComponent>();
+            let data = point.data_mut(true);
+
+            data.color = color;
+            data.range = range;
+            data.radius = radius_m;
+            data.intensity = luminance / 100.0;
+        }
     }
 }
 
@@ -615,24 +652,40 @@ where
 fn load_material(world: &mut World, material: &russimp_ng::material::Material) -> HMaterial {
     let name = get_string_property_or(&material.properties, "name", || "Material".to_string());
 
-    let diffuse = extract_vec3_property(&material.properties, "diffuse", || {
+    let color = extract_vec3_property(&material.properties, "diffuse", || {
         Vector3::new(0.788, 0.788, 0.788)
     });
+
     let diffuse_tex = material.textures.get(&TextureType::Diffuse);
-    let diffuse_tex_id = diffuse_tex.map(|tex| load_texture(world, tex.clone()));
+    let diffuse_texture = diffuse_tex.map(|tex| load_texture(world, tex.clone()));
 
     let normal_tex = material.textures.get(&TextureType::Normals);
-    let normal_tex_id = normal_tex.map(|tex| load_texture(world, tex.clone()));
+    let normal_texture = normal_tex.map(|tex| load_texture(world, tex.clone()));
 
-    let shininess = get_float_property_or(&material.properties, "shininess", 0.0);
+    let roughness_tex = material.textures.get(&TextureType::Roughness);
+    let roughness_texture = roughness_tex.map(|tex| load_texture(world, tex.clone()));
+
+    let roughness = get_float_property_or(&material.properties, "roughness", 0.5);
+    let metallic = get_float_property_or(&material.properties, "metallic", 0.0);
+    let alpha = get_float_property_or(&material.properties, "opacity", 1.0);
+    let shading_mode = get_int_property_or(
+        &material.properties,
+        "shadingm",
+        aiShadingMode_aiShadingMode_PBR_BRDF,
+    );
+
+    let lit = shading_mode != aiShadingMode_aiShadingMode_Unlit;
     let new_material = Material {
         name,
-        color: diffuse,
-        shininess,
-        diffuse_texture: diffuse_tex_id,
-        normal_texture: normal_tex_id,
-        shininess_texture: None,
-        opacity: 1.0,
+        color,
+        roughness,
+        metallic,
+        diffuse_texture,
+        normal_texture,
+        roughness_texture,
+        alpha,
+        lit,
+        cast_shadows: true,
         shader: HShader::DIM3,
     };
     world.assets.materials.add(new_material)
@@ -666,7 +719,18 @@ fn get_float_property_or(properties: &[MaterialProperty], key: &str, default: f3
     match prop {
         None => default,
         Some(prop) => match &prop.data {
-            PropertyTypeInfo::FloatArray(f) => f.first().cloned().unwrap_or(default),
+            PropertyTypeInfo::FloatArray(f) => f.first().copied().unwrap_or(default),
+            _ => default,
+        },
+    }
+}
+
+fn get_int_property_or(properties: &[MaterialProperty], key: &str, default: u32) -> u32 {
+    let prop = properties.iter().find(|prop| prop.key.contains(key));
+    match prop {
+        None => default,
+        Some(prop) => match &prop.data {
+            PropertyTypeInfo::Buffer(f) => f.first().map(|b| *b as u32).unwrap_or(default),
             _ => default,
         },
     }

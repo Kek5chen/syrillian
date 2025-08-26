@@ -23,7 +23,7 @@ impl H<Texture> {
 
     pub const FALLBACK_DIFFUSE: H<Texture> = H::new(Self::FALLBACK_DIFFUSE_ID);
     pub const FALLBACK_NORMAL: H<Texture> = H::new(Self::FALLBACK_NORMAL_ID);
-    pub const FALLBACK_SHININESS: H<Texture> = H::new(Self::FALLBACK_SHININESS_ID);
+    pub const FALLBACK_ROUGHNESS: H<Texture> = H::new(Self::FALLBACK_SHININESS_ID);
 }
 
 impl Texture {

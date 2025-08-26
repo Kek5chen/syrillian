@@ -67,8 +67,13 @@ impl<L: LightTypeTrait + 'static> Component for LightComponent<L> {
             local_proxy.inner_angle = DEFAULT_INNER_ANGLE;
             local_proxy.outer_angle = DEFAULT_OUTER_ANGLE;
             local_proxy.range = 100.0;
-            local_proxy.intensity = 100.0;
+            local_proxy.intensity = 1000.0;
         }
+
+        local_proxy.position = parent.transform.position();
+        local_proxy.direction = parent.transform.forward();
+        local_proxy.up = parent.transform.up();
+        local_proxy.view_mat = parent.transform.view_matrix_rigid().to_matrix();
 
         LightComponent {
             parent,

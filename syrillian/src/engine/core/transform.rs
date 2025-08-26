@@ -211,21 +211,40 @@ impl Transform {
 
     /// Sets the global rotation of the transform in euler angles.
     /// This will do the transformation to quaternions for you, but it's recommended to use quaternions.
-    pub fn set_euler_rotation(
+    pub fn set_euler_rotation_deg(
+        &mut self,
+        roll: impl AsPrimitive<f32>,
+        pitch: impl AsPrimitive<f32>,
+        yaw: impl AsPrimitive<f32>,
+    ) {
+        self.set_euler_rotation_rad(
+            roll.as_().to_radians(),
+            pitch.as_().to_radians(),
+            yaw.as_().to_radians(),
+        );
+    }
+
+    /// Sets the global rotation of the transform in euler angles.
+    /// This will do the transformation to quaternions for you, but it's recommended to use quaternions.
+    pub fn set_euler_rotation_rad(
         &mut self,
         roll: impl AsPrimitive<f32>,
         pitch: impl AsPrimitive<f32>,
         yaw: impl AsPrimitive<f32>,
     ) {
         let parent_global_rotation = self.get_global_rotation_ext(false);
-        let target = UnitQuaternion::from_euler_angles(
-            roll.as_().to_radians(),
-            pitch.as_().to_radians(),
-            yaw.as_().to_radians(),
-        );
+        let target = UnitQuaternion::from_euler_angles(roll.as_(), pitch.as_(), yaw.as_());
 
         let local_rotation_change = parent_global_rotation.rotation_to(&target);
         self.set_local_rotation(local_rotation_change);
+    }
+
+    pub fn set_euler_rotation_deg_vec(&mut self, euler_rot: Vector3<impl AsPrimitive<f32>>) {
+        self.set_euler_rotation_deg(euler_rot[0], euler_rot[1], euler_rot[2]);
+    }
+
+    pub fn set_euler_rotation_rad_vec(&mut self, euler_rot_rad: Vector3<impl AsPrimitive<f32>>) {
+        self.set_euler_rotation_rad(euler_rot_rad[0], euler_rot_rad[1], euler_rot_rad[2]);
     }
 
     /// Sets the global rotation of the transform.
@@ -244,6 +263,11 @@ impl Transform {
     /// Returns the global rotation euler angles
     pub fn euler_rotation(&self) -> Vector3<f32> {
         let (x, y, z) = self.get_global_rotation_ext(true).euler_angles();
+        Vector3::new(x, y, z)
+    }
+
+    pub fn local_euler_rotation(&self) -> Vector3<f32> {
+        let (x, y, z) = self.local_rotation().euler_angles();
         Vector3::new(x, y, z)
     }
 
