@@ -28,7 +28,7 @@ impl AssetStore {
             textures: Arc::new(Store::populated()),
             materials: Arc::new(Store::populated()),
             bgls: Arc::new(Store::populated()),
-            fonts: Arc::new(Store::empty()),
+            fonts: Arc::new(Store::populated()),
             sounds: Arc::new(Store::empty()),
         })
     }
