@@ -1,7 +1,7 @@
 [![Codacy Badge](https://app.codacy.com/project/badge/Grade/337033d4547044cf96a1584bf82b1ce8)](https://app.codacy.com/gh/Kek5chen/syrillian/dashboard?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_grade)
 [![codecov](https://codecov.io/github/kek5chen/syrillian/graph/badge.svg?token=QORLO7MO2I)](https://codecov.io/github/kek5chen/syrillian)
 ![GitHub commit activity](https://img.shields.io/github/commit-activity/m/Kek5chen/syrillian)
-![Discord](https://img.shields.io/discord/1401869988796698696?style=flat&label=Discord)
+[![Discord](https://img.shields.io/discord/1401869988796698696?style=flat&label=Discord)](https://discord.gg/hZWycSwSm4)
 
 # Syrillian Engine
 
@@ -132,7 +132,7 @@ I am not monetized to work on this, and I do it out of pure personal interest.
 anything that's not clear. Even feedback or rants on the user-facing API are more than welcome, as I wish to provide
 patterns that make is as simple as possible to use.
 
-If you need *anything*: Don't hesitate to join the discord to discuss :)
+If you need *anything*: Don't hesitate to join the [discord](https://discord.gg/hZWycSwSm4) to discuss :)
 
 ### License
 
