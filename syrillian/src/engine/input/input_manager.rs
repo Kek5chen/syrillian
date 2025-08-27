@@ -65,7 +65,6 @@ impl InputManager {
 
     pub fn process_event(&mut self, event: &WindowEvent) {
         self.handle_window_event(event);
-        self.gamepad.poll();
     }
 
     pub fn handle_window_event(&mut self, event: &WindowEvent) {
@@ -199,6 +198,7 @@ impl InputManager {
         self.key_just_updated.clear();
         self.button_just_updated.clear();
         self.mouse_delta = Vector2::zero();
+        self.gamepad.poll();
     }
 
     pub fn set_auto_cursor_lock(&mut self, enabled: bool) {
