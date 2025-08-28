@@ -1,9 +1,9 @@
+use crate::World;
 use crate::components::Component;
 use crate::core::GameObjectId;
-use crate::rendering::lights::{Light, LightProxy, LightType};
 use crate::rendering::CPUDrawCtx;
+use crate::rendering::lights::{Light, LightProxy, LightType};
 use crate::utils::FloatMathExt;
-use crate::World;
 use std::marker::PhantomData;
 
 pub trait LightTypeTrait {
@@ -116,7 +116,7 @@ impl<L: LightTypeTrait + 'static> Component for LightComponent<L> {
     }
 
     fn create_light_proxy(&mut self, _world: &World) -> Option<Box<LightProxy>> {
-        Some(Box::new(self.local_proxy.clone()))
+        Some(Box::new(self.local_proxy))
     }
 
     fn update_proxy(&mut self, _world: &World, mut ctx: CPUDrawCtx) {

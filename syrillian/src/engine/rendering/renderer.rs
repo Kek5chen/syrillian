@@ -7,10 +7,10 @@
 use super::error::*;
 use crate::components::TypedComponentId;
 use crate::engine::assets::AssetStore;
+use crate::engine::rendering::FrameCtx;
 use crate::engine::rendering::cache::AssetCache;
 use crate::engine::rendering::offscreen_surface::OffscreenSurface;
 use crate::engine::rendering::post_process_pass::PostProcessData;
-use crate::engine::rendering::FrameCtx;
 use crate::rendering::light_manager::LightManager;
 use crate::rendering::lights::LightType;
 use crate::rendering::message::RenderMsg;
@@ -23,7 +23,7 @@ use nalgebra::Vector2;
 use snafu::ResultExt;
 use std::collections::HashMap;
 use std::mem::swap;
-use std::sync::{mpsc, Arc, RwLock};
+use std::sync::{Arc, RwLock, mpsc};
 use std::time::{Duration, Instant};
 use syrillian_utils::debug_panic;
 use wgpu::{
@@ -79,7 +79,7 @@ impl Renderer {
         let shadow_render_data = RenderUniformData::empty(&state.device, &render_bgl);
 
         let post_process_data =
-            PostProcessData::new(&state.device, &pp_bgl, &offscreen_surface.view());
+            PostProcessData::new(&state.device, &pp_bgl, offscreen_surface.view());
 
         let lights = LightManager::new(&cache, &state.device);
 
@@ -115,7 +115,7 @@ impl Renderer {
             }
             RenderMsg::RegisterLightProxy(cid, proxy) => {
                 trace!("Registered Light Proxy for #{:?}", cid.0);
-                self.lights.add_proxy(cid, proxy);
+                self.lights.add_proxy(cid, *proxy);
             }
             RenderMsg::RemoveProxy(cid) => {
                 self.proxies.remove(&cid);
@@ -164,7 +164,7 @@ impl Renderer {
         let mut proxies = HashMap::new();
         swap(&mut self.proxies, &mut proxies);
 
-        for (_, proxy) in &mut proxies {
+        for proxy in proxies.values_mut() {
             proxy.update(self, self.window());
         }
 
@@ -177,14 +177,14 @@ impl Renderer {
         let mut ctx = match self.begin_render() {
             Ok(ctx) => ctx,
             Err(RenderError::Surface {
-                    source: SurfaceError::Lost,
-                }) => {
+                source: SurfaceError::Lost,
+            }) => {
                 self.state.resize(self.state.size);
                 return true; // drop frame but don't cancel
             }
             Err(RenderError::Surface {
-                    source: SurfaceError::OutOfMemory,
-                }) => {
+                source: SurfaceError::OutOfMemory,
+            }) => {
                 error!("The application ran out of GPU memory!");
                 return false;
             }
@@ -255,7 +255,7 @@ impl Renderer {
 
         let shadow_layers = self
             .lights
-            .shadow_array(&self.cache.textures.store())
+            .shadow_array(self.cache.textures.store())
             .unwrap()
             .array_layers;
         let light_count = self.lights.update_shadow_map_ids(shadow_layers);
@@ -402,7 +402,7 @@ impl Renderer {
         });
 
         let post_shader = self.cache.shader_post_process();
-        pass.set_pipeline(&post_shader.solid_pipeline());
+        pass.set_pipeline(post_shader.solid_pipeline());
         pass.set_bind_group(0, self.render_data.uniform.bind_group(), &[]);
         pass.set_bind_group(1, self.post_process_data.uniform.bind_group(), &[]);
         pass.draw(0..6, 0..1);
@@ -451,7 +451,7 @@ impl Renderer {
             label: Some("Shadow Pass"),
             color_attachments: &[],
             depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
-                view: &shadow_map,
+                view: shadow_map,
                 depth_ops: Some(Operations {
                     load: LoadOp::Clear(1.0),
                     store: StoreOp::Store,

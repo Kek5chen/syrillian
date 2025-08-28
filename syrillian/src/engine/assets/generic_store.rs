@@ -1,9 +1,9 @@
 use crate::engine::assets::key::AssetKey;
-use crate::engine::assets::{HShader, H};
+use crate::engine::assets::{H, HShader};
+use dashmap::DashMap;
 use dashmap::iter::Iter;
 use dashmap::mapref::one::Ref as MapRef;
 use dashmap::mapref::one::RefMut as MapRefMut;
-use dashmap::DashMap;
 use log::{trace, warn};
 use std::fmt::{Debug, Display, Formatter};
 use std::mem;
@@ -115,27 +115,27 @@ impl<T: StoreType> Store<T> {
     }
 
     fn _try_get_mut(&self, h: H<T>) -> Option<RefMut<'_, T>> {
-        self.data
-            .get_mut(&h.into())
-            .or_else(|| {
-                warn!(
-                    "[{} Store] Invalid Reference: h={} not found",
-                    T::name(),
-                    T::ident_fmt(h)
-                );
-                None
-            })
-            .and_then(|v| {
-                self.set_dirty(h.into());
-                Some(v)
-            })
+        let reference = self.data.get_mut(&h.into()).or_else(|| {
+            warn!(
+                "[{} Store] Invalid Reference: h={} not found",
+                T::name(),
+                T::ident_fmt(h)
+            );
+            None
+        });
+
+        if reference.is_some() {
+            self.set_dirty(h.into());
+        }
+
+        reference
     }
 
     fn set_dirty(&self, h: AssetKey) {
         let mut dirty_store = self.dirty.write().expect("Deadlock in Asset Store");
-        if !dirty_store.contains(&h.into()) {
+        if !dirty_store.contains(&h) {
             trace!("Set {} {} dirty", T::name(), T::ident(h.into()));
-            dirty_store.push(h.into());
+            dirty_store.push(h);
         }
     }
 
@@ -202,7 +202,7 @@ impl<T: StoreTypeName> Store<T> {
         self.data
             .iter()
             .find(|e| e.value().name() == name)
-            .map(|e| e.key().clone().into())
+            .map(|e| (*e.key()).into())
     }
 }
 

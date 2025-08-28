@@ -1,17 +1,17 @@
 use crate::engine::assets::generic_store::{Store, StoreType};
-use crate::engine::assets::{AssetKey, StoreTypeFallback, H};
+use crate::engine::assets::{AssetKey, H, StoreTypeFallback};
 use crate::engine::rendering::cache::AssetCache;
 use dashmap::DashMap;
 use log::warn;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, RwLock};
 use wgpu::{Device, Queue};
 
 type Slot<T> = Arc<<T as CacheType>::Hot>;
 
 pub struct Cache<T: CacheType> {
     data: DashMap<AssetKey, Slot<T>>,
-    cache_misses: RwLock<AtomicUsize>,
+    cache_misses: AtomicUsize,
 
     store: Arc<Store<T>>,
     device: Arc<Device>,
@@ -34,9 +34,8 @@ impl<T: CacheType + StoreTypeFallback> Cache<T> {
     fn refresh_item(&self, h: H<T>, device: &Device, queue: &Queue, cache: &AssetCache) -> T::Hot {
         let cold = self.store.get(h);
 
-        let misses_atom = self.cache_misses.write().unwrap();
-        let misses = misses_atom.load(Ordering::Acquire) + 1;
-        misses_atom.fetch_add(1, Ordering::Relaxed);
+        let misses = self.cache_misses.load(Ordering::Acquire) + 1;
+        self.cache_misses.fetch_add(1, Ordering::Relaxed);
 
         if misses % 1000 == 0 {
             warn!(
@@ -55,7 +54,7 @@ impl<T: CacheType> Cache<T> {
     pub fn new(store: Arc<Store<T>>, device: Arc<Device>, queue: Arc<Queue>) -> Self {
         Cache {
             data: DashMap::new(),
-            cache_misses: RwLock::new(AtomicUsize::new(0)),
+            cache_misses: AtomicUsize::new(0),
             store,
             device,
             queue,
@@ -96,9 +95,8 @@ impl<T: CacheType> Cache<T> {
     ) -> Result<T::Hot, ()> {
         let cold = self.store.try_get(h).ok_or(())?;
 
-        let misses_atom = self.cache_misses.write().unwrap();
-        let misses = misses_atom.load(Ordering::Acquire) + 1;
-        misses_atom.fetch_add(1, Ordering::Relaxed);
+        let misses = self.cache_misses.load(Ordering::Acquire) + 1;
+        self.cache_misses.fetch_add(1, Ordering::Relaxed);
 
         if misses % 1000 == 0 {
             warn!(

@@ -1,5 +1,5 @@
-use crate::engine::assets::generic_store::StoreType;
 use crate::engine::assets::HandleName;
+use crate::engine::assets::generic_store::StoreType;
 use std::fmt::{Debug, Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
@@ -15,7 +15,7 @@ pub struct H<T: StoreType>(u32, PhantomData<T>);
 
 impl<T: StoreType> Clone for H<T> {
     fn clone(&self) -> Self {
-        H(self.0, PhantomData)
+        *self
     }
 }
 impl<T: StoreType> Copy for H<T> {}

@@ -1,6 +1,6 @@
 use crate::engine::assets::Mesh;
-use crate::engine::rendering::cache::generic_cache::CacheType;
 use crate::engine::rendering::cache::AssetCache;
+use crate::engine::rendering::cache::generic_cache::CacheType;
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::{BufferUsages, Device, Queue};
 
@@ -19,7 +19,7 @@ impl RuntimeMesh {
     }
 
     pub fn set_index_buffer(&mut self, buffer: Option<wgpu::Buffer>, indices_count: usize) {
-        self.indices_num = buffer.is_some().then_some(indices_count).unwrap_or(0);
+        self.indices_num = if buffer.is_some() { indices_count } else { 0 };
         self.indices_buf = buffer;
     }
 

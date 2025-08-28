@@ -1,7 +1,7 @@
+use crate::World;
 use crate::assets::{HMaterial, HTexture, Material, Texture};
 use crate::rendering::AssetCache;
-use crate::World;
-use etagere::{size2, AtlasAllocator};
+use etagere::{AtlasAllocator, size2};
 use fdsm::bezier::scanline::FillRule;
 use fdsm::generate::generate_msdf;
 use fdsm::render::correct_sign_msdf;
@@ -135,7 +135,7 @@ impl MsdfAtlas {
     pub fn ensure_glyphs(
         &mut self,
         cache: &AssetCache,
-        chars: impl IntoIterator<Item=char>,
+        chars: impl IntoIterator<Item = char>,
         queue: &Queue,
     ) {
         let mut missing: Vec<char> = Vec::new();
@@ -223,7 +223,7 @@ impl MsdfAtlas {
                 [..(width_px as usize) * 3];
             let dst = &mut self.pixels[dst_off..dst_off + (width_px as usize) * 4];
             for x in 0..(width_px as usize) {
-                dst[4 * x + 0] = src[3 * x + 0]; // R
+                dst[4 * x] = src[3 * x]; // R
                 dst[4 * x + 1] = src[3 * x + 1]; // G
                 dst[4 * x + 2] = src[3 * x + 2]; // B
                 dst[4 * x + 3] = 255u8; // A
@@ -234,7 +234,7 @@ impl MsdfAtlas {
         debug_assert!(dest_y + height_px <= self.height);
 
         // upload sub-rect to gpu
-        let gpu_texture = cache.textures.try_get(self.texture, &cache).unwrap();
+        let gpu_texture = cache.textures.try_get(self.texture, cache).unwrap();
         let copy = TexelCopyTextureInfo {
             texture: &gpu_texture.texture,
             mip_level: 0,

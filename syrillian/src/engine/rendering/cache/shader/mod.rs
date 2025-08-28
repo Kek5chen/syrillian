@@ -1,6 +1,6 @@
 use crate::engine::assets::Shader;
-use crate::engine::rendering::cache::generic_cache::CacheType;
 use crate::engine::rendering::cache::AssetCache;
+use crate::engine::rendering::cache::generic_cache::CacheType;
 use crate::rendering::{RenderPassType, RenderPipelineBuilder};
 use std::borrow::Cow;
 use wgpu::*;
@@ -29,7 +29,7 @@ impl CacheType for Shader {
         let pipeline = solid_builder.build(device);
         let shadow_pipeline = self.shadow_layout(device, cache).and_then(|layout| {
             let shadow_builder = RenderPipelineBuilder::builder(self, &layout, &module);
-            shadow_builder.build_shadow(&device)
+            shadow_builder.build_shadow(device)
         });
 
         RuntimeShader {

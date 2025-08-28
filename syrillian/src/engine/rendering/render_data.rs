@@ -78,7 +78,7 @@ impl CameraUniform {
             .get_global_transform_matrix_ext(true)
             .inverse();
 
-        self.update(proj_matrix, &pos, &view_mat.matrix());
+        self.update(proj_matrix, &pos, view_mat.matrix());
     }
 
     pub fn update(
@@ -133,7 +133,7 @@ impl RenderUniformData {
 
     pub fn upload_camera_data(&self, queue: &Queue) {
         queue.write_buffer(
-            &self.uniform.buffer(RenderUniformIndex::Camera),
+            self.uniform.buffer(RenderUniformIndex::Camera),
             0,
             bytemuck::bytes_of(&self.camera_data),
         );
@@ -141,7 +141,7 @@ impl RenderUniformData {
 
     pub fn upload_system_data(&self, queue: &Queue) {
         queue.write_buffer(
-            &self.uniform.buffer(RenderUniformIndex::System),
+            self.uniform.buffer(RenderUniformIndex::System),
             0,
             bytemuck::bytes_of(&self.system_data),
         );

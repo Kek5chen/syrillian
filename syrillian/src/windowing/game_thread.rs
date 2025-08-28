@@ -3,7 +3,7 @@ use crate::rendering::message::RenderMsg;
 use crate::{AppState, World};
 use log::{debug, error, info};
 use std::sync::mpsc::{SendError, TryRecvError};
-use std::sync::{mpsc, Arc};
+use std::sync::{Arc, mpsc};
 use std::thread::JoinHandle;
 use winit::dpi::PhysicalSize;
 use winit::event::{DeviceEvent, DeviceId, WindowEvent};
@@ -60,7 +60,7 @@ impl GameThread {
                 render_event_rx,
                 _game_event_tx: game_event_tx,
             }
-                .run();
+            .run();
 
             debug!("Game thread exited");
 
@@ -74,34 +74,43 @@ impl GameThread {
         })
     }
 
-    pub fn init(&self) -> Result<(), SendError<RenderAppEvent>> {
-        self.render_event_tx.send(RenderAppEvent::Init)
+    pub fn init(&self) -> Result<(), Box<SendError<RenderAppEvent>>> {
+        self.render_event_tx
+            .send(RenderAppEvent::Init)
+            .map_err(Box::new)
     }
 
-    pub fn input(&self, event: WindowEvent) -> Result<(), SendError<RenderAppEvent>> {
-        self.render_event_tx.send(RenderAppEvent::Input(event))
+    pub fn input(&self, event: WindowEvent) -> Result<(), Box<SendError<RenderAppEvent>>> {
+        self.render_event_tx
+            .send(RenderAppEvent::Input(event))
+            .map_err(Box::new)
     }
 
     pub fn device_event(
         &self,
         device_id: DeviceId,
         event: DeviceEvent,
-    ) -> Result<(), SendError<RenderAppEvent>> {
+    ) -> Result<(), Box<SendError<RenderAppEvent>>> {
         self.render_event_tx
             .send(RenderAppEvent::DeviceEvent(device_id, event))
+            .map_err(Box::new)
     }
 
-    pub fn resize(&self, size: PhysicalSize<u32>) -> Result<(), SendError<RenderAppEvent>> {
-        self.render_event_tx.send(RenderAppEvent::Resize(size))
+    pub fn resize(&self, size: PhysicalSize<u32>) -> Result<(), Box<SendError<RenderAppEvent>>> {
+        self.render_event_tx
+            .send(RenderAppEvent::Resize(size))
+            .map_err(Box::new)
     }
 
-    pub fn receive_events(&self) -> impl Iterator<Item=GameAppEvent> {
+    pub fn receive_events(&self) -> impl Iterator<Item = GameAppEvent> {
         self.game_event_rx.try_iter()
     }
 
     // TODO: Think about if render frame and world should be linked
-    pub fn next_frame(&self) -> Result<(), SendError<RenderAppEvent>> {
-        self.render_event_tx.send(RenderAppEvent::StartFrame)
+    pub fn next_frame(&self) -> Result<(), Box<SendError<RenderAppEvent>>> {
+        self.render_event_tx
+            .send(RenderAppEvent::StartFrame)
+            .map_err(Box::new)
     }
 }
 
@@ -147,9 +156,7 @@ impl<S: AppState> GameThreadInner<S> {
             if update_signaled {
                 keep_running = self.update();
             }
-        }
-
-        if !keep_running {
+        } else {
             info!("Game signaled exit. Exiting event loop.");
         }
 

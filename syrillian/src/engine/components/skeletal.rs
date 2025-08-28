@@ -1,6 +1,6 @@
+use crate::World;
 use crate::components::{Component, MeshRenderer};
 use crate::core::{Bones, GameObjectId};
-use crate::World;
 use log::warn;
 use nalgebra::{Matrix4, Vector3};
 use nalgebra::{Scale3, Translation3, UnitQuaternion};
@@ -82,7 +82,7 @@ impl SkeletalComponent {
     pub fn set_local_rotation(&mut self, index: usize, q: UnitQuaternion<f32>) {
         let mut m = Matrix4::identity();
         m.fixed_view_mut::<3, 3>(0, 0)
-            .copy_from(&q.to_rotation_matrix().matrix());
+            .copy_from(q.to_rotation_matrix().matrix());
         self.delta_local[index] = m;
         self.dirty = true;
     }

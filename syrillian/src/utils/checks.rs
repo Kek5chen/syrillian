@@ -1,12 +1,12 @@
+use wgpu::naga::WithSpan;
 use wgpu::naga::front::wgsl;
 use wgpu::naga::front::wgsl::ParseError;
 use wgpu::naga::valid::{Capabilities, ModuleInfo, ValidationError, ValidationFlags, Validator};
-use wgpu::naga::WithSpan;
 
 #[derive(Debug)]
 pub enum ShaderValidError {
     Parse(ParseError),
-    ValidationError(WithSpan<ValidationError>),
+    ValidationError(Box<WithSpan<ValidationError>>),
 }
 
 impl ShaderValidError {
@@ -33,9 +33,9 @@ impl ShaderValidError {
 }
 
 pub fn validate_wgsl_source(shader: &str) -> Result<ModuleInfo, ShaderValidError> {
-    let module = wgsl::parse_str(&shader).map_err(ShaderValidError::Parse)?;
+    let module = wgsl::parse_str(shader).map_err(ShaderValidError::Parse)?;
     let mut validator = Validator::new(ValidationFlags::all(), Capabilities::all());
     validator
         .validate(&module)
-        .map_err(ShaderValidError::ValidationError)
+        .map_err(|e| ShaderValidError::ValidationError(Box::new(e)))
 }

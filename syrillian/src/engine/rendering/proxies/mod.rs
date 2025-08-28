@@ -60,7 +60,7 @@ pub trait SceneProxy: Send + Any {
         window: &Window,
         local_to_world: &Matrix4<f32>,
     );
-    fn render<'a>(
+    fn render(
         &self,
         renderer: &Renderer,
         data: &dyn Any,
@@ -103,7 +103,7 @@ impl SceneProxyBinding {
             renderer,
             self.proxy_data.as_mut(),
             window,
-            &self.local_to_world.matrix(),
+            self.local_to_world.matrix(),
         );
     }
 
@@ -112,7 +112,7 @@ impl SceneProxyBinding {
             renderer,
             self.proxy_data.as_ref(),
             ctx,
-            &self.local_to_world.matrix(),
+            self.local_to_world.matrix(),
         )
     }
 }

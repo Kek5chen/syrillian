@@ -1,3 +1,4 @@
+use crate::World;
 use crate::assets::{HMaterial, HShader, HTexture, Material, Mesh, StoreType, Texture};
 use crate::components::{
     AnimationComponent, MeshRenderer, PointLightComponent, SkeletalComponent, SpotLightComponent,
@@ -5,14 +6,13 @@ use crate::components::{
 };
 use crate::core::{Bones, GameObjectId, Vertex3D};
 use crate::rendering::lights::Light;
-use crate::utils::animation::{AnimationClip, Channel, TransformKeys};
 use crate::utils::ExtraMatrixMath;
-use crate::World;
+use crate::utils::animation::{AnimationClip, Channel, TransformKeys};
 use gltf::animation::util::ReadOutputs;
 use gltf::image::Format;
 use gltf::khr_lights_punctual::Kind;
 use gltf::{self, buffer::Data as BufferData, image::Data as ImageData};
-use gltf::{mesh, Document, Node};
+use gltf::{Document, Node, mesh};
 use itertools::izip;
 use log::{trace, warn};
 use nalgebra::{Matrix4, Quaternion, UnitQuaternion, Vector2, Vector3};
@@ -46,6 +46,9 @@ impl GltfScene {
     }
 }
 
+/// Mesh and its Materials
+pub type MeshData = Option<(Mesh, Vec<u32>)>;
+
 pub struct SceneLoader;
 
 impl SceneLoader {
@@ -58,14 +61,12 @@ impl SceneLoader {
         GltfScene::from_slice(model)
     }
 
-    pub fn load_first_mesh(path: &str) -> Result<Option<(Mesh, Vec<u32>)>, Box<dyn Error>> {
+    pub fn load_first_mesh(path: &str) -> Result<MeshData, Box<dyn Error>> {
         let scene = GltfScene::import(path)?;
         Ok(Self::load_first_from_scene(&scene))
     }
 
-    pub fn load_first_mesh_from_buffer(
-        model: &[u8],
-    ) -> Result<Option<(Mesh, Vec<u32>)>, Box<dyn Error>> {
+    pub fn load_first_mesh_from_buffer(model: &[u8]) -> Result<MeshData, Box<dyn Error>> {
         let scene = GltfScene::from_slice(model)?;
         Ok(Self::load_first_from_scene(&scene))
     }
@@ -238,7 +239,10 @@ fn load_mesh(scene: &GltfScene, node: Node) -> Option<(Mesh, Vec<u32>)> {
             (0u32..pos.len() as u32).collect()
         };
 
-        let (joints, weights): (Option<Vec<[u16; 4]>>, Option<Vec<[f32; 4]>>) =
+        type OptJoints = Option<Vec<[u16; 4]>>;
+        type OptWeights = Option<Vec<[f32; 4]>>;
+
+        let (joints, weights): (OptJoints, OptWeights) =
             match (reader.read_joints(0), reader.read_weights(0)) {
                 (Some(js), Some(ws)) => {
                     let js = match js {
@@ -359,8 +363,8 @@ fn load_mesh(scene: &GltfScene, node: Node) -> Option<(Mesh, Vec<u32>)> {
     let vertices: Vec<Vertex3D> = izip!(
         positions, tex_coords, normals, tangents, bitangents, &bone_idxs, &bone_wts
     )
-        .map(Vertex3D::from)
-        .collect();
+    .map(Vertex3D::from)
+    .collect();
 
     let mesh = Mesh::builder(vertices)
         .with_many_textures(ranges)
@@ -393,8 +397,8 @@ fn build_bones_from_skin(
     let inv_mats: Vec<Matrix4<f32>> = skin
         .reader(get_buf)
         .read_inverse_bind_matrices()
-        .map(|iter| iter.map(|m| Matrix4::from(m)).collect())
-        .unwrap_or_else(|| Vec::new());
+        .map(|iter| iter.map(Matrix4::from).collect())
+        .unwrap_or_default();
 
     for (joint_idx, joint_node) in skin.joints().enumerate() {
         let name = joint_node.name().unwrap_or("<unnamed>").to_string();
@@ -409,15 +413,14 @@ fn build_bones_from_skin(
             .and_then(|pi| {
                 skin.joints()
                     .position(|jn| jn.index() == pi)
-                    .map(|local| joint_map.get(&local).copied())
-                    .flatten()
+                    .and_then(|local| joint_map.get(&local).copied())
             });
         parents.push(parent);
 
         let ib = inv_mats
             .get(joint_idx)
             .cloned()
-            .unwrap_or_else(|| Matrix4::identity());
+            .unwrap_or_else(Matrix4::identity);
         inverse_bind.push(ib);
     }
 

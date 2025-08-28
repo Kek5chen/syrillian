@@ -49,10 +49,7 @@ impl GamePadManager {
         let uuid = Uuid::from_bytes(gamepad.uuid());
         match event.event {
             EventType::Connected => debug!("[Gamepads] Connected Gamepad: {name} ({uuid})"),
-            EventType::Disconnected => {
-                debug!("[Gamepads] Disconnected Gamepad {name} ({uuid})");
-                return;
-            }
+            EventType::Disconnected => debug!("[Gamepads] Disconnected Gamepad {name} ({uuid})"),
             _ => (),
         }
     }

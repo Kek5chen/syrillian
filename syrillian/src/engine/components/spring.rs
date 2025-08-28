@@ -1,10 +1,10 @@
 use self::SpringComponentError::*;
+use crate::World;
 use crate::components::{Component, RigidBodyComponent};
 use crate::core::GameObjectId;
-use crate::World;
 use log::warn;
 use rapier3d::prelude::*;
-use snafu::{ensure, Snafu};
+use snafu::{Snafu, ensure};
 
 #[derive(Debug, Snafu)]
 #[snafu(context(suffix(Err)))]
@@ -104,7 +104,7 @@ impl SpringComponent {
         unsafe { std::mem::transmute(spring) }
     }
 
-    pub fn spring_mut(&self) -> Option<&mut SpringJoint> {
+    pub fn spring_mut(&mut self) -> Option<&mut SpringJoint> {
         let spring = &mut World::instance()
             .physics
             .impulse_joint_set
@@ -129,13 +129,14 @@ impl SpringComponent {
     }
 
     fn refresh_spring(&mut self) {
+        let rest_length = self.rest_length;
+        let stiffness = self.stiffness;
+        let damping = self.damping;
+
         if let Some(spring) = self.spring_mut() {
-            spring.data.set_motor_position(
-                JointAxis::LinX,
-                self.rest_length,
-                self.stiffness,
-                self.damping,
-            );
+            spring
+                .data
+                .set_motor_position(JointAxis::LinX, rest_length, stiffness, damping);
         } else {
             warn!("Failed to refresh spring data")
         }

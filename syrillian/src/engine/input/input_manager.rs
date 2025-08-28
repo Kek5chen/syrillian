@@ -1,6 +1,6 @@
+use crate::World;
 use crate::game_thread::GameAppEvent;
 use crate::input::gamepad_manager::GamePadManager;
-use crate::World;
 use gilrs::Button;
 use log::{info, trace};
 use nalgebra::Vector2;
@@ -73,9 +73,9 @@ impl InputManager {
                 if let PhysicalKey::Code(code) = event.physical_key {
                     if !event.state.is_pressed()
                         || self
-                        .key_states
-                        .get(&code)
-                        .is_none_or(|state| !state.is_pressed())
+                            .key_states
+                            .get(&code)
+                            .is_none_or(|state| !state.is_pressed())
                     {
                         self.key_just_updated.push(code);
                     }
@@ -97,9 +97,9 @@ impl InputManager {
             WindowEvent::MouseInput { button, state, .. } => {
                 if !state.is_pressed()
                     || self
-                    .button_states
-                    .get(button)
-                    .is_none_or(|state| !state.is_pressed())
+                        .button_states
+                        .get(button)
+                        .is_none_or(|state| !state.is_pressed())
                 {
                     self.button_just_updated.push(*button);
                 }
@@ -220,12 +220,6 @@ impl InputManager {
     }
 
     pub fn is_sprinting(&self) -> bool {
-        if cfg!(target_os = "macos") {
-            if self.gamepad.is_button_pressed(Button::Unknown) {
-                return true;
-            }
-        }
-
         self.is_key_pressed(KeyCode::ShiftLeft) || self.gamepad.is_button_pressed(Button::LeftThumb)
     }
 

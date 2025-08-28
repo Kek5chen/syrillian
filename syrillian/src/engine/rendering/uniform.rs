@@ -1,4 +1,4 @@
-use smallvec::{smallvec, SmallVec};
+use smallvec::{SmallVec, smallvec};
 use std::marker::PhantomData;
 use syrillian_utils::{ShaderUniformIndex, ShaderUniformMultiIndex, ShaderUniformSingleIndex};
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
@@ -40,8 +40,8 @@ pub struct UniformBufferStorage<I: ShaderUniformIndex> {
 impl<'a, I: ShaderUniformIndex> ShaderUniformBuilder<'a, I> {
     #[inline]
     pub fn build(self, device: &Device) -> ShaderUniform<I> {
-        let buffers = UniformBufferStorage::new(&device, &self.data);
-        let bind_group = self.bind_group(&device, self.bind_group_layout, &buffers);
+        let buffers = UniformBufferStorage::new(device, &self.data);
+        let bind_group = self.bind_group(device, self.bind_group_layout, &buffers);
 
         ShaderUniform {
             buffers,
@@ -188,16 +188,14 @@ impl<I: ShaderUniformSingleIndex> ShaderUniform<I> {
 impl<I: ShaderUniformIndex> UniformBufferStorage<I> {
     #[inline]
     fn new(device: &Device, desc: &[ResourceDesc<I>]) -> Self {
-        let buffers: SmallVec<[Option<Buffer>; 1]> = desc
-            .into_iter()
-            .map(|desc| desc.make_buffer(device))
-            .collect();
+        let buffers: SmallVec<[Option<Buffer>; 1]> =
+            desc.iter().map(|desc| desc.make_buffer(device)).collect();
 
         assert_eq!(buffers.len(), I::MAX + 1);
 
         UniformBufferStorage {
             buffers,
-            _indexer: PhantomData::default(),
+            _indexer: PhantomData,
         }
     }
 }

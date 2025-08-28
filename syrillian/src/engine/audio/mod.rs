@@ -8,8 +8,8 @@ pub struct AudioScene {
     listener: ListenerHandle,
 }
 
-impl AudioScene {
-    pub fn new() -> Self {
+impl Default for AudioScene {
+    fn default() -> Self {
         let mut manager = AudioManager::new(AudioManagerSettings::default())
             .expect("Failed to initialize audio manager");
 
@@ -22,7 +22,9 @@ impl AudioScene {
 
         Self { manager, listener }
     }
+}
 
+impl AudioScene {
     pub fn set_receiver_position(&mut self, receiver_position: Vector3<f32>) {
         self.listener
             .set_position(receiver_position, Tween::default());

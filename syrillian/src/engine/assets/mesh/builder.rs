@@ -55,8 +55,8 @@ impl MeshBuilder {
     }
 }
 
-impl Into<Mesh> for MeshBuilder {
-    fn into(self) -> Mesh {
-        self.build()
+impl From<MeshBuilder> for Mesh {
+    fn from(value: MeshBuilder) -> Self {
+        value.build()
     }
 }

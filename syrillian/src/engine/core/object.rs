@@ -7,7 +7,7 @@ use crate::world::World;
 use crate::{c_any_mut, ensure_aligned};
 use itertools::Itertools;
 use nalgebra::{Matrix4, Translation3, Vector3};
-use slotmap::{new_key_type, Key, KeyData};
+use slotmap::{Key, KeyData, new_key_type};
 
 use crate::components::InternalComponentDeletion;
 use crate::core::Transform;
@@ -93,7 +93,7 @@ impl GameObject {
         child.parent = Some(self.id);
     }
 
-    pub fn add_component<'b, C>(&mut self) -> CRef<C>
+    pub fn add_component<C>(&mut self) -> CRef<C>
     where
         C: Component + 'static,
     {
@@ -129,7 +129,7 @@ impl GameObject {
         self.components.iter().find_map(|c| c.as_a::<C>())
     }
 
-    pub fn get_components<C: Component + 'static>(&self) -> impl Iterator<Item=CRef<C>> {
+    pub fn get_components<C: Component + 'static>(&self) -> impl Iterator<Item = CRef<C>> {
         self.components.iter().filter_map(|c| c.as_a())
     }
 

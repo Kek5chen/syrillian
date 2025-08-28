@@ -1,14 +1,15 @@
+use crate::World;
 use crate::components::{Component, SkeletalComponent};
 use crate::core::GameObjectId;
-use crate::utils::animation::{
-    sample_rotation, sample_scale, sample_translation, AnimationClip, Binding, ChannelBinding, ClipIndex,
-    Playback,
-};
 use crate::utils::ExtraMatrixMath;
-use crate::World;
+use crate::utils::animation::{
+    AnimationClip, Binding, ChannelBinding, ClipIndex, Playback, sample_rotation, sample_scale,
+    sample_translation,
+};
 use log::warn;
 use nalgebra::{UnitQuaternion, Vector3};
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 
 pub struct AnimationComponent {
     parent: GameObjectId,
@@ -22,6 +23,9 @@ pub struct AnimationComponent {
 
     bindings: Vec<Vec<ChannelBinding>>,
 }
+
+/// Position, Rotation, Scale
+type SkeletonLocals = (Vector3<f32>, UnitQuaternion<f32>, Vector3<f32>);
 
 impl Component for AnimationComponent {
     fn new(parent: GameObjectId) -> Self {
@@ -150,30 +154,28 @@ impl AnimationComponent {
 
     fn ensure_pose(
         skel_go: GameObjectId,
-        locals: &mut HashMap<GameObjectId, Vec<(Vector3<f32>, UnitQuaternion<f32>, Vector3<f32>)>>,
-    ) -> Option<&mut Vec<(Vector3<f32>, UnitQuaternion<f32>, Vector3<f32>)>> {
-        if !locals.contains_key(&skel_go) {
-            let skel = skel_go.get_component::<SkeletalComponent>()?;
-            let bones = skel.bones();
-            let mut pose = Vec::with_capacity(bones.len());
-            for m in &bones.bind_local {
-                let (t, r, s) = m.decompose();
-                pose.push((t, r, s));
+        locals: &mut HashMap<GameObjectId, Vec<SkeletonLocals>>,
+    ) -> Option<&mut Vec<SkeletonLocals>> {
+        match locals.entry(skel_go) {
+            Entry::Occupied(o) => Some(o.into_mut()),
+            Entry::Vacant(e) => {
+                let skel = skel_go.get_component::<SkeletalComponent>()?;
+                let bones = skel.bones();
+                let mut pose = Vec::with_capacity(bones.len());
+                for m in &bones.bind_local {
+                    let (t, r, s) = m.decompose();
+                    pose.push((t, r, s));
+                }
+                Some(e.insert(pose))
             }
-            locals.insert(skel_go, pose);
         }
-
-        locals.get_mut(&skel_go)
     }
 
     fn evaluate_and_apply(&mut self, clip_index: usize, time: f32, weight: f32) {
         let clip = &self.clips[clip_index];
         let binds = &self.bindings[clip_index];
 
-        let mut skel_locals: HashMap<
-            GameObjectId,
-            Vec<(Vector3<f32>, UnitQuaternion<f32>, Vector3<f32>)>,
-        > = HashMap::new();
+        let mut skel_locals: HashMap<GameObjectId, Vec<SkeletonLocals>> = HashMap::new();
 
         for b in binds {
             let ch = &clip.channels[b.ch_index];

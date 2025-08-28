@@ -1,4 +1,4 @@
-use crate::assets::{HFont, HandleName, Store, StoreDefaults, StoreType, StoreTypeFallback, H};
+use crate::assets::{H, HFont, HandleName, Store, StoreDefaults, StoreType, StoreTypeFallback};
 use crate::store_add_checked;
 use font_kit::family_name::FamilyName;
 use font_kit::properties::Properties;
@@ -86,7 +86,7 @@ impl Store<Font> {
     }
 
     pub fn load_sized(&self, font_family: &str, atlas_em_px: Option<u32>) -> HFont {
-        if let Some(font) = self.find(&font_family) {
+        if let Some(font) = self.find(font_family) {
             return font;
         }
 

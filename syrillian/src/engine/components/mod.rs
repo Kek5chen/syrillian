@@ -79,13 +79,13 @@ pub use text::*;
 #[cfg(debug_assertions)]
 pub use camera_debug::*;
 
+use crate::World;
 use crate::core::GameObjectId;
+use crate::rendering::CPUDrawCtx;
 use crate::rendering::lights::LightProxy;
 use crate::rendering::proxies::SceneProxy;
-use crate::rendering::CPUDrawCtx;
-use crate::World;
 use delegate::delegate;
-use slotmap::{new_key_type, Key};
+use slotmap::{Key, new_key_type};
 use std::any::{Any, TypeId};
 use std::fmt::{Debug, Formatter};
 use std::hash::Hash;
@@ -127,7 +127,7 @@ pub struct CRef<C: Component>(pub(crate) ComponentId, pub(crate) PhantomData<C>)
 
 impl<C: Component> Clone for CRef<C> {
     fn clone(&self) -> Self {
-        CRef(self.0, self.1)
+        *self
     }
 }
 
@@ -204,7 +204,7 @@ pub struct CWeak<C: Component>(pub(crate) ComponentId, pub(crate) PhantomData<C>
 
 impl<C: Component> Clone for CWeak<C> {
     fn clone(&self) -> Self {
-        CWeak(self.0, self.1)
+        *self
     }
 }
 
@@ -234,7 +234,7 @@ impl<C: Component> CWeak<C> {
             .unwrap_or(false)
     }
     pub fn upgrade(&self, world: &World) -> Option<CRef<C>> {
-        self.exists(world).then(|| CRef(self.0, self.1))
+        self.exists(world).then_some(CRef(self.0, self.1))
     }
 
     pub fn null() -> CWeak<C> {
@@ -275,7 +275,7 @@ impl TypedComponentId {
     }
 
     pub fn as_a<C: Component>(&self) -> Option<CRef<C>> {
-        self.is_a::<C>().then(|| CRef(self.1, PhantomData))
+        self.is_a::<C>().then_some(CRef(self.1, PhantomData))
     }
 
     pub fn type_id(&self) -> TypeId {

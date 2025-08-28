@@ -1,9 +1,9 @@
 use crate::assets::{HTexture, Ref, Store, StoreType, Texture};
 use crate::components::TypedComponentId;
+use crate::rendering::AssetCache;
 use crate::rendering::lights::{LightProxy, LightUniformIndex, ShadowUniformIndex};
 use crate::rendering::message::LightProxyCommand;
 use crate::rendering::uniform::ShaderUniform;
-use crate::rendering::AssetCache;
 use itertools::Itertools;
 use log::warn;
 use syrillian_utils::debug_panic;
@@ -13,9 +13,9 @@ use wgpu::{
 };
 
 #[cfg(debug_assertions)]
-use crate::rendering::lights::LightType;
-#[cfg(debug_assertions)]
 use crate::rendering::Renderer;
+#[cfg(debug_assertions)]
+use crate::rendering::lights::LightType;
 
 const DUMMY_POINT_LIGHT: LightProxy = LightProxy::dummy();
 
@@ -49,8 +49,8 @@ impl LightManager {
         id
     }
 
-    pub fn add_proxy(&mut self, owner: TypedComponentId, proxy: Box<LightProxy>) {
-        self.proxies.push(*proxy);
+    pub fn add_proxy(&mut self, owner: TypedComponentId, proxy: LightProxy) {
+        self.proxies.push(proxy);
         self.proxy_owners.push(owner);
     }
 
@@ -171,7 +171,7 @@ impl LightManager {
         queue.write_buffer(count, 0, bytemuck::bytes_of(&(size as u32)));
 
         let data = self.uniform.buffer(LightUniformIndex::Lights);
-        if size * size_of::<LightProxy>() > data.size() as usize {
+        if size_of_val(proxies) > data.size() as usize {
             let bgl = cache.bgl_light();
             self.uniform = ShaderUniform::builder(&bgl)
                 .with_buffer(count.clone())
@@ -195,8 +195,8 @@ impl LightManager {
         pass.set_pipeline(pipeline);
 
         let lights = self.proxies.as_slice();
-        for i in 0..self.proxies.len() {
-            let type_id: LightType = match lights[i].type_id.try_into() {
+        for (i, proxy) in lights.iter().enumerate().take(self.proxies.len()) {
+            let type_id: LightType = match proxy.type_id.try_into() {
                 Ok(ty) => ty,
                 Err(e) => {
                     debug_panic!("{}", e);
@@ -215,7 +215,7 @@ impl LightManager {
 }
 
 pub fn proxy_buffer_slice(proxies: &[LightProxy]) -> &[LightProxy] {
-    if proxies.len() == 0 {
+    if proxies.is_empty() {
         &[DUMMY_POINT_LIGHT]
     } else {
         proxies

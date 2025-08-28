@@ -1,11 +1,11 @@
+use crate::World;
 use crate::assets::HSound;
 use crate::components::Component;
 use crate::core::GameObjectId;
-use crate::World;
-use kira::sound::static_sound::StaticSoundHandle;
-use kira::sound::PlaybackState;
-use kira::track::{SpatialTrackBuilder, SpatialTrackHandle};
 use kira::Tween;
+use kira::sound::PlaybackState;
+use kira::sound::static_sound::StaticSoundHandle;
+use kira::track::{SpatialTrackBuilder, SpatialTrackHandle};
 use log::{trace, warn};
 
 pub struct AudioReceiver {
@@ -130,7 +130,8 @@ impl AudioEmitter {
 
     pub fn set_sound(&mut self, sound: HSound) {
         self.stop();
-        self.asset_handle = Some(sound.clone());
+        debug_assert_eq!(self.asset_handle, None);
+        self.asset_handle = Some(sound);
     }
 
     pub fn set_track(&mut self, world: &mut World, track: SpatialTrackBuilder) -> &mut Self {

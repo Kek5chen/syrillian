@@ -1,11 +1,11 @@
+use crate::World;
 use crate::components::{CRef, CWeak, Component, FirstPersonCameraController, RigidBodyComponent};
 use crate::core::GameObjectId;
-use crate::World;
 use gilrs::Axis;
 use log::warn;
 use nalgebra::Vector3;
 use num_traits::Zero;
-use rapier3d::prelude::{vector, LockedAxes};
+use rapier3d::prelude::{LockedAxes, vector};
 use winit::keyboard::KeyCode;
 
 pub struct FirstPersonMovementController {
@@ -38,11 +38,11 @@ impl Component for FirstPersonMovementController {
 
     fn init(&mut self, _world: &mut World) {
         let rigid = self.parent().get_component::<RigidBodyComponent>();
-        if let Some(mut rigid) = rigid {
-            if let Some(rigid) = rigid.get_body_mut() {
-                rigid.set_locked_axes(LockedAxes::ROTATION_LOCKED, false);
-                rigid.enable_ccd(true);
-            }
+        if let Some(mut rigid) = rigid
+            && let Some(rigid) = rigid.get_body_mut()
+        {
+            rigid.set_locked_axes(LockedAxes::ROTATION_LOCKED, false);
+            rigid.enable_ccd(true);
         }
         self.rigid_body = rigid.map(CRef::downgrade).unwrap_or_default();
 

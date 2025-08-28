@@ -1,7 +1,7 @@
-use crate::assets::{AssetStore, HMaterial, HMesh, HShader, Mesh, Shader, H};
+use crate::assets::{AssetStore, H, HMaterial, HMesh, HShader, Mesh, Shader};
 use crate::components::BoneData;
 use crate::core::ModelUniform;
-use crate::rendering::proxies::{SceneProxy, PROXY_PRIORITY_SOLID, PROXY_PRIORITY_TRANSPARENT};
+use crate::rendering::proxies::{PROXY_PRIORITY_SOLID, PROXY_PRIORITY_TRANSPARENT, SceneProxy};
 use crate::rendering::uniform::ShaderUniform;
 use crate::rendering::{AssetCache, GPUDrawCtx, RenderPassType, Renderer, RuntimeMesh};
 use crate::{must_pipeline, proxy_data, proxy_data_mut};
@@ -56,7 +56,7 @@ impl SceneProxy for MeshSceneProxy {
 
         if self.bones_dirty {
             renderer.state.queue.write_buffer(
-                &data.uniform.buffer(MeshUniformIndex::BoneData),
+                data.uniform.buffer(MeshUniformIndex::BoneData),
                 0,
                 self.bone_data.as_bytes(),
             );
@@ -66,7 +66,7 @@ impl SceneProxy for MeshSceneProxy {
         data.mesh_data.model_mat = *local_to_world;
 
         renderer.state.queue.write_buffer(
-            &data.uniform.buffer(MeshUniformIndex::MeshData),
+            data.uniform.buffer(MeshUniformIndex::MeshData),
             0,
             bytemuck::bytes_of(&data.mesh_data),
         );
@@ -107,14 +107,14 @@ impl SceneProxy for MeshSceneProxy {
     }
 
     fn priority(&self, store: &AssetStore) -> u32 {
-        self.materials
-            .iter()
-            .any(|m| {
-                let material = store.materials.get(*m);
-                material.is_transparent()
-            })
-            .then_some(PROXY_PRIORITY_TRANSPARENT)
-            .unwrap_or(PROXY_PRIORITY_SOLID)
+        if self.materials.iter().any(|m| {
+            let material = store.materials.get(*m);
+            material.is_transparent()
+        }) {
+            PROXY_PRIORITY_TRANSPARENT
+        } else {
+            PROXY_PRIORITY_SOLID
+        }
     }
 }
 
@@ -166,7 +166,7 @@ impl MeshSceneProxy {
                 let shader = cache.shader(material.shader);
                 must_pipeline!(pipeline = shader, ctx.pass_type => continue);
 
-                pass.set_pipeline(&pipeline);
+                pass.set_pipeline(pipeline);
             }
 
             pass.set_bind_group(2, material.uniform.bind_group(), &[]);

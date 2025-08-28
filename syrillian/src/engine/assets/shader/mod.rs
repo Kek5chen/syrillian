@@ -3,12 +3,12 @@ mod shader_gen;
 // this module only has tests for the built-in shaders and can be safely ignored
 mod shaders;
 
-use crate::assets::shader::shader_gen::ShaderGen;
 use crate::assets::HBGL;
+use crate::assets::shader::shader_gen::ShaderGen;
 use crate::engine::assets::generic_store::{HandleName, Store, StoreDefaults, StoreType};
-use crate::engine::assets::{HShader, StoreTypeFallback, StoreTypeName, H};
-use crate::rendering::proxies::text_proxy::TextPushConstants;
+use crate::engine::assets::{H, HShader, StoreTypeFallback, StoreTypeName};
 use crate::rendering::AssetCache;
+use crate::rendering::proxies::text_proxy::TextPushConstants;
 use crate::utils::sizes::VEC2_SIZE;
 use crate::{store_add_checked, store_add_checked_many};
 use std::error::Error;
@@ -359,7 +359,7 @@ impl StoreTypeFallback for Shader {
 impl StoreTypeName for Shader {
     #[inline]
     fn name(&self) -> &str {
-        &self.name()
+        self.name()
     }
 }
 
@@ -656,9 +656,9 @@ impl Shader {
         fixed_bgls: &[&BindGroupLayout],
     ) -> PipelineLayout {
         let desc = PipelineLayoutDescriptor {
-            label: Some(&layout_name),
-            bind_group_layouts: &fixed_bgls,
-            push_constant_ranges: &self.push_constant_ranges(),
+            label: Some(layout_name),
+            bind_group_layouts: fixed_bgls,
+            push_constant_ranges: self.push_constant_ranges(),
         };
         device.create_pipeline_layout(&desc)
     }

@@ -3,7 +3,7 @@ mod builder;
 use crate::assets::mesh::builder::MeshBuilder;
 use crate::core::{Bones, Vertex3D};
 use crate::engine::assets::generic_store::{HandleName, Store, StoreDefaults, StoreType};
-use crate::engine::assets::{HMesh, H};
+use crate::engine::assets::{H, HMesh};
 use crate::store_add_checked;
 use crate::utils::UNIT_SQUARE_VERT;
 use itertools::izip;
@@ -64,7 +64,7 @@ impl Mesh {
 
     #[inline]
     pub fn indices(&self) -> Option<&[u32]> {
-        self.data.indices.as_ref().map(|i| i.as_slice())
+        self.data.indices.as_deref()
     }
 
     #[inline]

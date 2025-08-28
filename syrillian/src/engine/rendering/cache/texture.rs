@@ -16,7 +16,7 @@ impl CacheType for CpuTexture {
         let texture = match &self.data {
             None => device.create_texture(&self.desc()),
             Some(data) => device.create_texture_with_data(
-                &queue,
+                queue,
                 &self.desc(),
                 TextureDataOrder::LayerMajor,
                 data,

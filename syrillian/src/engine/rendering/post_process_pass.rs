@@ -31,7 +31,7 @@ impl PostProcessData {
         });
 
         let uniform = ShaderUniform::<PostProcessUniformIndex>::builder(layout)
-            .with_texture(&offscreen_view)
+            .with_texture(offscreen_view)
             .with_sampler(&sampler)
             .build(device);
 

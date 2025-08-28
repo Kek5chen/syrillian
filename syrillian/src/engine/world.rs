@@ -4,7 +4,7 @@
 //! It maintains the scene graph, input state and physics simulation and
 //! offers utilities such as methods to create, find and remove game objects.
 
-use crate::assets::{Material, Mesh, Shader, Sound, Store, Texture, BGL};
+use crate::assets::{BGL, Material, Mesh, Shader, Sound, Store, Texture};
 use crate::audio::AudioScene;
 use crate::components::{CRef, CWeak, CameraComponent, Component};
 use crate::core::component_storage::ComponentStorage;
@@ -15,14 +15,14 @@ use crate::game_thread::GameAppEvent;
 use crate::input::InputManager;
 use crate::physics::PhysicsManager;
 use crate::prefabs::CameraPrefab;
-use crate::rendering::message::RenderMsg;
 use crate::rendering::CPUDrawCtx;
+use crate::rendering::message::RenderMsg;
 use itertools::Itertools;
 use log::info;
 use slotmap::{HopSlotMap, Key};
 use std::collections::HashSet;
 use std::mem::swap;
-use std::sync::{mpsc, Arc};
+use std::sync::{Arc, mpsc};
 use std::time::{Duration, Instant};
 
 static mut G_WORLD: *mut World = std::ptr::null_mut();
@@ -86,7 +86,7 @@ impl World {
             physics: PhysicsManager::default(),
             input: InputManager::new(game_event_tx.clone()),
             assets,
-            audio: AudioScene::new(),
+            audio: AudioScene::default(),
 
             start_time: Instant::now(),
             delta_time: Duration::default(),
@@ -99,6 +99,7 @@ impl World {
     }
 
     /// # Safety
+    ///
     /// Creates a new world through World::empty and registers it globally.
     ///
     /// This function must only be called once during program startup since the
@@ -119,8 +120,10 @@ impl World {
         world
     }
 
-    // SAFETY: View [`World::new`]. This function will just set up data structures around the world
-    // needed for initialization. Mostly useful for tests.
+    /// # Safety
+    ///
+    /// View [`World::new`]. This function will just set up data structures around the world
+    /// needed for initialization. Mostly useful for tests.
     pub unsafe fn fresh() -> (
         Box<World>,
         mpsc::Receiver<RenderMsg>,
@@ -292,7 +295,7 @@ impl World {
         for (ctid, comp) in self.components.iter_mut() {
             let ctx = CPUDrawCtx::new(ctid, &mut frame_proxy_batch);
             unsafe {
-                comp.update_proxy(&mut *world, ctx);
+                comp.update_proxy(&*world, ctx);
             }
         }
 

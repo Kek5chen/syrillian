@@ -1,13 +1,13 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::spanned::Spanned;
 use syn::Error;
+use syn::spanned::Spanned;
 
 #[proc_macro_derive(UniformIndex)]
 pub fn uniform_index(input: TokenStream) -> TokenStream {
     let input = syn::parse_macro_input!(input as syn::ItemEnum);
 
-    if input.variants.len() == 0 {
+    if input.variants.is_empty() {
         return Error::new(
             input.span(),
             "Uniform Shader Indexers must have at least one variant",
@@ -18,7 +18,10 @@ pub fn uniform_index(input: TokenStream) -> TokenStream {
 
     let type_ident = &input.ident;
 
-    let type_ident_str = type_ident.to_string().replace("Uniform", "").replace("Index", "");
+    let type_ident_str = type_ident
+        .to_string()
+        .replace("Uniform", "")
+        .replace("Index", "");
 
     let variants = input.variants.iter().map(|var| &var.ident);
     let variants2 = input.variants.iter().map(|var| &var.ident);
@@ -86,7 +89,7 @@ pub fn syrillian_app(input: TokenStream) -> TokenStream {
                 .init();
         )
     });
-    
+
     let app_name = &input.ident;
 
     quote! {

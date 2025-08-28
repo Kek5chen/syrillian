@@ -1,7 +1,7 @@
-use crate::assets::{Font, HMaterial, HTexture, FONT_ATLAS_CHARS};
+use crate::World;
+use crate::assets::{FONT_ATLAS_CHARS, Font, HMaterial, HTexture};
 use crate::components::msdf_atlas::{FontLineMetrics, GlyphAtlasEntry, MsdfAtlas};
 use crate::rendering::{AssetCache, CacheType};
-use crate::World;
 use std::sync::{Arc, RwLock};
 use wgpu::{Device, Queue};
 
@@ -15,7 +15,7 @@ impl CacheType for Font {
     fn upload(&self, _device: &Device, queue: &Queue, cache: &AssetCache) -> Self::Hot {
         let world = World::instance();
 
-        let mut msdf = MsdfAtlas::new(self.font_bytes.clone(), self.atlas_em_px, 16.0, 4.0, &world);
+        let mut msdf = MsdfAtlas::new(self.font_bytes.clone(), self.atlas_em_px, 16.0, 4.0, world);
 
         msdf.ensure_glyphs(cache, FONT_ATLAS_CHARS.iter().flatten().copied(), queue);
 
@@ -38,7 +38,7 @@ impl FontAtlas {
     pub fn ensure_glyphs(
         &self,
         cache: &AssetCache,
-        chars: impl IntoIterator<Item=char>,
+        chars: impl IntoIterator<Item = char>,
         queue: &Queue,
     ) {
         self.atlas
