@@ -7,26 +7,49 @@ on:
     branches: [ "master" ]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
   build:
-    runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest]
+        os: [ ubuntu-latest, windows-latest, macos-latest ]
+        profile: [ debug, release ]
+
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+
     steps:
       - uses: actions/checkout@v4
 
+      - name: Ubuntu System Dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y pkg-config libudev-dev libfontconfig-dev
+
       - name: Install Rust
-        run: rustup toolchain install stable --profile minimal --no-self-update
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0
+        with:
+          shared-key: ${{ matrix.os }}-${{ matrix.features }}
 
-      - name: Build
-        run: cargo build --workspace --no-default-features --features derive
-
-      - name: Build release
-        run: cargo build --workspace --release --no-default-features --features derive
+      - name: Build and Test
+        shell: bash
+        run: |
+          set -e
+          FLAGS=""
+          if [ "${{ matrix.profile }}" = "release" ]; then FLAGS="--release"; fi
+          cargo build --workspace --locked $FLAGS --no-default-features --features derive
+          cargo test  --workspace --locked $FLAGS --no-default-features --features derive
