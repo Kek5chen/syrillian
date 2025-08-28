@@ -28,7 +28,7 @@ jobs:
       - uses: taiki-e/install-action@cargo-llvm-cov
 
       - name: Cache Rust dependencies and tools
-        uses: Swatinem/rust-cache@v2.7,8
+        uses: Swatinem/rust-cache@v2.7.8
 
       - name: Check formatting
         run: cargo fmt --all -- --check

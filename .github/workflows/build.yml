@@ -23,7 +23,7 @@ jobs:
         run: rustup toolchain install stable --profile minimal --no-self-update
 
       - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@v2,7,8
+        uses: Swatinem/rust-cache@v2.7.8
 
       - name: Build
         run: cargo build --workspace --no-default-features --features derive
