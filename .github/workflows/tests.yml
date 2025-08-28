@@ -51,7 +51,7 @@ jobs:
       - name: Test coverage
         run: |
           cargo llvm-cov --workspace --locked --no-default-features --features derive
-          cargo llvm-cov report --codecov --no-default-features --features derive --output-path cov.json
+          cargo llvm-cov report --codecov --output-path cov.json
 
       - name: Upload coverage report to Codecov
         if: ${{ (github.event_name != 'pull_request') || (github.event.pull_request.head.repo.fork == false) }}
