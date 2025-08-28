@@ -46,15 +46,15 @@ pub mod fp_camera;
 pub mod fp_movement;
 pub mod freecam;
 pub mod gravity;
+pub mod image;
 pub mod light;
+pub mod mesh_renderer;
 pub mod rigid_body;
 pub mod rope;
 pub mod rotate;
 pub mod skeletal;
 pub mod spring;
 pub mod text;
-pub mod mesh_renderer;
-pub mod image;
 
 #[cfg(debug_assertions)]
 pub mod camera_debug;
@@ -307,9 +307,13 @@ pub trait Component: Any {
     // Gets called after all other updates are done
     fn post_update(&mut self, world: &mut World) {}
 
-    fn create_render_proxy(&mut self, world: &World) -> Option<Box<dyn SceneProxy>> { None }
+    fn create_render_proxy(&mut self, world: &World) -> Option<Box<dyn SceneProxy>> {
+        None
+    }
 
-    fn create_light_proxy(&mut self, world: &World) -> Option<Box<LightProxy>> { None }
+    fn create_light_proxy(&mut self, world: &World) -> Option<Box<LightProxy>> {
+        None
+    }
 
     fn update_proxy(&mut self, world: &World, ctx: CPUDrawCtx) {}
 

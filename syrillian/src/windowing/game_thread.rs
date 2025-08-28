@@ -172,20 +172,14 @@ impl<S: AppState> GameThreadInner<S> {
     }
 
     pub fn device_event(&mut self, _: DeviceId, event: &DeviceEvent) -> bool {
-        self.world
-            .input
-            .process_device_input_event(event);
+        self.world.input.process_device_input_event(event);
 
         true
     }
 
     pub fn resize(&mut self, size: PhysicalSize<u32>) -> bool {
         // TODO: consider updating this in the CameraComponent
-        if let Some(mut cam) = self
-            .world
-            .active_camera()
-            .upgrade(&self.world)
-        {
+        if let Some(mut cam) = self.world.active_camera().upgrade(&self.world) {
             cam.resize(size.width as f32, size.height as f32);
         }
 

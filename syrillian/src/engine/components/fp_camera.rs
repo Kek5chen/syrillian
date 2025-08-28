@@ -176,7 +176,9 @@ impl FirstPersonCameraController {
             UnitQuaternion::from_axis_angle(&Vector3::y_axis(), self.yaw.to_radians());
         let pitch_rotation =
             UnitQuaternion::from_axis_angle(&Vector3::x_axis(), self.pitch.to_radians());
-        if self.vel.xz().magnitude() < 0.01 || self.vel.xz().normalize().dot(&transform.forward().xz()) > 0.9 {
+        if self.vel.xz().magnitude() < 0.01
+            || self.vel.xz().normalize().dot(&transform.forward().xz()) > 0.9
+        {
             self.update_roll(mouse_delta.x, self.config.max_roll);
         }
 

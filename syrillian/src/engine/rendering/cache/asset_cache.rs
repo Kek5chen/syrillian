@@ -44,7 +44,7 @@ impl AssetCache {
     pub fn store(&self) -> &AssetStore {
         &self.store
     }
-    
+
     pub fn mesh(&self, handle: HMesh) -> Option<Arc<RuntimeMesh>> {
         self.meshes.try_get(handle, self)
     }
@@ -99,7 +99,7 @@ impl AssetCache {
             .try_get(HBGL::EMPTY, self)
             .expect("Light is a default layout")
     }
-    
+
     pub fn bgl_model(&self) -> Arc<BindGroupLayout> {
         self.bgls
             .try_get(HBGL::MODEL, self)

@@ -79,7 +79,9 @@ impl Sound {
     }
 
     pub fn with_settings(&self, settings: StaticSoundSettings) -> Self {
-        Sound { inner: self.inner.with_settings(settings) }
+        Sound {
+            inner: self.inner.with_settings(settings),
+        }
     }
 
     pub fn inner(&self) -> StaticSoundData {

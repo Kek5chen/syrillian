@@ -4,8 +4,8 @@
 //! application state management into a compact runtime that can be easily used.
 
 pub mod app;
-pub mod state;
 pub mod game_thread;
+pub mod state;
 
 pub use app::*;
 pub use state::*;

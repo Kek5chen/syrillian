@@ -74,7 +74,10 @@ impl ComponentStorage {
         Some(self.inner.get(&tid)?.as_ref())
     }
 
-    pub(crate) fn _get_mut_from_id(&mut self, tid: TypeId) -> Option<&mut dyn HopSlotMapUntyped<ComponentId>> {
+    pub(crate) fn _get_mut_from_id(
+        &mut self,
+        tid: TypeId,
+    ) -> Option<&mut dyn HopSlotMapUntyped<ComponentId>> {
         Some(self.inner.get_mut(&tid)?.as_mut())
     }
 
@@ -127,21 +130,18 @@ impl ComponentStorage {
     }
 
     pub fn iter(&self) -> impl Iterator<Item=(TypedComponentId, &dyn Component)> {
-        self.inner.iter().flat_map(|(tid, store)| {
-            store.iter().map(|(k, v)| {
-                (TypedComponentId(*tid, k), v)
-            })
-        })
+        self.inner
+            .iter()
+            .flat_map(|(tid, store)| store.iter().map(|(k, v)| (TypedComponentId(*tid, k), v)))
     }
 
     pub fn iter_mut(&mut self) -> impl Iterator<Item=(TypedComponentId, &mut dyn Component)> {
         self.inner.iter_mut().flat_map(|(tid, store)| {
-            store.iter_mut().map(|(k, v)| {
-                (TypedComponentId(*tid, k), v)
-            })
+            store
+                .iter_mut()
+                .map(|(k, v)| (TypedComponentId(*tid, k), v))
         })
     }
-
 
     pub fn values(&self) -> impl Iterator<Item=&dyn Component> {
         self.inner.values().flat_map(|store| store.iter_comps())

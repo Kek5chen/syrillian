@@ -2,7 +2,10 @@ use smallvec::{smallvec, SmallVec};
 use std::marker::PhantomData;
 use syrillian_utils::{ShaderUniformIndex, ShaderUniformMultiIndex, ShaderUniformSingleIndex};
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
-use wgpu::{BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindingResource, Buffer, BufferAddress, BufferDescriptor, BufferUsages, Device, Sampler, TextureView};
+use wgpu::{
+    BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindingResource, Buffer,
+    BufferAddress, BufferDescriptor, BufferUsages, Device, Sampler, TextureView,
+};
 
 #[derive(Debug, Clone)]
 pub struct ShaderUniform<I: ShaderUniformIndex> {
@@ -80,8 +83,7 @@ impl<'a, I: ShaderUniformIndex> ShaderUniformBuilder<'a, I> {
     }
 
     #[inline]
-    pub fn with_buffer(mut self, buffer: Buffer) -> Self
-    {
+    pub fn with_buffer(mut self, buffer: Buffer) -> Self {
         let name = self._next_index();
         self.data.push(ResourceDesc::Buffer { buffer, name });
         self
@@ -94,13 +96,13 @@ impl<'a, I: ShaderUniformIndex> ShaderUniformBuilder<'a, I> {
     {
         let name = self._next_index();
         let data = bytemuck::cast_slice(data);
-        self.data.push(ResourceDesc::StorageBufferData { data, name });
+        self.data
+            .push(ResourceDesc::StorageBufferData { data, name });
         self
     }
 
     #[inline]
-    pub fn with_storage_buffer(mut self, buffer: Buffer) -> Self
-    {
+    pub fn with_storage_buffer(mut self, buffer: Buffer) -> Self {
         let name = self._next_index();
         self.data.push(ResourceDesc::StorageBuffer { buffer, name });
         self
@@ -186,7 +188,10 @@ impl<I: ShaderUniformSingleIndex> ShaderUniform<I> {
 impl<I: ShaderUniformIndex> UniformBufferStorage<I> {
     #[inline]
     fn new(device: &Device, desc: &[ResourceDesc<I>]) -> Self {
-        let buffers: SmallVec<[Option<Buffer>; 1]> = desc.into_iter().map(|desc| desc.make_buffer(device)).collect();
+        let buffers: SmallVec<[Option<Buffer>; 1]> = desc
+            .into_iter()
+            .map(|desc| desc.make_buffer(device))
+            .collect();
 
         assert_eq!(buffers.len(), I::MAX + 1);
 
@@ -201,7 +206,7 @@ impl<I: ShaderUniformIndex> ResourceDesc<'_, I> {
     #[inline]
     fn name(&self) -> &I {
         match self {
-            | ResourceDesc::DataBuffer { name, .. }
+            ResourceDesc::DataBuffer { name, .. }
             | ResourceDesc::Buffer { name, .. }
             | ResourceDesc::StorageBufferData { name, .. }
             | ResourceDesc::StorageBuffer { name, .. }
@@ -273,7 +278,7 @@ impl<I: ShaderUniformIndex> ResourceDesc<'_, I> {
             }
             ResourceDesc::TextureView { .. } | ResourceDesc::Sampler { .. } => None,
             ResourceDesc::Buffer { buffer, .. } => Some(buffer.clone()),
-            ResourceDesc::StorageBuffer { buffer, .. } => Some(buffer.clone())
+            ResourceDesc::StorageBuffer { buffer, .. } => Some(buffer.clone()),
         }
     }
 }

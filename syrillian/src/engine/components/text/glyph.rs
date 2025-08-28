@@ -17,7 +17,11 @@ pub struct GlyphRenderData {
 }
 
 #[derive(Debug, Copy, Clone)]
-pub enum TextAlignment { Left, Right, Center }
+pub enum TextAlignment {
+    Left,
+    Right,
+    Center,
+}
 
 impl GlyphRenderData {
     fn from_entry(origin_em: Vector2<f32>, entry: &GlyphAtlasEntry) -> Self {
@@ -29,16 +33,25 @@ impl GlyphRenderData {
         let uv_min = entry.uv_min;
         let uv_max = entry.uv_max;
 
-        let v_tl = GlyphVertex { pos: [l, t], uv: [uv_min[0], uv_min[1]] };
-        let v_tr = GlyphVertex { pos: [r, t], uv: [uv_max[0], uv_min[1]] };
-        let v_bl = GlyphVertex { pos: [l, b], uv: [uv_min[0], uv_max[1]] };
-        let v_br = GlyphVertex { pos: [r, b], uv: [uv_max[0], uv_max[1]] };
+        let v_tl = GlyphVertex {
+            pos: [l, t],
+            uv: [uv_min[0], uv_min[1]],
+        };
+        let v_tr = GlyphVertex {
+            pos: [r, t],
+            uv: [uv_max[0], uv_min[1]],
+        };
+        let v_bl = GlyphVertex {
+            pos: [l, b],
+            uv: [uv_min[0], uv_max[1]],
+        };
+        let v_br = GlyphVertex {
+            pos: [r, b],
+            uv: [uv_max[0], uv_max[1]],
+        };
 
         Self {
-            triangles: [
-                [v_tl, v_bl, v_tr],
-                [v_tr, v_bl, v_br],
-            ]
+            triangles: [[v_tl, v_bl, v_tr], [v_tr, v_bl, v_br]],
         }
     }
 }
@@ -72,10 +85,13 @@ pub fn generate_glyph_geometry_stream(
     alignment: TextAlignment,
     line_height_mul: f32,
 ) -> Vec<GlyphRenderData> {
-    if text.is_empty() { return vec![]; }
+    if text.is_empty() {
+        return vec![];
+    }
 
     let metrics = atlas.metrics();
-    let baseline_dy = (metrics.ascent_em + metrics.descent_em + metrics.line_gap_em) * line_height_mul;
+    let baseline_dy =
+        (metrics.ascent_em + metrics.descent_em + metrics.line_gap_em) * line_height_mul;
 
     atlas.ensure_glyphs(cache, text.chars(), queue);
 

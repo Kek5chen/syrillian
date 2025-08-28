@@ -177,14 +177,14 @@ impl Renderer {
         let mut ctx = match self.begin_render() {
             Ok(ctx) => ctx,
             Err(RenderError::Surface {
-                source: SurfaceError::Lost,
-            }) => {
+                    source: SurfaceError::Lost,
+                }) => {
                 self.state.resize(self.state.size);
                 return true; // drop frame but don't cancel
             }
             Err(RenderError::Surface {
-                source: SurfaceError::OutOfMemory,
-            }) => {
+                    source: SurfaceError::OutOfMemory,
+                }) => {
                 error!("The application ran out of GPU memory!");
                 return false;
             }

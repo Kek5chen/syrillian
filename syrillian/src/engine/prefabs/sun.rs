@@ -20,4 +20,3 @@ impl Prefab for SunPrefab {
         obj
     }
 }
-

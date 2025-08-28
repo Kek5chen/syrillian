@@ -14,9 +14,7 @@ impl Component for MyComponent {
     where
         Self: Sized,
     {
-        Self {
-            parent,
-        }
+        Self { parent }
     }
 
     fn init(&mut self, _world: &mut World) {
@@ -44,12 +42,26 @@ fn component() {
     assert_eq!(comp2.parent(), obj);
 
     assert_eq!(world.components.values().count(), 2);
-    assert_eq!(world.components.values_of_type::<MyComponent>().unwrap().count(), 2);
+    assert_eq!(
+        world
+            .components
+            .values_of_type::<MyComponent>()
+            .unwrap()
+            .count(),
+        2
+    );
 
     obj.remove_component(comp2, &mut world);
     assert_eq!(obj.get_components::<MyComponent>().count(), 1);
     assert_eq!(world.components.values().count(), 1);
-    assert_eq!(world.components.values_of_type::<MyComponent>().unwrap().count(), 1);
+    assert_eq!(
+        world
+            .components
+            .values_of_type::<MyComponent>()
+            .unwrap()
+            .count(),
+        1
+    );
 
     let comp2 = comp2.downgrade();
     assert_eq!(comp2.upgrade(&world), None);

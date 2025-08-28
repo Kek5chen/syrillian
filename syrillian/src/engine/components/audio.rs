@@ -35,7 +35,9 @@ impl Component for AudioEmitter {
 
     fn init(&mut self, world: &mut World) {
         trace!("Initializing new Spatial Track");
-        self.track_handle = world.audio.add_spatial_track(self.parent.transform.position(), SpatialTrackBuilder::new());
+        self.track_handle = world
+            .audio
+            .add_spatial_track(self.parent.transform.position(), SpatialTrackBuilder::new());
     }
 
     fn update(&mut self, world: &mut World) {
@@ -95,7 +97,7 @@ impl AudioEmitter {
             Ok(handle) => self.sound_handle = Some(handle),
             Err(e) => {
                 warn!("Error when playing sound: {e}")
-            },
+            }
         }
     }
 

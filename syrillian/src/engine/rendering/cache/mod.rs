@@ -2,11 +2,11 @@ mod generic_cache;
 
 mod asset_cache;
 mod bind_group_layout;
+mod font;
 mod material;
 mod mesh;
 mod shader;
 mod texture;
-mod font;
 
 pub use self::asset_cache::AssetCache;
 

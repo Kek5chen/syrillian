@@ -86,11 +86,7 @@ impl CameraComponent {
     pub fn click_ray(&self, x: f32, y: f32) -> Ray {
         let eye = self.mouse_eye_dir(x, y);
 
-        let cam_to_world = self
-            .parent()
-            .transform
-            .view_matrix_rigid()
-            .to_matrix();
+        let cam_to_world = self.parent().transform.view_matrix_rigid().to_matrix();
 
         let dir_world = (cam_to_world * eye).xyz().normalize();
         let origin = cam_to_world.transform_point(&Point3::origin());
@@ -181,4 +177,3 @@ fn add_debug_drawable(mut parent: GameObjectId) {
 
     parent.add_component::<CameraDebug>();
 }
-

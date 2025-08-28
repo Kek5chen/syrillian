@@ -75,7 +75,11 @@ impl GameObject {
             }
         } else {
             let world = World::instance();
-            if let Some(pos) = world.children.iter().find_position(|other| self.id == **other) {
+            if let Some(pos) = world
+                .children
+                .iter()
+                .find_position(|other| self.id == **other)
+            {
                 world.children.remove(pos.0);
             }
         }
@@ -122,15 +126,11 @@ impl GameObject {
     }
 
     pub fn get_component<C: Component + 'static>(&self) -> Option<CRef<C>> {
-        self.components
-            .iter()
-            .find_map(|c| c.as_a::<C>())
+        self.components.iter().find_map(|c| c.as_a::<C>())
     }
 
     pub fn get_components<C: Component + 'static>(&self) -> impl Iterator<Item=CRef<C>> {
-        self.components
-            .iter()
-            .filter_map(|c| c.as_a())
+        self.components.iter().filter_map(|c| c.as_a())
     }
 
     pub fn get_child_component<C>(&mut self) -> Option<CRef<C>>

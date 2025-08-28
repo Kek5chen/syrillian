@@ -68,7 +68,11 @@ impl CameraUniform {
         }
     }
 
-    pub fn update_with_transform(&mut self, proj_matrix: &Perspective3<f32>, cam_transform: &Transform) {
+    pub fn update_with_transform(
+        &mut self,
+        proj_matrix: &Perspective3<f32>,
+        cam_transform: &Transform,
+    ) {
         let pos = cam_transform.position();
         let view_mat = cam_transform
             .get_global_transform_matrix_ext(true)

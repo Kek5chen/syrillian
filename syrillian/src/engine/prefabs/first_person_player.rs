@@ -1,5 +1,8 @@
-use crate::components::{Collider3D, Component, FirstPersonCameraController, FirstPersonMovementController, RigidBodyComponent};
 use crate::components::audio::AudioReceiver;
+use crate::components::{
+    Collider3D, Component, FirstPersonCameraController, FirstPersonMovementController,
+    RigidBodyComponent,
+};
 use crate::core::GameObjectId;
 use crate::engine::prefabs::prefab::Prefab;
 use crate::World;

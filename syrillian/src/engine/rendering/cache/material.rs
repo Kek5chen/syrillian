@@ -27,7 +27,7 @@ pub struct MaterialUniform {
     pub roughness: f32,
     pub metallic: f32,
     pub alpha: f32,
-    pub lit: u32, // bool
+    pub lit: u32,          // bool
     pub cast_shadows: u32, // bool
     pub use_diffuse_texture: u32,
     pub use_normal_texture: u32,

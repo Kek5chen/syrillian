@@ -1,4 +1,7 @@
-use crate::components::{Collider3D, Component, LightComponent, LightTypeTrait, RigidBodyComponent, RopeComponent, RotateComponent};
+use crate::components::{
+    Collider3D, Component, LightComponent, LightTypeTrait, RigidBodyComponent, RopeComponent,
+    RotateComponent,
+};
 use crate::core::{GameObject, GameObjectId};
 use crate::rendering::lights::Light;
 use nalgebra::Vector3;
@@ -24,7 +27,10 @@ pub trait GOComponentExt<'a>: Component {
 
 pub struct GOColliderExt<'a>(&'a mut Collider, &'a mut GameObject);
 pub struct GORigidBodyExt<'a>(&'a mut RigidBody, &'a mut GameObject);
-pub struct GOLightExt<'a, L: LightTypeTrait + 'static>(&'a mut LightComponent<L>, &'a mut GameObject);
+pub struct GOLightExt<'a, L: LightTypeTrait + 'static>(
+    &'a mut LightComponent<L>,
+    &'a mut GameObject,
+);
 pub struct GORotateExt<'a>(&'a mut RotateComponent, &'a mut GameObject);
 pub struct GORopeExt<'a>(&'a mut RopeComponent, &'a mut GameObject);
 

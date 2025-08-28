@@ -54,16 +54,11 @@ impl Component for RigidBodyComponent {
     }
 
     fn fixed_update(&mut self, world: &mut World) {
-        let rb = world
-            .physics
-            .rigid_body_set
-            .get_mut(self.body_handle);
+        let rb = world.physics.rigid_body_set.get_mut(self.body_handle);
         if let Some(rb) = rb {
             self.prev_iso = self.curr_iso;
-            self.curr_iso = Isometry3::from_parts(
-                Translation3::from(*rb.translation()),
-                *rb.rotation(),
-            );
+            self.curr_iso =
+                Isometry3::from_parts(Translation3::from(*rb.translation()), *rb.rotation());
             if rb.is_dynamic() {
                 self.parent().transform.set_position_vec(*rb.translation());
                 if rb.is_rotation_locked().iter().all(|l| !l) {

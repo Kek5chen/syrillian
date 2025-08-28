@@ -167,14 +167,12 @@ impl MsdfAtlas {
         let face = Face::parse(&self.face_bytes, 0).expect("parse face");
         let gid = face.glyph_index(ch)?;
         // bbox in font units; if None (space), make a tiny box so we still allocate padding
-        let bbox = face
-            .glyph_bounding_box(gid)
-            .unwrap_or(ttf_parser::Rect {
-                x_min: 0,
-                y_min: 0,
-                x_max: 1,
-                y_max: 1,
-            });
+        let bbox = face.glyph_bounding_box(gid).unwrap_or(ttf_parser::Rect {
+            x_min: 0,
+            y_min: 0,
+            x_max: 1,
+            y_max: 1,
+        });
         let upm = self.metrics.units_per_em as f64;
 
         // plane bounds in em (no msdf margin)

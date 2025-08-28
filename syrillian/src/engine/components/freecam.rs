@@ -33,7 +33,10 @@ impl Component for FreecamController {
 
         let input = &world.input;
 
-        let gamepad_delta = Vector2::new(-input.gamepad.axis(Axis::RightStickX), input.gamepad.axis(Axis::RightStickY)) * 100.;
+        let gamepad_delta = Vector2::new(
+            -input.gamepad.axis(Axis::RightStickX),
+            input.gamepad.axis(Axis::RightStickY),
+        ) * 100.;
         let delta = input.mouse_delta() + gamepad_delta;
         self.yaw += delta.x * self.look_sensitivity / 30.0;
         self.pitch += delta.y * self.look_sensitivity / 30.0;
@@ -99,7 +102,8 @@ impl Component for FreecamController {
         let move_speed = if input.is_key_pressed(KeyCode::ShiftLeft) {
             self.move_speed * 3.0
         } else {
-            let controller_extra_speed = input.gamepad.button(Button::LeftTrigger2) + (1. / 10.0) / 10.0;
+            let controller_extra_speed =
+                input.gamepad.button(Button::LeftTrigger2) + (1. / 10.0) / 10.0;
             self.move_speed * (controller_extra_speed * 5.)
         };
 

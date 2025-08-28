@@ -91,7 +91,6 @@ impl<S: AppState> App<S> {
             }
         };
 
-
         if let Err(e) = game_thread.init() {
             error!("Error when initializing Game Thread: {e}");
             event_loop.exit();
@@ -109,11 +108,21 @@ impl<S: AppState> App<S> {
                 GameAppEvent::SetCursorMode(locked, visible) => {
                     if locked {
                         trace!("RT: Locked cursor");
-                        renderer.window_mut().set_cursor_grab(CursorGrabMode::Locked)
-                            .or_else(|_| renderer.window_mut().set_cursor_grab(CursorGrabMode::Confined)).expect("Couldn't grab cursor");
+                        renderer
+                            .window_mut()
+                            .set_cursor_grab(CursorGrabMode::Locked)
+                            .or_else(|_| {
+                                renderer
+                                    .window_mut()
+                                    .set_cursor_grab(CursorGrabMode::Confined)
+                            })
+                            .expect("Couldn't grab cursor");
                     } else {
                         trace!("RT: Unlocked cursor");
-                        renderer.window_mut().set_cursor_grab(CursorGrabMode::None).expect("Couldn't ungrab cursor");
+                        renderer
+                            .window_mut()
+                            .set_cursor_grab(CursorGrabMode::None)
+                            .expect("Couldn't ungrab cursor");
                     }
                     renderer.window_mut().set_cursor_visible(visible);
                     if visible {
@@ -169,13 +178,13 @@ impl<S: AppState> ApplicationHandler for App<S> {
             WindowEvent::CloseRequested => {
                 // TODO: Quit Game Thread
                 event_loop.exit()
-            },
+            }
             WindowEvent::Resized(size) => {
                 renderer.resize(size);
                 if game_thread.resize(size).is_err() {
                     event_loop.exit();
                 }
-            },
+            }
             _ => {
                 if game_thread.input(event).is_err() {
                     event_loop.exit();
@@ -184,8 +193,19 @@ impl<S: AppState> ApplicationHandler for App<S> {
         }
     }
 
-    fn device_event(&mut self, event_loop: &ActiveEventLoop, device_id: DeviceId, event: DeviceEvent) {
-        if self.game_thread.as_ref().unwrap().device_event(device_id, event).is_err() {
+    fn device_event(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        device_id: DeviceId,
+        event: DeviceEvent,
+    ) {
+        if self
+            .game_thread
+            .as_ref()
+            .unwrap()
+            .device_event(device_id, event)
+            .is_err()
+        {
             event_loop.exit();
         }
     }

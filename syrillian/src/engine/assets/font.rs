@@ -36,7 +36,11 @@ impl H<Font> {
 
 impl StoreDefaults for Font {
     fn populate(store: &mut Store<Self>) {
-        store_add_checked!(store, HFont::DEFAULT_ID, Font::new("Arial".to_string(), None));
+        store_add_checked!(
+            store,
+            HFont::DEFAULT_ID,
+            Font::new("Arial".to_string(), None)
+        );
     }
 }
 
@@ -108,7 +112,9 @@ pub fn id_from_atlas(character: char) -> Vector2<u32> {
 fn find_font_and_bytes(family_name: String) -> (font_kit::font::Font, Arc<Vec<u8>>) {
     let target_family = FamilyName::Title(family_name);
     let families = &[target_family.clone(), FamilyName::SansSerif];
-    let handle = SystemSource::new().select_best_match(families, &Properties::new()).unwrap();
+    let handle = SystemSource::new()
+        .select_best_match(families, &Properties::new())
+        .unwrap();
 
     let font = handle.load().unwrap();
     let bytes = match font.handle() {

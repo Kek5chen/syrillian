@@ -73,8 +73,8 @@ impl InputManager {
                 if let PhysicalKey::Code(code) = event.physical_key {
                     if !event.state.is_pressed()
                         || self
-                            .key_states
-                            .get(&code)
+                        .key_states
+                        .get(&code)
                         .is_none_or(|state| !state.is_pressed())
                     {
                         self.key_just_updated.push(code);
@@ -97,8 +97,8 @@ impl InputManager {
             WindowEvent::MouseInput { button, state, .. } => {
                 if !state.is_pressed()
                     || self
-                        .button_states
-                        .get(button)
+                    .button_states
+                    .get(button)
                     .is_none_or(|state| !state.is_pressed())
                 {
                     self.button_just_updated.push(*button);

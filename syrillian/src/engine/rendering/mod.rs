@@ -30,16 +30,16 @@
 pub mod cache;
 mod context;
 pub mod error;
+pub mod light_manager;
+pub mod lights;
+pub mod message;
 mod offscreen_surface;
 mod post_process_pass;
+pub mod proxies;
+pub(crate) mod render_data;
 pub mod renderer;
 pub mod state;
 pub(crate) mod uniform;
-pub mod lights;
-pub(crate) mod render_data;
-pub mod proxies;
-pub mod message;
-pub mod light_manager;
 
 #[cfg(debug_assertions)]
 pub mod debug_renderer;

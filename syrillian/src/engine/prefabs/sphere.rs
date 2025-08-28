@@ -30,7 +30,9 @@ impl Prefab for SpherePrefab {
 
     fn build(&self, world: &mut World) -> GameObjectId {
         let mut sphere = world.new_object(self.prefab_name());
-        sphere.add_component::<MeshRenderer>().change_mesh(HMesh::SPHERE, Some(vec![self.material]));
+        sphere
+            .add_component::<MeshRenderer>()
+            .change_mesh(HMesh::SPHERE, Some(vec![self.material]));
 
         sphere
     }

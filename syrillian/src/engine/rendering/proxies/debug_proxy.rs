@@ -60,7 +60,13 @@ impl SceneProxy for DebugSceneProxy {
         // TODO: Reuse or Resize buffer
         data.line_data = self.new_line_buffer(&renderer.state.device);
 
-        self.update_mesh_buffer(data, &renderer.cache, &renderer.state.device, &renderer.state.queue, local_to_world);
+        self.update_mesh_buffer(
+            data,
+            &renderer.cache,
+            &renderer.state.device,
+            &renderer.state.queue,
+            local_to_world,
+        );
     }
 
     fn render(

@@ -16,7 +16,6 @@ use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::{Buffer, BufferUsages, RenderPass, ShaderStages};
 use winit::window::Window;
 
-
 #[cfg(debug_assertions)]
 use crate::rendering::DebugRenderer;
 
@@ -47,7 +46,9 @@ pub trait TextDim<const D: u8>: Copy + Clone + Send + 'static {
     fn shader() -> HShader;
     #[cfg(debug_assertions)]
     fn debug_shader() -> HShader;
-    fn dimensions() -> u8 { D }
+    fn dimensions() -> u8 {
+        D
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -94,10 +95,7 @@ impl<const D: u8, DIM: TextDim<D>> TextProxy<D, DIM> {
         }
     }
 
-    pub fn update_game_thread(
-        &mut self,
-        mut ctx: CPUDrawCtx,
-    ) {
+    pub fn update_game_thread(&mut self, mut ctx: CPUDrawCtx) {
         if self.constants_dirty {
             let constants = self.pc;
             let rainbow_mode = self.rainbow_mode;
@@ -139,15 +137,14 @@ impl<const D: u8, DIM: TextDim<D>> TextProxy<D, DIM> {
 
         if self.text_dirty {
             if self.text.len() > self.last_text_len {
-                data.glyph_vbo =
-                    renderer
-                        .state
-                        .device
-                        .create_buffer_init(&BufferInitDescriptor {
-                            label: Some("Text 2D Glyph Data"),
-                            contents: bytemuck::cast_slice(&self.glyph_data[..]),
-                            usage: BufferUsages::VERTEX | BufferUsages::COPY_DST,
-                        });
+                data.glyph_vbo = renderer
+                    .state
+                    .device
+                    .create_buffer_init(&BufferInitDescriptor {
+                        label: Some("Text 2D Glyph Data"),
+                        contents: bytemuck::cast_slice(&self.glyph_data[..]),
+                        usage: BufferUsages::VERTEX | BufferUsages::COPY_DST,
+                    });
             } else {
                 renderer.state.queue.write_buffer(
                     &data.glyph_vbo,
@@ -208,7 +205,12 @@ impl<const D: u8, DIM: TextDim<D>> TextProxy<D, DIM> {
     }
 
     #[cfg(debug_assertions)]
-    fn draw_debug_edges(&self, cache: &AssetCache, pass: &mut RenderPass, pass_type: RenderPassType) {
+    fn draw_debug_edges(
+        &self,
+        cache: &AssetCache,
+        pass: &mut RenderPass,
+        pass_type: RenderPassType,
+    ) {
         let shader = cache.shader(DIM::debug_shader());
         must_pipeline!(pipeline = shader, pass_type => return);
         pass.set_pipeline(pipeline);
@@ -280,7 +282,11 @@ impl<const D: u8, DIM: TextDim<D>> TextProxy<D, DIM> {
 }
 
 impl<const D: u8, DIM: TextDim<D>> SceneProxy for TextProxy<D, DIM> {
-    fn setup_render(&mut self, renderer: &Renderer, _local_to_world: &Matrix4<f32>) -> Box<dyn Any> {
+    fn setup_render(
+        &mut self,
+        renderer: &Renderer,
+        _local_to_world: &Matrix4<f32>,
+    ) -> Box<dyn Any> {
         let hot_font = renderer.cache.font(self.font);
 
         self.glyph_data = generate_glyph_geometry_stream(
@@ -309,13 +315,25 @@ impl<const D: u8, DIM: TextDim<D>> SceneProxy for TextProxy<D, DIM> {
         Box::new(TextRenderData { uniform, glyph_vbo })
     }
 
-    fn update_render(&mut self, renderer: &Renderer, data: &mut dyn Any, _window: &Window, local_to_world: &Matrix4<f32>) {
+    fn update_render(
+        &mut self,
+        renderer: &Renderer,
+        data: &mut dyn Any,
+        _window: &Window,
+        local_to_world: &Matrix4<f32>,
+    ) {
         let data: &mut TextRenderData = proxy_data_mut!(data);
 
         self.update_render_thread(renderer, data, local_to_world);
     }
 
-    fn render<'a>(&self, renderer: &Renderer, data: &dyn Any, ctx: &GPUDrawCtx, _local_to_world: &Matrix4<f32>) {
+    fn render<'a>(
+        &self,
+        renderer: &Renderer,
+        data: &dyn Any,
+        ctx: &GPUDrawCtx,
+        _local_to_world: &Matrix4<f32>,
+    ) {
         let data: &TextRenderData = proxy_data!(data);
         self.render(renderer, data, ctx);
     }

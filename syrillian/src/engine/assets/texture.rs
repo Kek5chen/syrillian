@@ -55,7 +55,10 @@ impl Texture {
     pub(crate) fn desc(&self) -> TextureDescriptor<'_> {
         let layers = self.array_layers.max(1);
         let usage = if layers > 1 {
-            TextureUsages::TEXTURE_BINDING | TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_SRC | TextureUsages::COPY_DST
+            TextureUsages::TEXTURE_BINDING
+                | TextureUsages::RENDER_ATTACHMENT
+                | TextureUsages::COPY_SRC
+                | TextureUsages::COPY_DST
         } else {
             TextureUsages::TEXTURE_BINDING | TextureUsages::RENDER_ATTACHMENT
         };

@@ -124,7 +124,10 @@ impl Component for FirstPersonMovementController {
             target_velocity = target_velocity.normalize();
         }
         target_velocity *= speed_factor;
-        self.velocity = self.velocity.lerp(&target_velocity, self.velocity_interp_t * world.delta_time().as_secs_f32());
+        self.velocity = self.velocity.lerp(
+            &target_velocity,
+            self.velocity_interp_t * world.delta_time().as_secs_f32(),
+        );
 
         if let Some(mut camera) = self.camera_controller.upgrade(world) {
             let delta_time = world.delta_time().as_secs_f32();

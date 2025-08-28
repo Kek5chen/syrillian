@@ -18,7 +18,11 @@ use syrillian::assets::{HMaterial, HSound, Sound, StoreType};
 use syrillian::assets::{Material, Shader};
 use syrillian::components::audio::AudioEmitter;
 use syrillian::components::glyph::TextAlignment;
-use syrillian::components::{CRef, Collider3D, Component, FirstPersonCameraController, PointLightComponent, RigidBodyComponent, RopeComponent, RotateComponent, SpotLightComponent, SpringComponent, Text2D, Text3D};
+use syrillian::components::{
+    CRef, Collider3D, Component, FirstPersonCameraController, PointLightComponent,
+    RigidBodyComponent, RopeComponent, RotateComponent, SpotLightComponent, SpringComponent,
+    Text2D, Text3D,
+};
 use syrillian::core::{GameObjectExt, GameObjectId};
 use syrillian::prefabs::first_person_player::FirstPersonPlayerPrefab;
 use syrillian::prefabs::prefab::Prefab;
@@ -174,7 +178,9 @@ impl AppState for MyMain {
         let mut reverb_track = SpatialTrackBuilder::new();
         reverb_track.add_effect(ReverbBuilder::new());
         self.sound_cube2_emitter = sound_cube2.add_component::<AudioEmitter>();
-        self.sound_cube2_emitter.set_track(world, reverb_track).set_sound(pop_sound);
+        self.sound_cube2_emitter
+            .set_track(world, reverb_track)
+            .set_sound(pop_sound);
 
         {
             let mut text = world.new_object("Text 3D");
@@ -182,12 +188,19 @@ impl AppState for MyMain {
 
             text3d.set_size(1.0);
             text3d.set_alignment(TextAlignment::Center);
-            text.transform.set_position(-10., 2., 0.);
+            text.transform.set_position(-15., 2., 2.);
             text.transform.set_euler_rotation_deg(0., 90., 0.);
             text3d.set_rainbow_mode(true);
+            text3d.set_font("GeistMono Nerd Font Mono");
 
             world.add_child(text);
             self.text3d = text;
+        }
+
+        for mut object in &world.objects {
+            if object.1.name.starts_with("Plane") {
+                object.0.delete();
+            }
         }
 
         // fixme: render order matters because this is transparent and 2d
@@ -393,10 +406,13 @@ impl MyMain {
             let target_position = camera_obj.transform.position()
                 + camera_obj.transform.forward() * scale.magnitude().max(1.) * 2.;
             let position = obj.transform.position();
-            let target_rotation =
-                UnitQuaternion::face_towards(&camera_obj.transform.up(), &camera_obj.transform.forward());
+            let target_rotation = UnitQuaternion::face_towards(
+                &camera_obj.transform.up(),
+                &camera_obj.transform.forward(),
+            );
             let rotation = obj.transform.rotation();
-            let unit_quat = UnitQuaternion::from_quaternion(rotation.lerp(&target_rotation, 1.03 * delta));
+            let unit_quat =
+                UnitQuaternion::from_quaternion(rotation.lerp(&target_rotation, 1.03 * delta));
             obj.transform
                 .set_position_vec(position.lerp(&target_position, 10.03 * delta));
             obj.transform.set_rotation(unit_quat);

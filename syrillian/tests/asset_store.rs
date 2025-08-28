@@ -1,5 +1,7 @@
 use nalgebra::{Vector2, Vector3};
-use syrillian::assets::{AssetStore, Font, HMaterial, HMesh, HShader, HTexture, Material, Mesh, Shader, Sound, Texture};
+use syrillian::assets::{
+    AssetStore, Font, HMaterial, HMesh, HShader, HTexture, Material, Mesh, Shader, Sound, Texture,
+};
 use syrillian::core::Vertex3D;
 
 #[test]
@@ -137,10 +139,19 @@ fn test_predefined_shaders() {
     #[cfg(debug_assertions)]
     {
         store.shaders.try_get(HShader::DEBUG_EDGES).unwrap();
-        store.shaders.try_get(HShader::DEBUG_VERTEX_NORMALS).unwrap();
+        store
+            .shaders
+            .try_get(HShader::DEBUG_VERTEX_NORMALS)
+            .unwrap();
         store.shaders.try_get(HShader::DEBUG_LINES).unwrap();
-        store.shaders.try_get(HShader::DEBUG_TEXT2D_GEOMETRY).unwrap();
-        store.shaders.try_get(HShader::DEBUG_TEXT3D_GEOMETRY).unwrap();
+        store
+            .shaders
+            .try_get(HShader::DEBUG_TEXT2D_GEOMETRY)
+            .unwrap();
+        store
+            .shaders
+            .try_get(HShader::DEBUG_TEXT3D_GEOMETRY)
+            .unwrap();
     }
 }
 

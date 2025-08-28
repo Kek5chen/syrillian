@@ -26,13 +26,16 @@ impl SceneProxy for ImageSceneProxy {
             .with_buffer_data(&BoneData::DUMMY)
             .build(&renderer.state.device);
 
-        Box::new(RuntimeMeshData {
-            mesh_data,
-            uniform,
-        })
+        Box::new(RuntimeMeshData { mesh_data, uniform })
     }
 
-    fn update_render(&mut self, renderer: &Renderer, data: &mut dyn Any, window: &Window, _local_to_world: &Matrix4<f32>) {
+    fn update_render(
+        &mut self,
+        renderer: &Renderer,
+        data: &mut dyn Any,
+        window: &Window,
+        _local_to_world: &Matrix4<f32>,
+    ) {
         let data: &mut RuntimeMeshData = proxy_data_mut!(data);
 
         let window_size = window.inner_size();
@@ -48,7 +51,13 @@ impl SceneProxy for ImageSceneProxy {
         );
     }
 
-    fn render<'a>(&self, renderer: &Renderer, data: &dyn Any, ctx: &GPUDrawCtx, _local_to_world: &Matrix4<f32>) {
+    fn render<'a>(
+        &self,
+        renderer: &Renderer,
+        data: &dyn Any,
+        ctx: &GPUDrawCtx,
+        _local_to_world: &Matrix4<f32>,
+    ) {
         if ctx.pass_type == RenderPassType::Shadow {
             return; // Don't render shadows for 2D
         }

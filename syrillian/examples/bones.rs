@@ -26,7 +26,10 @@ impl AppState for BonesExample {
 
         boney_obj.transform.set_position(0.0, -5.0, -20.0);
 
-        world.find_object_by_name("Cube").unwrap().add_component::<BoneChainWave>();
+        world
+            .find_object_by_name("Cube")
+            .unwrap()
+            .add_component::<BoneChainWave>();
 
         world.add_child(boney_obj);
 
@@ -52,7 +55,9 @@ pub struct BoneChainWave {
     t: f32,
 }
 impl Component for BoneChainWave {
-    fn new(parent: GameObjectId) -> Self { Self { parent, t: 0.0 } }
+    fn new(parent: GameObjectId) -> Self {
+        Self { parent, t: 0.0 }
+    }
     fn update(&mut self, world: &mut World) {
         self.t += world.delta_time().as_secs_f32() * 2.0;
         if let Some(mut skel) = self.parent.get_component::<SkeletalComponent>() {
@@ -60,10 +65,15 @@ impl Component for BoneChainWave {
             for i in 0..n {
                 let phase = self.t + i as f32 * 0.35;
                 let angle = (phase).sin() * 20.0_f32.to_radians();
-                skel.set_local_rotation(i, UnitQuaternion::from_axis_angle(&Vector3::z_axis(), angle));
+                skel.set_local_rotation(
+                    i,
+                    UnitQuaternion::from_axis_angle(&Vector3::z_axis(), angle),
+                );
             }
         }
     }
 
-    fn parent(&self) -> GameObjectId { self.parent }
+    fn parent(&self) -> GameObjectId {
+        self.parent
+    }
 }
