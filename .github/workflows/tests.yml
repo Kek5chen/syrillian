@@ -5,39 +5,58 @@ on:
     branches: [ "master" ]
   pull_request:
     branches: [ "master" ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+
     steps:
       - uses: actions/checkout@v4
 
-      #      - name: Update packages
-      #        run: "sudo apt-get update"
-      #
       - name: Install dependencies
-        run: "sudo apt-get install libudev-dev libfontconfig-dev"
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y pkg-config libudev-dev libfontconfig-dev
 
-      - name: Install Rust and llvm tools
-        run: rustup toolchain install stable --profile minimal --component llvm-tools-preview --no-self-update
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview, clippy, rustfmt
 
-      - uses: taiki-e/install-action@cargo-llvm-cov
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
 
       - name: Cache Rust dependencies and tools
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0
 
-      - name: Test
-        run: 'cargo llvm-cov --workspace --no-default-features --features derive'
+      - name: Check formatting
+        run: cargo fmt --all -- --check
 
-      - name: Gather Test Coverage
-        run: 'cargo llvm-cov report --codecov --output-path cov.json'
+      - name: Clippy
+        run: cargo clippy --workspace --locked --all-targets --no-default-features --features derive
 
-      - name: Upload coverage reports to Codecov
+      - name: Test coverage
+        run: |
+          cargo llvm-cov --workspace --locked --no-default-features --features derive
+          cargo llvm-cov report --codecov --no-default-features --features derive --output-path cov.json
+
+      - name: Upload coverage report to Codecov
+        if: ${{ (github.event_name != 'pull_request') || (github.event.pull_request.head.repo.fork == false) }}
         uses: codecov/codecov-action@v5
         with:
-          token: ${{ secrets.CODECOV_TOKEN }}
           files: ./cov.json
           disable_search: true
+          flags: ${{ matrix.features }}
