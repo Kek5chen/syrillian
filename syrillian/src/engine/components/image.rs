@@ -2,9 +2,9 @@ use crate::components::Component;
 use crate::core::GameObjectId;
 use crate::engine::assets::HMaterial;
 use crate::engine::rendering::CPUDrawCtx;
-use crate::rendering::proxies::image::ImageSceneProxy;
 use crate::rendering::proxies::SceneProxy;
-use crate::{proxy_data_mut, World};
+use crate::rendering::proxies::image::ImageSceneProxy;
+use crate::{World, proxy_data_mut};
 use nalgebra::Matrix4;
 
 #[derive(Debug, Clone, Copy)]

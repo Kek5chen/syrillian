@@ -14,7 +14,8 @@ pub trait ShaderUniformIndex: Debug + Sized + 'static {
 pub trait ShaderUniformSingleIndex: ShaderUniformIndex {
     /// Returns the first and only buffer index.
     fn first() -> Self {
-        Self::by_index(0).expect("Shader uniform indexer was wrongfully declared as a single buffer indexer")
+        Self::by_index(0)
+            .expect("Shader uniform indexer was wrongfully declared as a single buffer indexer")
     }
 }
 

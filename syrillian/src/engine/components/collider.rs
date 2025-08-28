@@ -1,10 +1,10 @@
+use crate::World;
 use crate::components::ColliderError::{
     DesyncedCollider, InvalidMesh, InvalidMeshRef, NoMeshRenderer,
 };
 use crate::components::{Component, MeshRenderer, RigidBodyComponent};
 use crate::core::GameObjectId;
 use crate::engine::assets::Mesh;
-use crate::World;
 use log::{trace, warn};
 use nalgebra::{Point3, Vector3};
 use rapier3d::prelude::*;

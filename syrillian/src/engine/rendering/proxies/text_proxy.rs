@@ -1,9 +1,9 @@
 use crate::assets::{AssetStore, HFont, HShader};
-use crate::components::glyph::{generate_glyph_geometry_stream, GlyphRenderData, TextAlignment};
 use crate::components::BoneData;
+use crate::components::glyph::{GlyphRenderData, TextAlignment, generate_glyph_geometry_stream};
 use crate::core::ModelUniform;
 use crate::rendering::proxies::mesh_proxy::MeshUniformIndex;
-use crate::rendering::proxies::{SceneProxy, PROXY_PRIORITY_2D, PROXY_PRIORITY_TRANSPARENT};
+use crate::rendering::proxies::{PROXY_PRIORITY_2D, PROXY_PRIORITY_TRANSPARENT, SceneProxy};
 use crate::rendering::uniform::ShaderUniform;
 use crate::rendering::{AssetCache, CPUDrawCtx, GPUDrawCtx, RenderPassType, Renderer};
 use crate::utils::hsv_to_rgb;

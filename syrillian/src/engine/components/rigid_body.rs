@@ -1,7 +1,7 @@
+use crate::World;
 use crate::components::Component;
 use crate::core::GameObjectId;
 use crate::utils::math::QuaternionEuler;
-use crate::World;
 use nalgebra::{Isometry3, Translation3};
 use rapier3d::prelude::*;
 use syrillian_utils::debug_panic;

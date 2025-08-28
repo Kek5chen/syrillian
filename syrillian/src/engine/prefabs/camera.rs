@@ -1,7 +1,7 @@
+use crate::World;
 use crate::components::CameraComponent;
 use crate::core::GameObjectId;
 use crate::prefabs::prefab::Prefab;
-use crate::World;
 
 pub struct CameraPrefab;
 

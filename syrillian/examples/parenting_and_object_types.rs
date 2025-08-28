@@ -35,7 +35,7 @@ impl AppState for ParentingAndObjectTypes {
     fn update(&mut self, world: &mut World) -> Result<(), Box<dyn Error>> {
         self.frame_counter.new_frame_from_world(world);
 
-        let title = format!("{} - FPS: [ {} ]", ENGINE_STR, self.frame_counter.fps(), );
+        let title = format!("{} - FPS: [ {} ]", ENGINE_STR, self.frame_counter.fps());
         world.set_window_title(title);
 
         Ok(())

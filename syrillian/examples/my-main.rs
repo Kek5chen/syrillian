@@ -13,6 +13,7 @@ use rapier3d::parry::query::Ray;
 use rapier3d::prelude::QueryFilter;
 use slotmap::Key;
 use std::error::Error;
+use syrillian::SyrillianApp;
 use syrillian::assets::scene_loader::SceneLoader;
 use syrillian::assets::{HMaterial, HSound, Sound, StoreType};
 use syrillian::assets::{Material, Shader};
@@ -24,12 +25,11 @@ use syrillian::components::{
     Text2D, Text3D,
 };
 use syrillian::core::{GameObjectExt, GameObjectId};
+use syrillian::prefabs::CubePrefab;
 use syrillian::prefabs::first_person_player::FirstPersonPlayerPrefab;
 use syrillian::prefabs::prefab::Prefab;
-use syrillian::prefabs::CubePrefab;
 use syrillian::rendering::lights::Light;
 use syrillian::utils::frame_counter::FrameCounter;
-use syrillian::SyrillianApp;
 use syrillian::{AppState, World};
 use winit::event::MouseButton;
 use winit::keyboard::KeyCode;

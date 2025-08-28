@@ -1,9 +1,9 @@
 use nalgebra::Vector3;
 use serial_test::serial;
 use std::any::TypeId;
+use syrillian::World;
 use syrillian::components::{Component, TypedComponentId};
 use syrillian::core::GameObjectId;
-use syrillian::World;
 
 struct MyComponent {
     parent: GameObjectId,

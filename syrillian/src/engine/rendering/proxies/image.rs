@@ -2,7 +2,7 @@ use crate::assets::{AssetStore, HMaterial};
 use crate::components::{BoneData, ImageScalingMode};
 use crate::core::ModelUniform;
 use crate::rendering::proxies::mesh_proxy::{MeshUniformIndex, RuntimeMeshData};
-use crate::rendering::proxies::{SceneProxy, PROXY_PRIORITY_2D};
+use crate::rendering::proxies::{PROXY_PRIORITY_2D, SceneProxy};
 use crate::rendering::uniform::ShaderUniform;
 use crate::rendering::{GPUDrawCtx, RenderPassType, Renderer};
 use crate::{proxy_data, proxy_data_mut};

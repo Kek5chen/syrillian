@@ -1,5 +1,5 @@
 use super::HBGL;
-use crate::engine::assets::{HandleName, Store, StoreDefaults, StoreType, H};
+use crate::engine::assets::{H, HandleName, Store, StoreDefaults, StoreType};
 use crate::store_add_checked;
 use wgpu::{
     BindGroupLayoutEntry, BindingType, BufferBindingType, SamplerBindingType, ShaderStages,

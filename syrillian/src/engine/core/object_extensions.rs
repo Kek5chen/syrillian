@@ -17,7 +17,7 @@ pub trait GameObjectExt {
 }
 
 pub trait GOComponentExt<'a>: Component {
-    type Outer: Deref<Target=GameObject> + DerefMut;
+    type Outer: Deref<Target = GameObject> + DerefMut;
 
     fn build_component(&'a mut self, obj: &'a mut GameObject) -> Self::Outer;
     fn finish(outer: &'a mut Self::Outer) -> &'a mut GameObject {

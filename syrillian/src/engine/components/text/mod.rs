@@ -1,11 +1,11 @@
-use crate::assets::{Font, HFont, DEFAULT_ATLAS_SIZE};
-use crate::components::glyph::TextAlignment;
-use crate::components::Component;
-use crate::core::GameObjectId;
-use crate::rendering::proxies::text_proxy::{TextDim, TextProxy, ThreeD, TwoD};
-use crate::rendering::proxies::SceneProxy;
-use crate::rendering::CPUDrawCtx;
 use crate::World;
+use crate::assets::{DEFAULT_ATLAS_SIZE, Font, HFont};
+use crate::components::Component;
+use crate::components::glyph::TextAlignment;
+use crate::core::GameObjectId;
+use crate::rendering::CPUDrawCtx;
+use crate::rendering::proxies::SceneProxy;
+use crate::rendering::proxies::text_proxy::{TextDim, TextProxy, ThreeD, TwoD};
 use delegate::delegate;
 use nalgebra::{Vector2, Vector3};
 

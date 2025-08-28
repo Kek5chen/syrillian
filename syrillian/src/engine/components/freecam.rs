@@ -1,6 +1,6 @@
+use crate::World;
 use crate::components::Component;
 use crate::core::GameObjectId;
-use crate::World;
 use gilrs::{Axis, Button};
 use nalgebra::{UnitQuaternion, Vector2, Vector3};
 use winit::keyboard::KeyCode;

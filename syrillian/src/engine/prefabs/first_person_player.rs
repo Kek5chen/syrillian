@@ -1,3 +1,4 @@
+use crate::World;
 use crate::components::audio::AudioReceiver;
 use crate::components::{
     Collider3D, Component, FirstPersonCameraController, FirstPersonMovementController,
@@ -5,7 +6,6 @@ use crate::components::{
 };
 use crate::core::GameObjectId;
 use crate::engine::prefabs::prefab::Prefab;
-use crate::World;
 use log::warn;
 use rapier3d::geometry::SharedShape;
 

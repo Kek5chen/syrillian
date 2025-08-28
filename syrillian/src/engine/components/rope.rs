@@ -1,10 +1,10 @@
 use self::RopeComponentError::*;
+use crate::World;
 use crate::components::{Component, RigidBodyComponent};
 use crate::core::GameObjectId;
-use crate::World;
 use log::warn;
 use rapier3d::prelude::*;
-use snafu::{ensure, Snafu};
+use snafu::{Snafu, ensure};
 
 #[derive(Debug, Snafu)]
 #[snafu(context(suffix(Err)))]

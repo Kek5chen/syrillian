@@ -1,5 +1,5 @@
-use crate::core::GameObjectId;
 use crate::World;
+use crate::core::GameObjectId;
 
 pub trait Prefab {
     fn prefab_name(&self) -> &'static str;

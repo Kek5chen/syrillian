@@ -1,8 +1,8 @@
+use crate::World;
 use crate::assets::{HMaterial, HMesh};
 use crate::components::MeshRenderer;
 use crate::core::GameObjectId;
 use crate::prefabs::prefab::Prefab;
-use crate::World;
 
 pub struct CubePrefab {
     pub material: HMaterial,

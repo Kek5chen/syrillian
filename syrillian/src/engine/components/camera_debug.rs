@@ -1,9 +1,9 @@
 use crate::components::Component;
 use crate::core::GameObjectId;
-use crate::rendering::proxies::debug_proxy::{DebugLine, DebugSceneProxy};
-use crate::rendering::proxies::SceneProxy;
 use crate::rendering::CPUDrawCtx;
-use crate::{proxy_data_mut, World};
+use crate::rendering::proxies::SceneProxy;
+use crate::rendering::proxies::debug_proxy::{DebugLine, DebugSceneProxy};
+use crate::{World, proxy_data_mut};
 use itertools::Itertools;
 use nalgebra::{Point3, Vector3, Vector4};
 use rapier3d::geometry::Ray;

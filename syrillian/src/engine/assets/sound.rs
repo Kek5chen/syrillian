@@ -1,4 +1,4 @@
-use crate::assets::{HandleName, StoreType, H};
+use crate::assets::{H, HandleName, StoreType};
 use delegate::delegate;
 use kira::sound::static_sound::{StaticSoundData, StaticSoundSettings};
 use kira::sound::{IntoOptionalRegion, PlaybackPosition};

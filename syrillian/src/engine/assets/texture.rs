@@ -1,5 +1,5 @@
 use crate::engine::assets::generic_store::{HandleName, Store, StoreDefaults, StoreType};
-use crate::engine::assets::{HTexture, StoreTypeFallback, H};
+use crate::engine::assets::{H, HTexture, StoreTypeFallback};
 use crate::store_add_checked;
 use std::error::Error;
 use std::fs;

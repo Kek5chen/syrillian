@@ -5,7 +5,7 @@
 //! resources when the window changes.
 
 use futures::executor::block_on;
-use snafu::{ensure, ResultExt, Snafu};
+use snafu::{ResultExt, Snafu, ensure};
 use std::sync::Arc;
 use wgpu::{
     Adapter, CompositeAlphaMode, CreateSurfaceError, Device, DeviceDescriptor, Extent3d, Features,

@@ -1,7 +1,7 @@
+use crate::World;
 use crate::components::{LightComponent, Sun};
 use crate::core::GameObjectId;
 use crate::prefabs::Prefab;
-use crate::World;
 
 pub struct SunPrefab;
 

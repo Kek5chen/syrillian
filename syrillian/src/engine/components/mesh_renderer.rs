@@ -3,9 +3,9 @@ use crate::components::{Component, SkeletalComponent};
 use crate::core::{Bone, GameObjectId, Vertex3D};
 use crate::engine::assets::HMesh;
 use crate::engine::rendering::CPUDrawCtx;
-use crate::rendering::proxies::mesh_proxy::MeshSceneProxy;
 use crate::rendering::proxies::SceneProxy;
-use crate::{proxy_data_mut, World, MAX_BONES};
+use crate::rendering::proxies::mesh_proxy::MeshSceneProxy;
+use crate::{MAX_BONES, World, proxy_data_mut};
 use nalgebra::{Matrix4, Vector3};
 
 #[derive(Debug, Default, Clone)]

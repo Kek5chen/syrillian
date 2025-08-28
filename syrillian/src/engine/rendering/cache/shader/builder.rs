@@ -1,4 +1,4 @@
-use crate::assets::{Shader, HBGL};
+use crate::assets::{HBGL, Shader};
 use crate::core::Vertex3D;
 use wgpu::{
     BlendState, ColorTargetState, ColorWrites, CompareFunction, DepthBiasState, DepthStencilState,

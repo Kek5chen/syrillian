@@ -1,5 +1,5 @@
-use crate::core::GameObjectId;
 use crate::World;
+use crate::core::GameObjectId;
 use nalgebra::Vector3;
 use rapier3d::parry::query::DefaultQueryDispatcher;
 use rapier3d::prelude::*;

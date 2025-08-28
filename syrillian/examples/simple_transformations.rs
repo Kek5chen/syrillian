@@ -4,11 +4,11 @@
 
 use nalgebra::UnitQuaternion;
 use std::error::Error;
+use syrillian::AppState;
 use syrillian::assets::scene_loader::SceneLoader;
 use syrillian::core::GameObjectId;
 use syrillian::prefabs::prefab::Prefab;
 use syrillian::world::World;
-use syrillian::AppState;
 use syrillian_macros::SyrillianApp;
 
 #[derive(Debug, Default, SyrillianApp)]

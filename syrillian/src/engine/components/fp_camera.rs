@@ -1,8 +1,8 @@
+use crate::World;
 use crate::components::{CameraComponent, Component};
 use crate::core::{GameObjectId, Transform};
 use crate::input::InputManager;
 use crate::utils::FloatMathExt;
-use crate::World;
 use gilrs::Axis;
 use log::warn;
 use nalgebra::{UnitQuaternion, Vector2, Vector3};

@@ -1,8 +1,8 @@
+use crate::AppState;
 use crate::assets::AssetStore;
 use crate::game_thread::GameAppEvent;
 use crate::rendering::Renderer;
 use crate::windowing::game_thread::GameThread;
-use crate::AppState;
 use log::{error, info, trace};
 use std::error::Error;
 use std::sync::mpsc;

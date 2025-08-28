@@ -1,8 +1,8 @@
 use nalgebra::{UnitQuaternion, Vector3};
 
+use crate::World;
 use crate::components::Component;
 use crate::core::GameObjectId;
-use crate::World;
 
 pub struct RotateComponent {
     pub rotate_speed: f32,
