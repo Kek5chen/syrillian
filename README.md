@@ -87,8 +87,8 @@ struct YourGame;
 
 impl AppState for YourGame {
     // will be called once
-    fn init(&mut self, world: &mut World, window: &Window) -> Result<(), Box<dyn Error>> {
-        window.set_title("Example App");
+    fn init(&mut self, world: &mut World) -> Result<(), Box<dyn Error>> {
+        world.set_window_title("Example App");
 
         world.new_camera();
         world.spawn(&CubePrefab::default()).at(0, 0, -10); // Spawn Cube at (0, 0, -10).
@@ -97,10 +97,12 @@ impl AppState for YourGame {
         Ok(())
     }
 
-    // will be called once per frame
-    // fn update(&mut self, world: &mut World, window: &Window) -> Result<(), Box<dyn Error>> { ... }
-    // uncomment this and the above line, if you are making updates to the game state every frame, replace the ... with your code 
-    // there's also "late_update", "draw", and more...
+    // use the update function if you are making updates to the game state every frame
+    fn update(&mut self, world: &mut World) -> Result<(), Box<dyn Error>> {
+        Ok(())
+    }
+
+    // there's also "late_update", and more...
 }
 ```
 
