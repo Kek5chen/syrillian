@@ -328,10 +328,8 @@ impl AppState for MyMain {
             };
             if collider.is_local_debug_render_enabled() {
                 collider.set_local_debug_render_enabled(false);
-            } else {
-                if mode == 0 {
-                    collider.set_local_debug_render_enabled(true);
-                }
+            } else if mode == 0 {
+                collider.set_local_debug_render_enabled(true);
             }
         }
 
