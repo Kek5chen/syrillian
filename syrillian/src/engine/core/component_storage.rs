@@ -1,4 +1,5 @@
 use crate::components::{CRef, Component, ComponentId, TypedComponentId};
+use log::trace;
 use slotmap::HopSlotMap;
 use slotmap::hop::{Values, ValuesMut};
 use std::any::{Any, TypeId};
@@ -18,7 +19,7 @@ where
     fn iter_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item = (K, &'a mut dyn Component)> + 'a>;
     fn get(&self, key: K) -> Option<&dyn Component>;
     fn get_mut(&mut self, key: K) -> Option<&mut dyn Component>;
-    fn remove(&mut self, key: K);
+    fn remove(&mut self, key: K) -> Option<Box<dyn Component>>;
 }
 
 impl<K, V> HopSlotMapUntyped<K> for HopSlotMap<K, V>
@@ -58,8 +59,11 @@ where
         self.get_mut(key).map(|v| v as &mut dyn Component)
     }
 
-    fn remove(&mut self, key: K) {
-        self.remove(key);
+    fn remove(&mut self, key: K) -> Option<Box<dyn Component>> {
+        self.remove(key).map(|v| {
+            let comp: Box<dyn Component> = Box::new(v);
+            comp
+        })
     }
 }
 
@@ -68,7 +72,9 @@ pub struct ComponentStorage {
     inner: HashMap<TypeId, Box<dyn HopSlotMapUntyped<ComponentId>>>,
     len: usize,
     pub(crate) fresh: Vec<TypedComponentId>,
+    pub(crate) removed: Vec<TypedComponentId>,
 }
+
 impl ComponentStorage {
     pub(crate) fn _get_from_id(&self, tid: TypeId) -> Option<&dyn HopSlotMapUntyped<ComponentId>> {
         Some(self.inner.get(&tid)?.as_ref())
@@ -170,12 +176,23 @@ impl ComponentStorage {
         comp
     }
 
-    pub(crate) fn remove(&mut self, comp: TypedComponentId) {
-        let Some(map) = self._get_mut_from_id(comp.0) else {
+    pub(crate) fn remove(&mut self, ctid: TypedComponentId) {
+        trace!("Removed component");
+
+        let Some(map) = self._get_mut_from_id(ctid.0) else {
             // already empty
             return;
         };
-        map.remove(comp.1);
+
+        let comp = map.remove(ctid.1);
+        debug_assert!(
+            comp.is_some(),
+            "Component wasn't found despite still being on owned by a game object."
+        );
+        self.removed.push(ctid);
+
+        debug_assert_ne!(self.len, 0);
+
         self.len = self.len.saturating_sub(1);
     }
 

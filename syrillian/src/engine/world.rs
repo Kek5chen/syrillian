@@ -260,25 +260,8 @@ impl World {
     pub fn post_update(&mut self) {
         let mut frame_proxy_batch = Vec::with_capacity(self.components.len());
         self.execute_component_func(Component::post_update);
-        let mut fresh = Vec::new();
-        swap(&mut fresh, &mut self.components.fresh);
-        for cid in fresh {
-            let Some(comp) = World::instance().components.get_dyn_mut(cid) else {
-                continue;
-            };
-
-            let local_to_world = comp.parent().transform.get_global_transform_matrix();
-            if let Some(proxy) = comp.create_render_proxy(World::instance()) {
-                self.render_tx
-                    .send(RenderMsg::RegisterProxy(cid, proxy, local_to_world))
-                    .unwrap();
-            }
-            if let Some(proxy) = comp.create_light_proxy(World::instance()) {
-                self.render_tx
-                    .send(RenderMsg::RegisterLightProxy(cid, proxy))
-                    .unwrap();
-            }
-        }
+        self.sync_fresh_components();
+        self.sync_removed_components();
 
         for (_, obj) in self.objects.iter() {
             if !obj.transform.is_dirty() {
@@ -325,6 +308,47 @@ impl World {
         self.render_tx
             .send(RenderMsg::CommandBatch(frame_proxy_batch))
             .unwrap();
+    }
+
+    /// Internally sync removed components to the Render Thread for proxy deletion
+    fn sync_removed_components(&mut self) {
+        if self.components.removed.is_empty() {
+            return;
+        }
+
+        let mut removed = Vec::new();
+        swap(&mut removed, &mut self.components.removed);
+
+        for ctid in removed {
+            self.render_tx.send(RenderMsg::RemoveProxy(ctid)).unwrap();
+        }
+    }
+
+    /// Internally sync new components to the Render Thread for proxy creation
+    fn sync_fresh_components(&mut self) {
+        if self.components.fresh.is_empty() {
+            return;
+        }
+
+        let mut fresh = Vec::new();
+        swap(&mut fresh, &mut self.components.fresh);
+        for cid in fresh {
+            let Some(comp) = World::instance().components.get_dyn_mut(cid) else {
+                continue;
+            };
+
+            let local_to_world = comp.parent().transform.get_global_transform_matrix();
+            if let Some(proxy) = comp.create_render_proxy(World::instance()) {
+                self.render_tx
+                    .send(RenderMsg::RegisterProxy(cid, proxy, local_to_world))
+                    .unwrap();
+            }
+            if let Some(proxy) = comp.create_light_proxy(World::instance()) {
+                self.render_tx
+                    .send(RenderMsg::RegisterLightProxy(cid, proxy))
+                    .unwrap();
+            }
+        }
     }
 
     /// Prepares for the next frame by resetting the input state
