@@ -60,7 +60,6 @@ impl LightManager {
             .iter()
             .find_position(|tcid| **tcid == owner)
         else {
-            warn!("Requested Light Proxy not found. Couldn't remove");
             return;
         };
 
