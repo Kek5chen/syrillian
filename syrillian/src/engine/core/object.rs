@@ -12,15 +12,20 @@ use slotmap::{Key, KeyData, new_key_type};
 use crate::components::InternalComponentDeletion;
 use crate::core::Transform;
 
-new_key_type! { pub struct GameObjectId; }
+new_key_type! {
+    /// Uniquely identifies a game object within the world.
+    pub struct GameObjectId;
+}
 
 #[allow(dead_code)]
 impl GameObjectId {
     const INVALID_VALUE: u64 = 0x0000_0001_ffff_ffff;
+    /// Returns `true` if `self` is non-null and is contained within the [`World`] instance.
     pub fn exists(&self) -> bool {
         !self.is_null() && World::instance().objects.contains_key(*self)
     }
 
+    /// Chaining method that applies the function `f` to `self`.
     pub fn tap<F: Fn(&mut GameObject)>(mut self, f: F) -> Self {
         if self.exists() {
             f(self.deref_mut())
@@ -53,16 +58,30 @@ impl DerefMut for GameObjectId {
     }
 }
 
+/// Structure representing an object tree within the world.
+///
+/// A game object has a unique identifier and a non-unique name.
+/// It keeps track of its parent-child relationships, applied
+/// transformation, and attached components. If a game object has
+/// no parent it is a root-level game object within the world.
 pub struct GameObject {
+    /// A unique identifier for this object within the world.
     pub id: GameObjectId,
+    /// The name of the object (not required to be unique).
     pub name: String,
+    /// Game objects that are direct children of this object.
     pub(crate) children: Vec<GameObjectId>,
+    /// Parent game object.
+    /// If `None`, this object is a root-level game object.
     pub(crate) parent: Option<GameObjectId>,
+    /// The transformation applied to the object.
     pub transform: Transform,
+    /// Components attached to this object.
     pub(crate) components: HashSet<TypedComponentId>,
 }
 
 impl GameObject {
+    /// Unlinks this game object from its parent or the world (root level).
     pub fn unlink(&mut self) {
         if let Some(mut parent) = self.parent.take() {
             let pos_opt = parent
@@ -85,6 +104,7 @@ impl GameObject {
         }
     }
 
+    /// Adds another game object as a child of this one, replacing the child's previous parent relationship.
     pub fn add_child(&mut self, mut child: GameObjectId) {
         // unlink from previous parent or world
         child.unlink();
@@ -93,6 +113,8 @@ impl GameObject {
         child.parent = Some(self.id);
     }
 
+    /// Adds a new [`Component`] of type `C` to this game object, initializing the component within the world,
+    /// and returns the component ID.
     pub fn add_component<C>(&mut self) -> CRef<C>
     where
         C: Component + 'static,
@@ -106,6 +128,7 @@ impl GameObject {
         id
     }
 
+    /// Adds a new [`Component`] of type `C` to all children of this game object.
     pub fn add_child_components<C>(&mut self)
     where
         C: Component + 'static,
@@ -115,6 +138,8 @@ impl GameObject {
         }
     }
 
+    /// Adds a new [`Component`] of type `C` to all children of this game object, and applies the provided
+    /// function `f` to each newly added component.
     pub fn add_child_components_then<C>(&mut self, f: impl Fn(&mut C))
     where
         C: Component + 'static,
@@ -125,14 +150,17 @@ impl GameObject {
         }
     }
 
+    /// Retrieves the first found [`Component`] of type `C` attached to this game object.
     pub fn get_component<C: Component + 'static>(&self) -> Option<CRef<C>> {
         self.components.iter().find_map(|c| c.as_a::<C>())
     }
 
+    /// Returns an iterator over all [`Component`] of type `C` attached to this game object.
     pub fn get_components<C: Component + 'static>(&self) -> impl Iterator<Item = CRef<C>> {
         self.components.iter().filter_map(|c| c.as_a())
     }
 
+    /// Retrieves the first found [`Component`] of type `C` attached to a child of this game object.
     pub fn get_child_component<C>(&mut self) -> Option<CRef<C>>
     where
         C: Component + 'static,
@@ -146,20 +174,25 @@ impl GameObject {
         None
     }
 
+    /// Removes a [`Component`] by id from this game object and the world.
     pub fn remove_component(&mut self, comp: impl Into<TypedComponentId>, world: &mut World) {
         let comp = comp.into();
         self.components.remove(&comp);
         world.components.remove(comp);
     }
 
+    /// Returns an immutable reference to this game object's parent ID.
     pub fn parent(&self) -> &Option<GameObjectId> {
         &self.parent
     }
 
+    /// Returns an immutable slice of this game object's child IDs.
     pub fn children(&self) -> &[GameObjectId] {
         &self.children
     }
 
+    /// Destroys this game object tree, cleaning up any component specific data,
+    /// then unlinks and removes the object from the world.
     pub fn delete(&mut self) {
         for mut child in self.children.iter().copied() {
             child.delete();
