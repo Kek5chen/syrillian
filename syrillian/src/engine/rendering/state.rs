@@ -9,9 +9,9 @@ use snafu::{ResultExt, Snafu, ensure};
 use std::sync::Arc;
 use wgpu::{
     Adapter, CompositeAlphaMode, CreateSurfaceError, Device, DeviceDescriptor, Extent3d, Features,
-    Instance, Limits, MemoryHints, PowerPreference, PresentMode, Queue, RequestAdapterOptions,
-    RequestDeviceError, Surface, SurfaceConfiguration, Texture, TextureDescriptor,
-    TextureDimension, TextureFormat, TextureUsages,
+    Instance, InstanceDescriptor, Limits, MemoryHints, PowerPreference, PresentMode, Queue,
+    RequestAdapterOptions, RequestDeviceError, Surface, SurfaceConfiguration, Texture,
+    TextureDescriptor, TextureDimension, TextureFormat, TextureUsages,
 };
 use winit::dpi::PhysicalSize;
 use winit::window::Window;
@@ -46,7 +46,7 @@ pub struct State {
 
 impl State {
     fn setup_instance() -> Instance {
-        Instance::default()
+        Instance::new(&InstanceDescriptor::from_env_or_default())
     }
 
     fn setup_surface(instance: &Instance, window: &Window) -> Result<Surface<'static>> {
