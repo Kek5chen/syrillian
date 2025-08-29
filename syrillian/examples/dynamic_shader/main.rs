@@ -1,4 +1,7 @@
 //! Example to showcase dynamic shader switching / cache refresh.
+//!
+//! Hotkeys:
+//! - Use L to toggle / switch to the next debug rendering mode
 
 use log::{debug, error, info};
 use notify::{Config, Event, RecommendedWatcher, RecursiveMode, Watcher};
@@ -15,6 +18,9 @@ use syrillian::prefabs::CubePrefab;
 use syrillian::utils::validate_wgsl_source;
 use syrillian::{AppState, World};
 use syrillian_macros::SyrillianApp;
+
+#[cfg(debug_assertions)]
+use syrillian::rendering::DebugRenderer;
 
 const SHADER_PATH: &str = "examples/dynamic_shader/shader.wgsl";
 const DEFAULT_VERT: &str =
@@ -159,12 +165,24 @@ impl AppState for DynamicShaderExample {
 
         world.new_camera();
 
+        #[cfg(debug_assertions)]
+        DebugRenderer::off();
+
         Ok(())
     }
     fn update(&mut self, world: &mut World) -> Result<(), Box<dyn Error>> {
         if self.last_refresh_time.elapsed().as_secs() > 0 {
             self.poll(world)?;
             self.last_refresh_time = Instant::now();
+        }
+
+        #[cfg(debug_assertions)]
+        {
+            use winit::keyboard::KeyCode;
+
+            if world.input.is_key_down(KeyCode::KeyL) {
+                DebugRenderer::next_mode();
+            }
         }
 
         Ok(())
