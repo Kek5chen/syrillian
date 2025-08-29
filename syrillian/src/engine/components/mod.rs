@@ -283,6 +283,41 @@ impl TypedComponentId {
     }
 }
 
+/// A component attached to [`GameObject`](crate::core::GameObject).
+///
+/// Typical components include `Collider3D`, `MeshRenderer`, `AudioEmitter`, etc.
+/// Can also be used to create custom game logic.
+///
+/// # Examples
+///
+/// ```rust
+/// use nalgebra::Vector3;
+/// use syrillian::World;
+/// use syrillian::components::Component;
+/// use syrillian::core::GameObjectId;
+///
+/// struct MyComponent {
+///     parent: GameObjectId,
+/// }
+///
+/// impl Component for MyComponent {
+///     fn new(parent: GameObjectId) -> Self
+///     where
+///         Self: Sized,
+///     {
+///         Self { parent }
+///     }
+///
+///     fn init(&mut self, _world: &mut World) {
+///         // Sets trasnlate for parent GameObject on its init
+///         self.parent.transform.translate(Vector3::new(1.0, 0.0, 0.0));
+///     }
+///
+///     fn parent(&self) -> GameObjectId {
+///         self.parent
+///     }
+/// }
+///```
 #[allow(unused)]
 pub trait Component: Any {
     fn new(parent: GameObjectId) -> Self
