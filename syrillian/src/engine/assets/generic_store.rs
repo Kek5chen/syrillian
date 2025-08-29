@@ -110,11 +110,7 @@ impl<T: StoreType> Store<T> {
         })
     }
 
-    pub fn try_get_mut(&mut self, h: H<T>) -> Option<RefMut<'_, T>> {
-        self._try_get_mut(h)
-    }
-
-    fn _try_get_mut(&self, h: H<T>) -> Option<RefMut<'_, T>> {
+    pub fn try_get_mut(&self, h: H<T>) -> Option<RefMut<'_, T>> {
         let reference = self.data.get_mut(&h.into()).or_else(|| {
             warn!(
                 "[{} Store] Invalid Reference: h={} not found",
@@ -181,7 +177,7 @@ impl<T: StoreTypeFallback> Store<T> {
 
     pub fn get_mut(&self, h: H<T>) -> RefMut<'_, T> {
         if !self.data.contains_key(&h.into()) {
-            let fallback = self._try_get_mut(T::fallback());
+            let fallback = self.try_get_mut(T::fallback());
             match fallback {
                 Some(elem) => elem,
                 None => unreachable!("Fallback items should always be populated"),
