@@ -5,10 +5,10 @@
 
 # Syrillian Engine
 
-Syrillian Engine is a Rust-based, real-time 3D game engine, focusing on flexibility, modularity, and a straightforward,
+Syrillian Engine is a Rust-based, real-time, mainly 3D game engine, focusing on flexibility, modularity, and a straightforward,
 entity-component-driven workflow.
 
-It's designed to be easily simple and extensible. We aim to provide a robust foundation for building modern 3D
+It's designed to be easy, simple and extensible. We aim to provide a robust foundation for building modern 3D
 applications, rendering pipelines, and visually pleasing gameplay.
 
 ## We're doing it different!
