@@ -69,19 +69,23 @@ impl DynamicShaderExample {
 
         if self.shader_id == HShader::FALLBACK {
             let shader = Shader::new_default("Dynamic Shader".to_string(), source_2).store(world);
-            let material = Material::builder()
-                .name("Dynamic Shader Material".to_string())
-                .shader(shader)
-                .store(world);
-
             self.shader_id = shader;
-            self.material_id = material;
         } else {
             world
                 .assets
                 .shaders
                 .get_mut(self.shader_id)
                 .set_code(source_2);
+        }
+
+        match world.assets.materials.try_get_mut(self.material_id) {
+            None => {
+                self.material_id = Material::builder()
+                    .name("Dynamic Shader Material".to_string())
+                    .shader(self.shader_id)
+                    .store(world);
+            }
+            Some(mut mat) => mat.shader = self.shader_id,
         }
     }
 
