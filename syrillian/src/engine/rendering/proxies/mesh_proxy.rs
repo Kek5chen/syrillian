@@ -89,7 +89,10 @@ impl SceneProxy for MeshSceneProxy {
             return;
         };
 
-        let mut pass = ctx.pass.write().unwrap();
+        let mut pass = ctx.pass.write().unwrap_or_else(|_| {
+            log::error!("Failed to obtain a writable pass in render in mesh_proxy.rs");
+            std::process::exit(1);
+        });
 
         pass.set_bind_group(1, data.uniform.bind_group(), &[]);
 

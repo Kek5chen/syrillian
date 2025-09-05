@@ -1,3 +1,5 @@
+#![deny(clippy::unwrap_used)]
+#![deny(clippy::expect_used)]
 pub mod engine;
 pub mod utils;
 pub mod windowing;

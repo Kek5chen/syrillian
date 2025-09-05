@@ -94,7 +94,10 @@ impl ComponentStorage {
             ._get_from_id(tid)?
             .as_dyn()
             .downcast_ref::<HopSlotMap<ComponentId, C>>()
-            .expect("Type ID was checked");
+            .unwrap_or_else(|| {
+                log::error!("The checking of a type ID resulted in an error with _get");
+                std::process::exit(1);
+            });
 
         Some(typed)
     }
@@ -106,7 +109,10 @@ impl ComponentStorage {
             ._get_mut_from_id(tid)?
             .as_dyn_mut()
             .downcast_mut::<HopSlotMap<ComponentId, C>>()
-            .expect("Type ID was checked");
+            .unwrap_or_else(|| {
+                log::error!("The checking of a type ID resulted in an error with _get_mut");
+                std::process::exit(1);
+            });
 
         Some(typed)
     }
@@ -166,7 +172,10 @@ impl ComponentStorage {
             .or_insert_with(|| Box::new(HopSlotMap::<ComponentId, C>::with_key()))
             .as_dyn_mut()
             .downcast_mut()
-            .unwrap()
+            .unwrap_or_else(|| {
+                log::error!("An error was encountered while trying to get a mutable ref to an HopSlotMap for the components IDs");
+                std::process::exit(1);
+            })
     }
 
     pub(crate) fn add<C: Component>(&mut self, component: C) -> CRef<C> {

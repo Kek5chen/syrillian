@@ -112,15 +112,31 @@ pub fn id_from_atlas(character: char) -> Vector2<u32> {
 fn find_font_and_bytes(family_name: String) -> (font_kit::font::Font, Arc<Vec<u8>>) {
     let target_family = FamilyName::Title(family_name);
     let families = &[target_family.clone(), FamilyName::SansSerif];
-    let handle = SystemSource::new()
-        .select_best_match(families, &Properties::new())
-        .unwrap();
+    let handle = match SystemSource::new().select_best_match(families, &Properties::new()) {
+        Ok(handle) => handle,
+        Err(e) => {
+            log::error!(
+                "Failed while select_best_match in find_font_and_bytes : {}",
+                e
+            );
+            std::process::exit(1);
+        }
+    };
 
-    let font = handle.load().unwrap();
+    let font = match handle.load() {
+        Ok(font) => font,
+        Err(e) => {
+            log::error!("Failed while loading the font , {}", e);
+            std::process::exit(1);
+        }
+    };
     let bytes = match font.handle() {
         Some(font_kit::handle::Handle::Memory { bytes, .. }) => bytes.clone(),
         Some(font_kit::handle::Handle::Path { path, .. }) => {
-            Arc::new(std::fs::read(path).expect("read font file"))
+            Arc::new(std::fs::read(path).unwrap_or_else(|_| {
+                log::error!("Failed to read the font file");
+                std::process::exit(1);
+            }))
         }
         None => panic!("font-kit did not expose a handle; cannot build MSDF"),
     };

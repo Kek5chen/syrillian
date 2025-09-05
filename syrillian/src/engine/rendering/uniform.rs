@@ -172,7 +172,9 @@ impl<I: ShaderUniformMultiIndex> ShaderUniform<I> {
     pub fn buffer(&self, idx: I) -> &Buffer {
         self.buffers.buffers[idx.index()]
             .as_ref()
-            .expect("Requested a binding resource that isn't a buffer")
+            .unwrap_or_else(|| { log::error!("Failed to get a ref to a MultiIndex buffer to impl ShaderUniform it's very likely that: a binding resource was requested but it's not a buffer");
+                std::process::exit(1);
+            })
     }
 }
 
@@ -181,7 +183,10 @@ impl<I: ShaderUniformSingleIndex> ShaderUniform<I> {
     pub fn buffer_one(&self) -> &Buffer {
         self.buffers.buffers[0]
             .as_ref()
-            .expect("Requested a binding resource that isn't a buffer")
+            .unwrap_or_else(|| { 
+                log::error!("Failed to get a ref to a SingleIndex buffer to impl ShaderUniform it's very likely that: a binding resource was requested but it's not a buffer");
+                std::process::exit(1);
+            })
     }
 }
 
@@ -235,7 +240,9 @@ impl<I: ShaderUniformIndex> ResourceDesc<'_, I> {
             | ResourceDesc::StorageBufferData { .. }
             | ResourceDesc::EmptyBuffer { .. } => buffers.buffers[self.index()]
                 .as_ref()
-                .expect("Resource should be registered as a buffer")
+                .unwrap_or_else(||{
+                    log::error!("Failed to get a ResourceDesc::EmptyBufferResource buffer as a ref in entry uniform.rs : should be registered as a buffer");
+                    std::process::exit(1);})
                 .as_entire_binding(),
             ResourceDesc::TextureView { view, .. } => BindingResource::TextureView(view),
             ResourceDesc::Sampler { sampler, .. } => BindingResource::Sampler(sampler),

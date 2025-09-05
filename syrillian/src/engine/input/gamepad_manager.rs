@@ -14,11 +14,17 @@ pub struct GamePadManager {
 impl Default for GamePadManager {
     fn default() -> Self {
         //let poller = Gilrs::new().expect("Init gamepad input failed");
-        let poller = GilrsBuilder::new()
+        let poller = match GilrsBuilder::new()
             .add_env_mappings(true)
             .add_included_mappings(false)
             .build()
-            .unwrap();
+        {
+            Ok(g) => g,
+            Err(err) => {
+                log::error!("An error was in creating a Gilrs : {}", err);
+                std::process::exit(1);
+            }
+        };
 
         Self {
             poller,

@@ -30,8 +30,10 @@ impl Prefab for FirstPersonPlayerPrefab {
 
         char_controller
             .add_component::<Collider3D>()
-            .get_collider_mut()
-            .unwrap()
+            .get_collider_mut().unwrap_or_else(||{
+                log::error!("Failed to get_collider_mut in the char_controller");
+                std::process::exit(1);
+            })
             .set_shape(SharedShape::capsule_y(1.0, 0.25));
 
         if let Some(rigid_body) = char_controller

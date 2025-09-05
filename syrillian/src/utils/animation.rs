@@ -87,7 +87,10 @@ fn find_key(times: &[f32], t: f32) -> usize {
     if t <= times[0] {
         return 0;
     }
-    if t >= *times.last().unwrap() {
+    if t >= *times.last().unwrap_or_else(|| {
+        log::error!("Failed to get times.last() in find_key in animation.rs");
+        std::process::exit(1);
+    }) {
         return times.len() - 1;
     }
     times

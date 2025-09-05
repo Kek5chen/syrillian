@@ -173,7 +173,10 @@ impl DebugSceneProxy {
             return;
         };
 
-        let mut pass = ctx.pass.write().unwrap();
+        let mut pass = ctx.pass.write().unwrap_or_else(|_| {
+            log::error!("Failed to obtain a writable pass in render_lines in the debug_proxy");
+            std::process::exit(1);
+        });
 
         pass.set_vertex_buffer(0, line_buffer.slice(..));
 
@@ -204,7 +207,10 @@ impl DebugSceneProxy {
             let shader = cache.shader(HShader::DEBUG_EDGES);
             must_pipeline!(pipeline = shader, ctx.pass_type => return);
 
-            let mut pass = ctx.pass.write().unwrap();
+            let mut pass = ctx.pass.write().unwrap_or_else(|_| {
+                log::error!("Failed to obtain a writable pass in render_meshes in the debug_proxy");
+                std::process::exit(1);
+            });
 
             pass.set_pipeline(pipeline);
             pass.set_push_constants(ShaderStages::FRAGMENT, 0, bytemuck::bytes_of(&self.color));

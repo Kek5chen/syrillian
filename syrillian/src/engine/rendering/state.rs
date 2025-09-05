@@ -66,9 +66,10 @@ impl State {
                 ..RequestAdapterOptions::default()
             })
             .await
-            .expect(
-                "Couldn't find anything that supports rendering stuff. How are you reading this..?",
-            )
+            .unwrap_or_else(|_| {
+                log::error!("Couldn't an adapter that supports rendering. How are you reading this..? is indeed a vaild question.");
+                std::process::exit(1);
+            })
     }
 
     // wgpu tracing is currently unavailable
