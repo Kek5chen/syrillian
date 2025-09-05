@@ -256,7 +256,10 @@ impl Renderer {
         let shadow_layers = self
             .lights
             .shadow_array(self.cache.textures.store())
-            .unwrap()
+            .unwrap_or_else(|| {
+                log::error!("Failed to obtain a shadow_array from the LightManager");
+                std::process::exit(1);
+            })
             .array_layers;
         let light_count = self.lights.update_shadow_map_ids(shadow_layers);
 

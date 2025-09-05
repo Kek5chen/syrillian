@@ -51,8 +51,11 @@ impl AssetCache {
 
     pub fn mesh_unit_square(&self) -> Arc<RuntimeMesh> {
         self.meshes
-            .try_get(HMesh::UNIT_SQUARE, self)
-            .expect("Unit square is a default mesh")
+            .try_get(HMesh::UNIT_SQUARE, self).unwrap_or_else(||{
+                log::error!(
+                "Error while trying to get HMesh::UNIT_SQUARE from meshes : Unit square is a default mesh");
+                std::process::exit(1);
+            })
     }
 
     pub fn shader(&self, handle: HShader) -> Arc<RuntimeShader> {
@@ -95,45 +98,68 @@ impl AssetCache {
     }
 
     pub fn bgl_empty(&self) -> Arc<BindGroupLayout> {
-        self.bgls
-            .try_get(HBGL::EMPTY, self)
-            .expect("Light is a default layout")
+        self.bgls.try_get(HBGL::EMPTY, self).unwrap_or_else(|| {
+            log::error!(
+                "Failed while trying to get HBGL::EMPTY from bgls : Light is a default layout"
+            );
+            std::process::exit(1);
+        })
     }
 
     pub fn bgl_model(&self) -> Arc<BindGroupLayout> {
-        self.bgls
-            .try_get(HBGL::MODEL, self)
-            .expect("Model is a default layout")
+        self.bgls.try_get(HBGL::MODEL, self).unwrap_or_else(|| {
+            log::error!(
+                "Failed while trying to get HBGL::MODEL from bgls : Model is a default layout"
+            );
+            std::process::exit(1);
+        })
     }
 
     pub fn bgl_render(&self) -> Arc<BindGroupLayout> {
-        self.bgls
-            .try_get(HBGL::RENDER, self)
-            .expect("Render is a default layout")
+        self.bgls.try_get(HBGL::RENDER, self).unwrap_or_else(|| {
+            log::error!(
+                "Failed while trying to get HBGL::RENDER from bgls : Render is a default layout"
+            );
+            std::process::exit(1);
+        })
     }
 
     pub fn bgl_light(&self) -> Arc<BindGroupLayout> {
-        self.bgls
-            .try_get(HBGL::LIGHT, self)
-            .expect("Light is a default layout")
+        self.bgls.try_get(HBGL::LIGHT, self).unwrap_or_else(|| {
+            log::error!(
+                "Failed while trying to get HBGL::EMPTY from bgls : Light is a default layout"
+            );
+            std::process::exit(1);
+        })
     }
 
     pub fn bgl_shadow(&self) -> Arc<BindGroupLayout> {
-        self.bgls
-            .try_get(HBGL::SHADOW, self)
-            .expect("Shadow is a default layout")
+        self.bgls.try_get(HBGL::SHADOW, self).unwrap_or_else(|| {
+            log::error!(
+                "Failed while trying to get HBGL::SHADOW from bgls : Shadow is a default layout"
+            );
+            std::process::exit(1);
+        })
     }
 
     pub fn bgl_material(&self) -> Arc<BindGroupLayout> {
-        self.bgls
-            .try_get(HBGL::MATERIAL, self)
-            .expect("Material is a default layout")
+        self.bgls.try_get(HBGL::MATERIAL, self).unwrap_or_else(|| {
+            log::error!(
+                "Failed while trying to get HBGL::MATERIAL from bgls : Material is a default layout"
+            );
+            std::process::exit(1);
+        })
     }
 
     pub fn bgl_post_process(&self) -> Arc<BindGroupLayout> {
         self.bgls
             .try_get(HBGL::POST_PROCESS, self)
-            .expect("Post Process is a default layout")
+            .unwrap_or_else(|| {
+                log::error!(
+                    "Failed while trying to get HBGL::POST_PROCESS from bgls : Post Process is a default layout"
+                );
+                std::process::exit(1);
+            })
     }
 
     pub fn font(&self, handle: HFont) -> Arc<FontAtlas> {
@@ -149,12 +175,18 @@ impl AssetCache {
         refreshed_count += self.textures.refresh_dirty();
         refreshed_count += self.bgls.refresh_dirty();
 
-        *self.last_refresh.lock().unwrap() = Instant::now();
+        *self.last_refresh.lock().unwrap_or_else(|_|{
+            log::error!("Failed to get a Mutex to last_refresh to set it to Instant now");
+            std::process::exit(1);
+        }) = Instant::now();
 
         refreshed_count
     }
 
     pub fn last_refresh(&self) -> Instant {
-        *self.last_refresh.lock().unwrap()
+        *self.last_refresh.lock().unwrap_or_else(|_|{
+            log::error!("Failed to get a Mutex to last_refresh to return it as an Instant");
+            std::process::exit(1);
+        }) 
     }
 }

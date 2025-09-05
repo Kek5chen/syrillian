@@ -68,7 +68,13 @@ impl MsdfAtlas {
         range: f64,
         world: &World,
     ) -> Self {
-        let face = Face::parse(&face_bytes, 0).expect("parse face");
+        let face = match Face::parse(&face_bytes, 0) {
+            Ok(face) => face,
+            Err(e) => {
+                log::error!("Face parsing error {}", e);
+                std::process::exit(1);
+            }
+        };
         let units_per_em = face.units_per_em() as f32;
 
         let ascent_em = face.ascender() as f32 / units_per_em;
@@ -121,7 +127,10 @@ impl MsdfAtlas {
     }
 
     pub fn entry(&self, ch: char) -> Option<GlyphAtlasEntry> {
-        self.entries.read().unwrap().get(&ch).copied()
+        self.entries.read()
+            .unwrap_or_else(|_|{log::error!("Error in the entry funcation in msdf_atlas");
+                std::process::exit(1);})
+            .get(&ch).copied()
     }
 
     pub fn texture(&self) -> HTexture {
@@ -140,7 +149,9 @@ impl MsdfAtlas {
     ) {
         let mut missing: Vec<char> = Vec::new();
         {
-            let map = self.entries.read().unwrap();
+            let map = self.entries.read().unwrap_or_else(|_|
+                {log::error!("Error in the ensure_glyphs funcation in msdf_atlas");
+                std::process::exit(1);});
             for ch in chars {
                 if !map.contains_key(&ch) {
                     missing.push(ch);
@@ -153,7 +164,9 @@ impl MsdfAtlas {
 
         for ch in missing {
             if let Some(entry) = self.rasterize_and_pack(cache, ch, queue) {
-                self.entries.write().unwrap().insert(ch, entry);
+                self.entries.write().unwrap_or_else(|_|
+                {log::error!("Error in the writing to entries in msdf_atlas");
+                std::process::exit(1);}).insert(ch, entry);
             }
         }
     }
@@ -164,7 +177,10 @@ impl MsdfAtlas {
         ch: char,
         queue: &Queue,
     ) -> Option<GlyphAtlasEntry> {
-        let face = Face::parse(&self.face_bytes, 0).expect("parse face");
+        let face = match Face::parse(&self.face_bytes, 0) 
+        { Ok(face) => face,
+          Err(e) => { log::error!("Face parsing error in the rasterize_and_pack funcation {}", e);
+                std::process::exit(1); } };
         let gid = face.glyph_index(ch)?;
         // bbox in font units; if None (space), make a tiny box so we still allocate padding
         let bbox = face.glyph_bounding_box(gid).unwrap_or(ttf_parser::Rect {
@@ -234,7 +250,9 @@ impl MsdfAtlas {
         debug_assert!(dest_y + height_px <= self.height);
 
         // upload sub-rect to gpu
-        let gpu_texture = cache.textures.try_get(self.texture, cache).unwrap();
+        let gpu_texture = cache.textures.try_get(self.texture, cache).unwrap_or_else(||
+            {log::error!("Error getting the cache textures in msdf_atlas"); 
+                std::process::exit(1)});
         let copy = TexelCopyTextureInfo {
             texture: &gpu_texture.texture,
             mip_level: 0,

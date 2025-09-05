@@ -84,7 +84,10 @@ impl<T: StoreType> Display for HandleName<T> {
 
 impl<T: StoreType> Store<T> {
     fn next_id(&self) -> H<T> {
-        let mut id_lock = self.next_id.write().unwrap();
+        let mut id_lock = self.next_id.write().unwrap_or_else(|_| {
+            log::error!("Failed while trying to get id_lock in the impl of Store");
+            std::process::exit(1);
+        });
         let id = H::new(*id_lock);
         *id_lock += 1;
         id
@@ -128,7 +131,10 @@ impl<T: StoreType> Store<T> {
     }
 
     fn set_dirty(&self, h: AssetKey) {
-        let mut dirty_store = self.dirty.write().expect("Deadlock in Asset Store");
+        let mut dirty_store = self.dirty.write().unwrap_or_else(|_| {
+            log::error!("Failed while getting dirty_store in set_dirty: Deadlock in Asset Store");
+            std::process::exit(1);
+        });
         if !dirty_store.contains(&h) {
             trace!("Set {} {} dirty", T::name(), T::ident(h.into()));
             dirty_store.push(h);
@@ -136,7 +142,10 @@ impl<T: StoreType> Store<T> {
     }
 
     pub(crate) fn pop_dirty(&self) -> Vec<AssetKey> {
-        let mut dirty_store = self.dirty.write().expect("Deadlock in Asset Store");
+        let mut dirty_store = self.dirty.write().unwrap_or_else(|_| {
+            log::error!("Failed while getting dirty_store in pop_dirty: Deadlock in Asset Store");
+            std::process::exit(1);
+        });
         let mut swap_store = Vec::new();
         mem::swap::<Vec<AssetKey>>(dirty_store.as_mut(), swap_store.as_mut());
 

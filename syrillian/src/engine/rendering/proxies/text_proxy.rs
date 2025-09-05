@@ -183,7 +183,10 @@ impl<const D: u8, DIM: TextDim<D>> TextProxy<D, DIM> {
         let shader = cache.shader(DIM::shader());
         let material = cache.material(font.atlas());
 
-        let mut pass = pass.write().unwrap();
+        let mut pass = pass.write().unwrap_or_else(|_| {
+            log::error!("Failed to obtain a writable pass in render in text_proxy.rs");
+            std::process::exit(1);
+        });
         must_pipeline!(pipeline = shader, ctx.pass_type => return);
 
         pass.set_pipeline(pipeline);

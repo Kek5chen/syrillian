@@ -159,14 +159,23 @@ impl StoreDefaults for Mesh {
         let unit_square = Mesh::builder(UNIT_SQUARE_VERT.to_vec()).build();
         store_add_checked!(store, HMesh::UNIT_SQUARE_ID, unit_square);
 
-        let unit_cube = Mesh::load_from_obj_slice(CUBE_OBJ).expect("Cube Mesh load failed");
+        let unit_cube = Mesh::load_from_obj_slice(CUBE_OBJ).unwrap_or_else(|_| {
+            log::error!("Cube Mesh load failed");
+            std::process::exit(1);
+        });
         store_add_checked!(store, HMesh::UNIT_CUBE_ID, unit_cube);
 
-        let debug_arrow =
-            Mesh::load_from_obj_slice(DEBUG_ARROW).expect("Debug Arrow Mesh load failed");
+        let debug_arrow = Mesh::load_from_obj_slice(DEBUG_ARROW).unwrap_or_else(|_| {
+            log::error!("Arrow Mesh load failed");
+            std::process::exit(1);
+        });
         store_add_checked!(store, HMesh::DEBUG_ARROW_ID, debug_arrow);
 
-        let sphere = Mesh::load_from_obj_slice(SPHERE).expect("Sphere Mesh load failed");
+        let sphere = Mesh::load_from_obj_slice(SPHERE).unwrap_or_else(|_| {
+            log::error!("Sphere Mesh load failed");
+            std::process::exit(1);
+        });
+
         store_add_checked!(store, HMesh::SPHERE_ID, sphere);
     }
 }

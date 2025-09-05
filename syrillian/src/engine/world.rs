@@ -305,9 +305,13 @@ impl World {
             }
         }
 
-        self.render_tx
+        if let Err(e) = self
+            .render_tx
             .send(RenderMsg::CommandBatch(frame_proxy_batch))
-            .unwrap();
+        {
+            log::error!("Failed to send RenderMsg::CommandBatch: {}", e);
+            std::process::exit(1);
+        }
     }
 
     /// Internally sync removed components to the Render Thread for proxy deletion
@@ -320,7 +324,10 @@ impl World {
         swap(&mut removed, &mut self.components.removed);
 
         for ctid in removed {
-            self.render_tx.send(RenderMsg::RemoveProxy(ctid)).unwrap();
+            if let Err(e) = self.render_tx.send(RenderMsg::RemoveProxy(ctid)) {
+                log::error!("Failed to send RenderMsg::CommandBatch: {}", e);
+                std::process::exit(1);
+            };
         }
     }
 
@@ -341,12 +348,22 @@ impl World {
             if let Some(proxy) = comp.create_render_proxy(World::instance()) {
                 self.render_tx
                     .send(RenderMsg::RegisterProxy(cid, proxy, local_to_world))
-                    .unwrap();
+                    .unwrap_or_else(|e|
+                {
+                log::error!("Failed to send RenderMsg::RegisterProxy(cid, proxy, local_to_world)): {}", e);
+                std::process::exit(1);
+                })
             }
             if let Some(proxy) = comp.create_light_proxy(World::instance()) {
                 self.render_tx
                     .send(RenderMsg::RegisterLightProxy(cid, proxy))
-                    .unwrap();
+                    .unwrap_or_else(|e| {
+                        log::error!(
+                            "Failed to send RenderMsg::RegisterLightProxy(cid, proxy) : {}",
+                            e
+                        );
+                        std::process::exit(1);
+                    })
             }
         }
     }
@@ -453,9 +470,16 @@ impl World {
     }
 
     pub fn set_window_title(&mut self, title: String) {
-        self.game_event_tx
+        if let Err(e) = self
+            .game_event_tx
             .send(GameAppEvent::UpdateWindowTitle(title))
-            .unwrap();
+        {
+            log::error!(
+                "Failed to send GameAppEvent::UpdateWindowTitle(title)): {}",
+                e
+            );
+            std::process::exit(1);
+        }
     }
 
     /// Requests a shutdown of the world

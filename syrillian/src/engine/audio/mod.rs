@@ -10,15 +10,24 @@ pub struct AudioScene {
 
 impl Default for AudioScene {
     fn default() -> Self {
-        let mut manager = AudioManager::new(AudioManagerSettings::default())
-            .expect("Failed to initialize audio manager");
+        let mut manager = match AudioManager::new(AudioManagerSettings::default()) {
+            Ok(manager) => manager,
+            Err(e) => {
+                log::error!("Failed to initialize audio manager : {}", e);
+                std::process::exit(1);
+            }
+        };
 
         let position = Vector3::zeros();
         let orientation = Quaternion::identity();
 
-        let listener = manager
-            .add_listener(position, orientation)
-            .expect("Failed to add audio listener");
+        let listener = match manager.add_listener(position, orientation) {
+            Ok(listener) => listener,
+            Err(e) => {
+                log::error!("Failed to add audio listener : {}", e);
+                std::process::exit(1);
+            }
+        };
 
         Self { manager, listener }
     }

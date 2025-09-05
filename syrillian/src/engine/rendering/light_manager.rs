@@ -121,7 +121,13 @@ impl LightManager {
 
         let shadow_texture =
             Texture::new_2d_shadow_map_array(8, 1024, 1024).store(&cache.textures.store());
-        let texture = cache.textures.try_get(shadow_texture, cache).unwrap();
+        let texture = cache
+            .textures
+            .try_get(shadow_texture, cache)
+            .unwrap_or_else(|| {
+                log::error!("Failed to get a Texture in light_for_layer in the LightManager");
+                std::process::exit(1);
+            });
 
         let bgl = cache.bgl_light();
         let count: u32 = 0;
@@ -186,7 +192,10 @@ impl LightManager {
         use crate::assets::HShader;
         use wgpu::ShaderStages;
 
-        let mut pass = ctx.pass.write().unwrap();
+        let mut pass = ctx.pass.write().unwrap_or_else(|_| {
+            log::error!("Failed to obtain a writable pass in render_debug_lights in LightManager");
+            std::process::exit(1);
+        });
 
         let shader = renderer.cache.shader(HShader::DEBUG_LIGHT);
         crate::must_pipeline!(pipeline = shader, ctx.pass_type => return);

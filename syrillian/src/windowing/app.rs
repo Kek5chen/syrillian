@@ -68,7 +68,11 @@ impl<S: AppState> App<S> {
         let asset_store = AssetStore::new();
 
         let (render_state_tx, render_state_rx) = mpsc::channel();
-        let state = self.state.take().unwrap();
+        let state = self.state.take().unwrap_or_else(||{
+            error!("Error while trying to invoke take to state in init");
+            event_loop.exit();
+            std::process::exit(1);
+        });
         let game_thread = match GameThread::new(state, asset_store.clone(), render_state_tx) {
             Ok(r) => r,
             Err(e) => {
@@ -80,7 +84,10 @@ impl<S: AppState> App<S> {
 
         let window = event_loop
             .create_window(self.window_attributes.clone())
-            .unwrap();
+            .unwrap_or_else(|err|{
+                error!("Failed to create a window due to {}" ,err);
+                std::process::exit(1);
+            });
 
         let renderer = match Renderer::new(render_state_rx, window, asset_store) {
             Ok(r) => r,
@@ -116,13 +123,19 @@ impl<S: AppState> App<S> {
                                     .window_mut()
                                     .set_cursor_grab(CursorGrabMode::Confined)
                             })
-                            .expect("Couldn't grab cursor");
+                                .unwrap_or_else(|err| {
+                                error!("Couldn't grab cursor : {}" , err);
+                                std::process::exit(1);
+                            })
                     } else {
                         trace!("RT: Unlocked cursor");
                         renderer
                             .window_mut()
                             .set_cursor_grab(CursorGrabMode::None)
-                            .expect("Couldn't ungrab cursor");
+                            .unwrap_or_else(|err| {
+                                error!("Couldn't grab cursor : {}" , err);
+                                std::process::exit(1);})
+
                     }
                     renderer.window_mut().set_cursor_visible(visible);
                     if visible {
@@ -160,8 +173,15 @@ impl<S: AppState> ApplicationHandler for App<S> {
             return;
         }
 
-        let game_thread = self.game_thread.as_ref().unwrap();
-        let renderer = self.renderer.as_mut().unwrap();
+        let game_thread = self.game_thread.as_ref().unwrap_or_else(||{
+            error!("Failed to get a ref to game_thread in app.rs");
+            std::process::exit(1);
+        });
+        let renderer = self.renderer.as_mut().unwrap_or_else(||{
+            error!("Failed to get a mutable ref to renderer");
+            std::process::exit(1);
+        }
+        );
 
         match event {
             WindowEvent::RedrawRequested => {
@@ -202,7 +222,12 @@ impl<S: AppState> ApplicationHandler for App<S> {
         if self
             .game_thread
             .as_ref()
-            .unwrap()
+            .unwrap_or_else(||{
+                    error!("Failed to get a ref to game_thread in app.rs");
+                 std::process::exit(1);
+                }
+            )
+
             .device_event(device_id, event)
             .is_err()
         {

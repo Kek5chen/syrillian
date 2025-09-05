@@ -73,7 +73,12 @@ impl<'a> GOComponentExt<'a> for Collider3D {
 
     #[inline]
     fn build_component(&'a mut self, obj: &'a mut GameObject) -> Self::Outer {
-        let collider = self.get_collider_mut().expect("Collider should be created");
+        let collider = self.get_collider_mut().unwrap_or_else(|| {
+            log::error!(
+                "getting a mutable ref to a Collider returned None while trying to build_component. Collider should be created"
+            );
+            std::process::exit(1);
+        });
         GOColliderExt(collider, obj)
     }
 
@@ -118,7 +123,12 @@ impl<'a> GOComponentExt<'a> for RigidBodyComponent {
 
     #[inline]
     fn build_component(&'a mut self, obj: &'a mut GameObject) -> Self::Outer {
-        let rb = self.get_body_mut().expect("Rigid Body should be created");
+        let rb = self.get_body_mut().unwrap_or_else(|| {
+            log::error!(
+                "getting a mutable ref to a Rigid Body while trying to build_component returned None. Rigid Body should be created"
+            );
+            std::process::exit(1);
+        });
         GORigidBodyExt(rb, obj)
     }
 

@@ -300,7 +300,11 @@ fn load_mesh(scene: &GltfScene, node: Node) -> Option<(Mesh, Vec<u32>)> {
                     let t4 = t[vi as usize];
                     let t3 = Vector3::new(t4[0], t4[1], t4[2]);
                     tangents.push(t3);
-                    let n3 = *normals.last().unwrap();
+                    let n3 = *normals.last().unwrap_or_else(||
+                    {
+                        log::error!("Failed in deref normals.last in Scene_Loader.rs");
+                        std::process::exit(1);
+                    });
                     let b = n3.cross(&t3).normalize() * t4[3].signum();
                     bitangents.push(b);
                 } else {
@@ -504,7 +508,11 @@ fn animations_from_scene(scene: &GltfScene) -> Vec<AnimationClip> {
                 max_time = max_time.max(times.last().copied().unwrap_or(0.0));
 
                 let mut keys = TransformKeys::default();
-                match reader.read_outputs().expect("outputs") {
+                match reader.read_outputs().unwrap_or_else(||
+                {
+                log::error!("Failed while reading outputs in Scene_Loader.rs");
+                std::process::exit(1);
+                }) {
                     ReadOutputs::Translations(v) => {
                         let vals: Vec<[f32; 3]> = v.collect();
                         keys.t_times = times.clone();
@@ -632,7 +640,11 @@ where
 
     debug_assert_eq!(
         data.len(),
-        w as usize * h as usize * format.block_copy_size(None).unwrap() as usize
+        w as usize * h as usize * format.block_copy_size(None).unwrap_or_else(||
+                {
+                log::error!("Failed while debug_asserting the data.len()");
+                std::process::exit(1);
+                }) as usize
     );
 
     Some(Texture::load_pixels(data, w, h, TextureFormat::Rgba8UnormSrgb).store(world))

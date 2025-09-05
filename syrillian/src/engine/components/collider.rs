@@ -102,7 +102,9 @@ impl Component for Collider3D {
         if let Some(body_comp) = body_comp {
             if self.linked_to_body.is_none() {
                 self.link_to_rigid_body(Some(body_comp.body_handle));
-                let coll = self.get_collider_mut().unwrap();
+                let coll = self.get_collider_mut()
+                    .unwrap_or_else(||{log::error!("get_collider_mut returned None");
+                    std::process::exit(1);});
                 coll.set_translation(Vector3::identity());
                 coll.set_rotation(Rotation::identity());
                 // TODO: Sync Scale to coll
@@ -111,7 +113,9 @@ impl Component for Collider3D {
             // the collider just takes on the parent transformations
             let translation = self.parent.transform.position();
             let rotation = self.parent.transform.rotation();
-            let coll = self.get_collider_mut().unwrap();
+            let coll = self.get_collider_mut()
+                .unwrap_or_else(||{log::error!("get_collider_mut returned None");
+                    std::process::exit(1);});
             coll.set_translation(translation);
             coll.set_rotation(rotation);
             // TODO: Sync Scale to coll

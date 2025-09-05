@@ -27,13 +27,31 @@ impl CacheType for Font {
 
 impl FontAtlas {
     pub fn atlas(&self) -> HMaterial {
-        self.atlas.read().unwrap().material()
+        self.atlas
+            .read()
+            .unwrap_or_else(|_| {
+                log::error!("Failed to read atlas to get HMaterial");
+                std::process::exit(1);
+            })
+            .material()
     }
     pub fn texture(&self) -> HTexture {
-        self.atlas.read().unwrap().texture()
+        self.atlas
+            .read()
+            .unwrap_or_else(|_| {
+                log::error!("Failed to read atlas to get HTexture");
+                std::process::exit(1);
+            })
+            .texture()
     }
     pub fn metrics(&self) -> FontLineMetrics {
-        self.atlas.read().unwrap().metrics()
+        self.atlas
+            .read()
+            .unwrap_or_else(|_| {
+                log::error!("Failed to read atlas to get metrics");
+                std::process::exit(1);
+            })
+            .metrics()
     }
     pub fn ensure_glyphs(
         &self,
@@ -41,12 +59,29 @@ impl FontAtlas {
         chars: impl IntoIterator<Item = char>,
         queue: &Queue,
     ) {
-        self.atlas
-            .write()
-            .unwrap()
-            .ensure_glyphs(cache, chars, queue)
+        let mut lock = match self.atlas.write() {
+            Ok(lock) => lock,
+            Err(e) => {
+                log::error!(
+                    "Failed to get a lock to write to atlas in ensure_glyphs in font.rs : {} ",
+                    e
+                );
+                std::process::exit(1);
+            }
+        };
+        lock.ensure_glyphs(cache, chars, queue);
     }
     pub fn entry(&self, ch: char) -> Option<GlyphAtlasEntry> {
-        self.atlas.read().unwrap().entry(ch)
+        let lock = match self.atlas.write() {
+            Ok(lock) => lock,
+            Err(e) => {
+                log::error!(
+                    "Failed to get a lock to write to atlas in entry in font.rs : {} ",
+                    e
+                );
+                std::process::exit(1);
+            }
+        };
+        lock.entry(ch)
     }
 }

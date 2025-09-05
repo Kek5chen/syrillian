@@ -68,7 +68,10 @@ impl SceneProxy for ImageSceneProxy {
         let material = renderer.cache.material(self.material);
         let shader = renderer.cache.shader_2d();
 
-        let mut pass = ctx.pass.write().unwrap();
+        let mut pass = ctx.pass.write().unwrap_or_else(|_| {
+            log::error!("Failed to obtain a writable pass in render in image.rs");
+            std::process::exit(1);
+        });
 
         pass.set_pipeline(shader.solid_pipeline());
 

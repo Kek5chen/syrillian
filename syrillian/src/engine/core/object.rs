@@ -48,13 +48,19 @@ impl Deref for GameObjectId {
     type Target = GameObject;
 
     fn deref(&self) -> &GameObject {
-        World::instance().objects.get(*self).unwrap()
+        World::instance().objects.get(*self).unwrap_or_else(|| {
+            log::error!("An error was encountered while getting a deref of a GameObject");
+            std::process::exit(1);
+        })
     }
 }
 
 impl DerefMut for GameObjectId {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        World::instance().objects.get_mut(*self).unwrap()
+        World::instance().objects.get_mut(*self).unwrap_or_else(|| {
+            log::error!("An error was encountered while getting a mutable deref of a GameObject");
+            std::process::exit(1);
+        })
     }
 }
 

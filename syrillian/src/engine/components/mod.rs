@@ -140,7 +140,10 @@ impl<C: Component> Deref for CRef<C> {
         World::instance()
             .components
             .get(CRef(self.0, PhantomData))
-            .unwrap()
+            .unwrap_or_else(|| {
+                log::error!("Error getting a PhantomData in the CRef implementation");
+                std::process::exit(1);
+            })
     }
 }
 
@@ -149,7 +152,12 @@ impl<C: Component> DerefMut for CRef<C> {
         World::instance()
             .components
             .get_mut(CRef(self.0, PhantomData))
-            .unwrap()
+            .unwrap_or_else(|| {
+                log::error!(
+                    "Error getting a mutable PhantomData in the mutable CRef implementation"
+                );
+                std::process::exit(1);
+            })
     }
 }
 
