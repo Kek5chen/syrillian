@@ -49,17 +49,17 @@ impl Default for AudioScene {
 
 impl AudioScene {
     pub fn set_receiver_position(&mut self, receiver_position: Vector3<f32>) {
-        self.inner.as_mut().map(|this| {
+        if let Some(this) = self.inner.as_mut() {
             this.listener
                 .set_position(receiver_position, Tween::default())
-        });
+        }
     }
 
     pub fn set_receiver_orientation(&mut self, receiver_orientation: Quaternion<f32>) {
-        self.inner.as_mut().map(|this| {
+        if let Some(this) = self.inner.as_mut() {
             this.listener
                 .set_orientation(receiver_orientation, Tween::default())
-        });
+        }
     }
 
     /// Returns none if the spatial track limit was reached
