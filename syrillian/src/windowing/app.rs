@@ -6,6 +6,7 @@ use crate::windowing::game_thread::GameThread;
 use log::{error, info, trace};
 use std::error::Error;
 use std::sync::mpsc;
+use std::time::Instant;
 use winit::application::ApplicationHandler;
 use winit::error::EventLoopError;
 use winit::event::{DeviceEvent, DeviceId, StartCause, WindowEvent};
@@ -156,6 +157,7 @@ impl<S: AppState> ApplicationHandler for App<S> {
         _window_id: WindowId,
         event: WindowEvent,
     ) {
+        let event_start = Instant::now();
         if event_loop.exiting() {
             return;
         }
@@ -191,6 +193,8 @@ impl<S: AppState> ApplicationHandler for App<S> {
                 }
             }
         }
+
+        debug_assert!(event_start.elapsed().as_secs_f32() < 2.0);
     }
 
     fn device_event(
