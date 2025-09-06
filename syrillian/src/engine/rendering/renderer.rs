@@ -53,6 +53,7 @@ pub struct Renderer {
     proxies: HashMap<TypedComponentId, SceneProxyBinding>,
     sorted_proxies: Vec<TypedComponentId>,
     pub(super) lights: LightManager,
+    skybox_background_color: Color,
 
     start_time: Instant,
     delta_time: Duration,
@@ -96,6 +97,7 @@ impl Renderer {
             proxies: HashMap::new(),
             sorted_proxies: Vec::new(),
             lights,
+            skybox_background_color: Color::BLACK,
 
             start_time: Instant::now(),
             delta_time: Duration::default(),
@@ -142,6 +144,9 @@ impl Renderer {
                 if let Some(binding) = self.proxies.get_mut(&cid) {
                     binding.enabled = enabled;
                 }
+            }
+            RenderMsg::SetSkyboxBackgroundColor(color) => {
+                self.set_skybox_background_color(color);
             }
             RenderMsg::CommandBatch(batch) => {
                 for message in batch {
@@ -420,6 +425,14 @@ impl Renderer {
         &mut self.window
     }
 
+    fn get_skybox_background_color(&self) -> Color {
+        self.skybox_background_color
+    }
+
+    pub fn set_skybox_background_color(&mut self, color: Color) {
+        self.skybox_background_color = color;
+    }
+
     fn update_render_data(&mut self) {
         self.update_system_data();
         self.lights
@@ -467,13 +480,15 @@ impl Renderer {
         encoder: &'a mut wgpu::CommandEncoder,
         ctx: &mut FrameCtx,
     ) -> RenderPass<'a> {
+        let default_color = self.get_skybox_background_color();
+
         encoder.begin_render_pass(&RenderPassDescriptor {
             label: Some("Offscreen Render Pass"),
             color_attachments: &[Some(RenderPassColorAttachment {
                 view: self.offscreen_surface.view(),
                 resolve_target: None,
                 ops: Operations {
-                    load: LoadOp::Clear(Color::BLACK),
+                    load: LoadOp::Clear(default_color),
                     store: StoreOp::Store,
                 },
             })],
