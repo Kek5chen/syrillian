@@ -78,6 +78,14 @@ impl AppState for MyMain {
         world.input.set_auto_cursor_lock(true);
         world.input.set_quit_on_escape(true);
 
+        // Set skybox background color to a pleasant sky blue
+        world.set_skybox_background_color(wgpu::Color {
+            r: 0.529, // 135/255
+            g: 0.808, // 206/255
+            b: 0.922, // 235/255
+            a: 1.0,
+        });
+
         world.spawn(&City);
 
         self.player = world.spawn(&FirstPersonPlayerPrefab);
