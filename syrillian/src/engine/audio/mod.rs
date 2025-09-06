@@ -14,7 +14,7 @@ impl AudioSceneInner {
         let mut manager = match AudioManager::new(AudioManagerSettings::default()) {
             Ok(x) => x,
             Err(e) => {
-                error!("Audio manager could not be initialized: {e} ({e:?})");
+                error!("Audio manager could not be initialized: {e:?}");
                 return None;
             }
         };
