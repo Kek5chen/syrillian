@@ -4,6 +4,7 @@ use crate::rendering::proxies::SceneProxy;
 use crate::rendering::render_data::CameraUniform;
 use nalgebra::Affine3;
 use std::fmt::{Debug, Formatter};
+use wgpu::Color;
 
 pub type ProxyUpdateCommand = Box<dyn FnOnce(&mut dyn SceneProxy) + Send>;
 pub type LightProxyCommand = Box<dyn FnOnce(&mut LightProxy) + Send>;
@@ -18,6 +19,7 @@ pub enum RenderMsg {
     LightProxyUpdate(TypedComponentId, LightProxyCommand),
     UpdateActiveCamera(CameraUpdateCommand),
     ProxyState(TypedComponentId, bool), // enabled
+    SetSkyboxBackgroundColor(Color),
     CommandBatch(Vec<RenderMsg>),
 }
 
