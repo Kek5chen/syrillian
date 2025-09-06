@@ -34,6 +34,7 @@ impl Debug for RenderMsg {
             RenderMsg::LightProxyUpdate(_, _) => "Light Proxy Update",
             RenderMsg::UpdateActiveCamera(_) => "Update Active Camera",
             RenderMsg::ProxyState(_, enable) => &format!("Proxy Enabled: {enable}"),
+            RenderMsg::SetSkyboxBackgroundColor(_) => "Set Skybox Background Color",
             RenderMsg::CommandBatch(inner) => &format!("Command Batch {inner:?}"),
         };
 
