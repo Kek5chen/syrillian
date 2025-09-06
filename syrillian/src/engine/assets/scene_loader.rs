@@ -57,7 +57,12 @@ impl SceneLoader {
         Self::load_into_world(world, &scene)
     }
 
-    pub fn load_scene_from_buffer(model: &[u8], _hint: &str) -> Result<GltfScene, Box<dyn Error>> {
+    pub fn load_buffer(world: &mut World, model: &[u8]) -> Result<GameObjectId, Box<dyn Error>> {
+        let scene = Self::load_scene_from_buffer(model)?;
+        Self::load_into_world(world, &scene)
+    }
+
+    pub fn load_scene_from_buffer(model: &[u8]) -> Result<GltfScene, Box<dyn Error>> {
         GltfScene::from_slice(model)
     }
 
