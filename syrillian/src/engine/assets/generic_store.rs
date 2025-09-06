@@ -22,7 +22,7 @@ pub trait StoreDefaults: StoreType {
     fn populate(store: &mut Store<Self>);
 }
 
-pub trait StoreType: Sized + Debug {
+pub trait StoreType: Sized + Debug + Clone {
     fn name() -> &'static str;
     fn ident_fmt(handle: H<Self>) -> HandleName<Self>;
     fn ident(handle: H<Self>) -> String {

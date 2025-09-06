@@ -2,6 +2,7 @@ use crate::components::TypedComponentId;
 use crate::rendering::{GPUDrawCtx, Renderer};
 use nalgebra::{Affine3, Matrix4};
 use std::any::Any;
+use std::fmt::Debug;
 use winit::window::Window;
 
 pub mod image;
@@ -51,7 +52,7 @@ pub const PROXY_PRIORITY_SOLID: u32 = 99;
 pub const PROXY_PRIORITY_TRANSPARENT: u32 = 999;
 pub const PROXY_PRIORITY_2D: u32 = 9999;
 
-pub trait SceneProxy: Send + Any {
+pub trait SceneProxy: Send + Any + Debug {
     fn setup_render(&mut self, renderer: &Renderer, local_to_world: &Matrix4<f32>) -> Box<dyn Any>;
     fn update_render(
         &mut self,

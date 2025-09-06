@@ -55,7 +55,7 @@ pub enum MaterialError {
 impl CacheType for Material {
     type Hot = RuntimeMaterial;
 
-    fn upload(&self, device: &Device, _queue: &Queue, cache: &AssetCache) -> Self::Hot {
+    fn upload(self, device: &Device, _queue: &Queue, cache: &AssetCache) -> Self::Hot {
         let data = MaterialUniform {
             diffuse: self.color,
             roughness: self.roughness,

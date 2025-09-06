@@ -18,7 +18,6 @@ use syrillian::assets::scene_loader::SceneLoader;
 use syrillian::assets::{HMaterial, HSound, Sound, StoreType};
 use syrillian::assets::{Material, Shader};
 use syrillian::components::audio::AudioEmitter;
-use syrillian::components::glyph::TextAlignment;
 use syrillian::components::{
     CRef, Collider3D, Component, FirstPersonCameraController, PointLightComponent,
     RigidBodyComponent, RopeComponent, RotateComponent, SpotLightComponent, SpringComponent,
@@ -36,6 +35,7 @@ use winit::keyboard::KeyCode;
 
 #[cfg(debug_assertions)]
 use syrillian::rendering::DebugRenderer;
+use syrillian::rendering::glyph::TextAlignment;
 // const NECO_IMAGE: &[u8; 1293] = include_bytes!("assets/neco.jpg");
 
 const SHADER1: &str = include_str!("dynamic_shader/shader.wgsl");

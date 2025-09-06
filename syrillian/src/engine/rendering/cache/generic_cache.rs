@@ -20,7 +20,7 @@ pub struct Cache<T: CacheType> {
 
 pub trait CacheType: Sized + StoreType {
     type Hot;
-    fn upload(&self, device: &Device, queue: &Queue, cache: &AssetCache) -> Self::Hot;
+    fn upload(self, device: &Device, queue: &Queue, cache: &AssetCache) -> Self::Hot;
 }
 
 impl<T: CacheType + StoreTypeFallback> Cache<T> {
@@ -32,7 +32,7 @@ impl<T: CacheType + StoreTypeFallback> Cache<T> {
     }
 
     fn refresh_item(&self, h: H<T>, device: &Device, queue: &Queue, cache: &AssetCache) -> T::Hot {
-        let cold = self.store.get(h);
+        let cold = self.store.get(h).clone();
 
         let misses = self.cache_misses.load(Ordering::Acquire) + 1;
         self.cache_misses.fetch_add(1, Ordering::Relaxed);
@@ -93,7 +93,7 @@ impl<T: CacheType> Cache<T> {
         queue: &Queue,
         cache: &AssetCache,
     ) -> Result<T::Hot, ()> {
-        let cold = self.store.try_get(h).ok_or(())?;
+        let cold = self.store.try_get(h).ok_or(())?.clone();
 
         let misses = self.cache_misses.load(Ordering::Acquire) + 1;
         self.cache_misses.fetch_add(1, Ordering::Relaxed);

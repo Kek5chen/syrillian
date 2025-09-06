@@ -3,6 +3,7 @@ use crate::rendering::lights::LightProxy;
 use crate::rendering::proxies::SceneProxy;
 use crate::rendering::render_data::CameraUniform;
 use nalgebra::Affine3;
+use std::fmt::{Debug, Formatter};
 
 pub type ProxyUpdateCommand = Box<dyn FnOnce(&mut dyn SceneProxy) + Send>;
 pub type LightProxyCommand = Box<dyn FnOnce(&mut LightProxy) + Send>;
@@ -18,4 +19,22 @@ pub enum RenderMsg {
     UpdateActiveCamera(CameraUpdateCommand),
     ProxyState(TypedComponentId, bool), // enabled
     CommandBatch(Vec<RenderMsg>),
+}
+
+impl Debug for RenderMsg {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let name = match self {
+            RenderMsg::RegisterProxy(_, _, _) => "Register Proxy",
+            RenderMsg::RegisterLightProxy(_, _) => "Register Light Proxy",
+            RenderMsg::RemoveProxy(_) => "Remove Proxy",
+            RenderMsg::UpdateTransform(_, _) => "Update Transform",
+            RenderMsg::ProxyUpdate(_, _) => "Proxy Update",
+            RenderMsg::LightProxyUpdate(_, _) => "Light Proxy Update",
+            RenderMsg::UpdateActiveCamera(_) => "Update Active Camera",
+            RenderMsg::ProxyState(_, enable) => &format!("Proxy Enabled: {enable}"),
+            RenderMsg::CommandBatch(inner) => &format!("Command Batch {inner:?}"),
+        };
+
+        write!(f, "{name}")
+    }
 }

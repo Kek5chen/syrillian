@@ -1,16 +1,13 @@
 use crate::World;
 use crate::assets::{DEFAULT_ATLAS_SIZE, Font, HFont};
 use crate::components::Component;
-use crate::components::glyph::TextAlignment;
 use crate::core::GameObjectId;
 use crate::rendering::CPUDrawCtx;
+use crate::rendering::glyph::TextAlignment;
 use crate::rendering::proxies::SceneProxy;
 use crate::rendering::proxies::text_proxy::{TextDim, TextProxy, ThreeD, TwoD};
 use delegate::delegate;
 use nalgebra::{Vector2, Vector3};
-
-pub mod glyph;
-pub mod msdf_atlas;
 
 pub type Text3D = Text<3, ThreeD>;
 pub type Text2D = Text<2, TwoD>;

@@ -1,7 +1,6 @@
-use crate::components::msdf_atlas::GlyphAtlasEntry;
-use crate::rendering::{AssetCache, FontAtlas};
+use crate::rendering::FontAtlas;
+use crate::rendering::msdf_atlas::GlyphAtlasEntry;
 use nalgebra::Vector2;
-use wgpu::Queue;
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
@@ -21,6 +20,18 @@ pub enum TextAlignment {
     Left,
     Right,
     Center,
+}
+
+#[derive(Clone)]
+pub struct GlyphBitmap {
+    pub ch: char,
+    pub width_px: u32,
+    pub height_px: u32,
+    pub plane_min: [f32; 2],
+    pub plane_max: [f32; 2],
+    pub advance_em: f32,
+    pub msdf_range_px: f32,
+    pub pixels_rgba: Vec<u8>,
 }
 
 impl GlyphRenderData {
@@ -78,8 +89,6 @@ fn align_lines(glyphs: &mut [GlyphRenderData], alignment: TextAlignment, rows: &
 }
 
 pub fn generate_glyph_geometry_stream(
-    cache: &AssetCache,
-    queue: &Queue,
     text: &str,
     atlas: &FontAtlas,
     alignment: TextAlignment,
@@ -92,8 +101,6 @@ pub fn generate_glyph_geometry_stream(
     let metrics = atlas.metrics();
     let baseline_dy =
         (metrics.ascent_em + metrics.descent_em + metrics.line_gap_em) * line_height_mul;
-
-    atlas.ensure_glyphs(cache, text.chars(), queue);
 
     let mut quads = Vec::new();
     let mut row_data = Vec::<(usize, f32)>::new();

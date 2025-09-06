@@ -10,6 +10,7 @@ use nalgebra::{Matrix4, Scale3, Translation3};
 use std::any::Any;
 use winit::window::Window;
 
+#[derive(Debug)]
 pub struct ImageSceneProxy {
     pub translation: Matrix4<f32>,
     pub material: HMaterial,

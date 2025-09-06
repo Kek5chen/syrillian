@@ -45,7 +45,7 @@ impl RuntimeMesh {
 impl CacheType for Mesh {
     type Hot = RuntimeMesh;
 
-    fn upload(&self, device: &Device, _queue: &Queue, _cache: &AssetCache) -> Self::Hot {
+    fn upload(self, device: &Device, _queue: &Queue, _cache: &AssetCache) -> Self::Hot {
         let vertices_num = self.vertex_count();
         let indices_num = self.indices_count();
 

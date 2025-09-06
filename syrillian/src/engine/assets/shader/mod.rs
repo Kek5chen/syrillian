@@ -164,7 +164,7 @@ impl StoreDefaults for Shader {
         );
 
         const TEXT_VBL: &[VertexBufferLayout] = &[VertexBufferLayout {
-            array_stride: 0,
+            array_stride: VEC2_SIZE * 2,
             step_mode: VertexStepMode::Vertex,
             attributes: &[
                 VertexAttribute {

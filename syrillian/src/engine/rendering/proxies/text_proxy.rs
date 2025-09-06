@@ -1,6 +1,5 @@
 use crate::assets::{AssetStore, HFont, HShader};
 use crate::components::BoneData;
-use crate::components::glyph::{GlyphRenderData, TextAlignment, generate_glyph_geometry_stream};
 use crate::core::ModelUniform;
 use crate::rendering::proxies::mesh_proxy::MeshUniformIndex;
 use crate::rendering::proxies::{PROXY_PRIORITY_2D, PROXY_PRIORITY_TRANSPARENT, SceneProxy};
@@ -8,8 +7,10 @@ use crate::rendering::uniform::ShaderUniform;
 use crate::rendering::{AssetCache, CPUDrawCtx, GPUDrawCtx, RenderPassType, Renderer};
 use crate::utils::hsv_to_rgb;
 use crate::{ensure_aligned, must_pipeline, proxy_data, proxy_data_mut};
+use log::trace;
 use nalgebra::{Matrix4, Vector2, Vector3};
 use std::any::Any;
+use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::sync::RwLock;
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
@@ -18,6 +19,7 @@ use winit::window::Window;
 
 #[cfg(debug_assertions)]
 use crate::rendering::DebugRenderer;
+use crate::rendering::glyph::{GlyphRenderData, TextAlignment, generate_glyph_geometry_stream};
 
 #[derive(Debug)]
 pub struct TextRenderData {
@@ -42,7 +44,7 @@ pub struct ThreeD;
 #[derive(Debug, Copy, Clone)]
 pub struct TwoD;
 
-pub trait TextDim<const D: u8>: Copy + Clone + Send + 'static {
+pub trait TextDim<const D: u8>: Copy + Clone + Debug + Send + 'static {
     fn shader() -> HShader;
     #[cfg(debug_assertions)]
     fn debug_shader() -> HShader;
@@ -133,10 +135,13 @@ impl<const D: u8, DIM: TextDim<D>> TextProxy<D, DIM> {
             self.regenerate_geometry(renderer);
         }
 
+        let hot_font = renderer.cache.font(self.font);
+        hot_font.pump(&renderer.cache, &renderer.state.queue, 10);
+
         self.translation.update(local_to_world);
 
         if self.text_dirty {
-            if self.text.len() > self.last_text_len {
+            if (data.glyph_vbo.size() as usize) < size_of_val(&self.glyph_data[..]) {
                 data.glyph_vbo = renderer
                     .state
                     .device
@@ -172,6 +177,10 @@ impl<const D: u8, DIM: TextDim<D>> TextProxy<D, DIM> {
 
     pub fn render(&self, renderer: &Renderer, data: &TextRenderData, ctx: &GPUDrawCtx) {
         if DIM::shader() != HShader::TEXT_3D && ctx.pass_type == RenderPassType::Shadow {
+            return;
+        }
+
+        if data.glyph_vbo.size() == 0 || self.text.is_empty() {
             return;
         }
 
@@ -227,14 +236,10 @@ impl<const D: u8, DIM: TextDim<D>> TextProxy<D, DIM> {
     pub fn regenerate_geometry(&mut self, renderer: &Renderer) {
         let hot_font = renderer.cache.font(self.font);
 
-        self.glyph_data = generate_glyph_geometry_stream(
-            &renderer.cache,
-            &renderer.state.queue,
-            &self.text,
-            &hot_font,
-            TextAlignment::Left,
-            1.0,
-        );
+        hot_font.request_glyphs(self.text.chars());
+
+        self.glyph_data =
+            generate_glyph_geometry_stream(&self.text, &hot_font, self.alignment, 1.0);
     }
 
     pub fn set_text(&mut self, text: impl Into<String>) {
@@ -287,16 +292,8 @@ impl<const D: u8, DIM: TextDim<D>> SceneProxy for TextProxy<D, DIM> {
         renderer: &Renderer,
         _local_to_world: &Matrix4<f32>,
     ) -> Box<dyn Any> {
-        let hot_font = renderer.cache.font(self.font);
-
-        self.glyph_data = generate_glyph_geometry_stream(
-            &renderer.cache,
-            &renderer.state.queue,
-            &self.text,
-            &hot_font,
-            TextAlignment::Left,
-            1.0,
-        );
+        trace!("REGENERATE GEOMETRY");
+        self.regenerate_geometry(renderer);
 
         let device = &renderer.state.device;
 

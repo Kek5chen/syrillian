@@ -8,7 +8,7 @@ use nalgebra::Vector2;
 use std::convert::Into;
 use std::sync::Arc;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Font {
     pub(crate) family_name: String,
     pub(crate) font_bytes: Arc<Vec<u8>>,

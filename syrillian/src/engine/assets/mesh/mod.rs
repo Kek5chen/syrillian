@@ -12,6 +12,7 @@ use obj::{IndexTuple, ObjError};
 use snafu::Snafu;
 use std::fmt::Debug;
 use std::ops::Range;
+use std::sync::Arc;
 
 const CUBE_OBJ: &[u8] = include_bytes!("preset_meshes/cube.obj");
 const DEBUG_ARROW: &[u8] = include_bytes!("preset_meshes/debug_arrow.obj");
@@ -31,7 +32,7 @@ pub enum MeshError {
 
 #[derive(Debug, Clone)]
 pub struct Mesh {
-    pub(crate) data: MeshVertexData<Vertex3D>,
+    pub(crate) data: Arc<MeshVertexData<Vertex3D>>,
     pub material_ranges: Vec<Range<u32>>,
     pub bones: Bones,
 }
@@ -113,7 +114,7 @@ impl Mesh {
             .collect();
 
         Ok(Mesh {
-            data: MeshVertexData::new(vertices, None),
+            data: Arc::new(MeshVertexData::new(vertices, None)),
             material_ranges,
             bones: Bones::none(),
         })

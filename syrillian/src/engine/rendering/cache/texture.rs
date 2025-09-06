@@ -12,7 +12,7 @@ pub struct GpuTexture {
 impl CacheType for CpuTexture {
     type Hot = GpuTexture;
 
-    fn upload(&self, device: &Device, queue: &Queue, _cache: &AssetCache) -> Self::Hot {
+    fn upload(self, device: &Device, queue: &Queue, _cache: &AssetCache) -> Self::Hot {
         let texture = match &self.data {
             None => device.create_texture(&self.desc()),
             Some(data) => device.create_texture_with_data(

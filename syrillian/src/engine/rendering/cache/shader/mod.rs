@@ -18,17 +18,17 @@ pub struct RuntimeShader {
 impl CacheType for Shader {
     type Hot = RuntimeShader;
 
-    fn upload(&self, device: &Device, _queue: &Queue, cache: &AssetCache) -> Self::Hot {
+    fn upload(self, device: &Device, _queue: &Queue, cache: &AssetCache) -> Self::Hot {
         let module = device.create_shader_module(ShaderModuleDescriptor {
             label: Some(self.name()),
             source: ShaderSource::Wgsl(Cow::Owned(self.gen_code())),
         });
 
         let solid_layout = self.solid_layout(device, cache);
-        let solid_builder = RenderPipelineBuilder::builder(self, &solid_layout, &module);
+        let solid_builder = RenderPipelineBuilder::builder(&self, &solid_layout, &module);
         let pipeline = solid_builder.build(device);
         let shadow_pipeline = self.shadow_layout(device, cache).and_then(|layout| {
-            let shadow_builder = RenderPipelineBuilder::builder(self, &layout, &module);
+            let shadow_builder = RenderPipelineBuilder::builder(&self, &layout, &module);
             shadow_builder.build_shadow(device)
         });
 

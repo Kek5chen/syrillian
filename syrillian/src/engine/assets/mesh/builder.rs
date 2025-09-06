@@ -1,6 +1,7 @@
 use crate::assets::{Mesh, MeshVertexData};
 use crate::core::{Bones, Vertex3D};
 use std::ops::Range;
+use std::sync::Arc;
 
 #[derive(Debug, Clone)]
 pub struct MeshBuilder {
@@ -33,7 +34,7 @@ impl MeshBuilder {
         }
 
         Mesh {
-            data: MeshVertexData::new(self.vertices, self.indices),
+            data: Arc::new(MeshVertexData::new(self.vertices, self.indices)),
             material_ranges,
             bones: self.bones.unwrap_or_default(),
         }
