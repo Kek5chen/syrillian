@@ -47,7 +47,7 @@ pub struct Renderer {
     post_process_data: PostProcessData,
     offscreen_surface: OffscreenSurface,
 
-    pub cache: Arc<AssetCache>,
+    pub cache: AssetCache,
 
     game_rx: mpsc::Receiver<RenderMsg>,
     proxies: HashMap<TypedComponentId, SceneProxyBinding>,
@@ -69,7 +69,7 @@ impl Renderer {
     ) -> Result<Self> {
         let state = Box::new(State::new(&window).context(StateErr)?);
         let offscreen_surface = OffscreenSurface::new(&state.device, &state.config);
-        let cache = Arc::new(AssetCache::new(store, &state));
+        let cache = AssetCache::new(store, &state);
 
         // Let's heat it up :)
         let render_bgl = cache.bgl_render();
