@@ -3,7 +3,7 @@ use crate::core::GameObjectId;
 use nalgebra::Vector3;
 use rapier3d::parry::query::DefaultQueryDispatcher;
 use rapier3d::prelude::*;
-use std::time::{Duration, Instant};
+use web_time::{Duration, Instant};
 
 pub struct PhysicsManager {
     pub gravity: Vector3<f32>,

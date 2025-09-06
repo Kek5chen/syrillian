@@ -1,12 +1,16 @@
 use crate::assets::AssetStore;
 use crate::rendering::message::RenderMsg;
 use crate::{AppState, World};
-use log::{debug, error, info};
+use log::{error, info};
 use std::sync::mpsc::{SendError, TryRecvError};
 use std::sync::{Arc, mpsc};
-use std::thread::JoinHandle;
 use winit::dpi::PhysicalSize;
 use winit::event::{DeviceEvent, DeviceId, WindowEvent};
+
+#[cfg(not(target_arch = "wasm32"))]
+use std::marker::PhantomData;
+#[cfg(not(target_arch = "wasm32"))]
+use std::thread::JoinHandle;
 
 #[derive(Debug, Clone)]
 pub enum RenderAppEvent {
@@ -29,8 +33,18 @@ impl GameAppEvent {
     }
 }
 
-pub struct GameThread {
-    _thread: JoinHandle<crate::rendering::error::Result<()>>,
+#[cfg(not(target_arch = "wasm32"))]
+pub struct GameThread<S: AppState> {
+    _thread: JoinHandle<()>,
+    render_event_tx: mpsc::Sender<RenderAppEvent>,
+    game_event_rx: mpsc::Receiver<GameAppEvent>,
+
+    _state: PhantomData<S>,
+}
+
+#[cfg(target_arch = "wasm32")]
+pub struct GameThread<S: AppState> {
+    thread: GameThreadInner<S>,
     render_event_tx: mpsc::Sender<RenderAppEvent>,
     game_event_rx: mpsc::Receiver<GameAppEvent>,
 }
@@ -42,42 +56,70 @@ struct GameThreadInner<S: AppState> {
     _game_event_tx: mpsc::Sender<GameAppEvent>,
 }
 
-impl GameThread {
-    pub fn new<S: AppState>(
+impl<S: AppState> GameThreadInner<S> {
+    #[cfg(not(target_arch = "wasm32"))]
+    fn spawn(
         state: S,
         asset_store: Arc<AssetStore>,
         render_tx: mpsc::Sender<RenderMsg>,
-    ) -> crate::rendering::error::Result<Self> {
-        let (render_event_tx, render_event_rx) = mpsc::channel();
-        let (game_event_tx, game_event_rx) = mpsc::channel();
-
-        let thread = std::thread::spawn(move || {
-            let world = unsafe { World::new(asset_store, render_tx, game_event_tx.clone()) };
-
-            GameThreadInner {
-                world,
+        game_event_tx: mpsc::Sender<GameAppEvent>,
+        render_event_rx: mpsc::Receiver<RenderAppEvent>,
+    ) -> JoinHandle<()> {
+        std::thread::spawn(move || {
+            Self::spawn_local(
                 state,
+                asset_store,
+                render_tx,
+                game_event_tx,
                 render_event_rx,
-                _game_event_tx: game_event_tx,
-            }
+            )
             .run();
-
-            debug!("Game thread exited");
-
-            Ok(())
-        });
-
-        Ok(GameThread {
-            _thread: thread,
-            render_event_tx,
-            game_event_rx,
+            log::debug!("Game thread exited");
         })
     }
 
-    pub fn init(&self) -> Result<(), Box<SendError<RenderAppEvent>>> {
-        self.render_event_tx
-            .send(RenderAppEvent::Init)
-            .map_err(Box::new)
+    fn spawn_local(
+        state: S,
+        asset_store: Arc<AssetStore>,
+        render_tx: mpsc::Sender<RenderMsg>,
+        game_event_tx: mpsc::Sender<GameAppEvent>,
+        render_event_rx: mpsc::Receiver<RenderAppEvent>,
+    ) -> GameThreadInner<S> {
+        let world = unsafe { World::new(asset_store, render_tx, game_event_tx.clone()) };
+
+        GameThreadInner {
+            world,
+            state,
+            render_event_rx,
+            _game_event_tx: game_event_tx,
+        }
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl<S: AppState> GameThread<S> {
+    pub fn new(state: S, asset_store: Arc<AssetStore>, render_tx: mpsc::Sender<RenderMsg>) -> Self {
+        let (render_event_tx, render_event_rx) = mpsc::channel();
+        let (game_event_tx, game_event_rx) = mpsc::channel();
+
+        let thread = GameThreadInner::spawn(
+            state,
+            asset_store,
+            render_tx,
+            game_event_tx,
+            render_event_rx,
+        );
+
+        GameThread {
+            _thread: thread,
+            render_event_tx,
+            game_event_rx,
+            _state: PhantomData,
+        }
+    }
+
+    pub fn init(&self) -> bool {
+        self.render_event_tx.send(RenderAppEvent::Init).is_ok()
     }
 
     pub fn input(&self, event: WindowEvent) -> Result<(), Box<SendError<RenderAppEvent>>> {
@@ -114,7 +156,65 @@ impl GameThread {
     }
 }
 
+#[cfg(target_arch = "wasm32")]
+impl<S: AppState> GameThread<S> {
+    pub fn new(state: S, asset_store: Arc<AssetStore>, render_tx: mpsc::Sender<RenderMsg>) -> Self {
+        let (render_event_tx, render_event_rx) = mpsc::channel();
+        let (game_event_tx, game_event_rx) = mpsc::channel();
+
+        let thread = GameThreadInner::spawn_local(
+            state,
+            asset_store,
+            render_tx,
+            game_event_tx,
+            render_event_rx,
+        );
+
+        GameThread {
+            thread,
+            render_event_tx,
+            game_event_rx,
+        }
+    }
+    pub fn init(&mut self) -> bool {
+        self.thread.init()
+    }
+
+    pub fn input(&self, event: WindowEvent) -> Result<(), Box<SendError<RenderAppEvent>>> {
+        self.render_event_tx
+            .send(RenderAppEvent::Input(event))
+            .map_err(Box::new)
+    }
+
+    pub fn device_event(
+        &self,
+        device_id: DeviceId,
+        event: DeviceEvent,
+    ) -> Result<(), Box<SendError<RenderAppEvent>>> {
+        self.render_event_tx
+            .send(RenderAppEvent::DeviceEvent(device_id, event))
+            .map_err(Box::new)
+    }
+
+    pub fn resize(&self, size: PhysicalSize<u32>) -> Result<(), Box<SendError<RenderAppEvent>>> {
+        self.render_event_tx
+            .send(RenderAppEvent::Resize(size))
+            .map_err(Box::new)
+    }
+
+    pub fn receive_events(&self) -> impl Iterator<Item = GameAppEvent> {
+        self.game_event_rx.try_iter()
+    }
+
+    // TODO: Think about if render frame and world should be linked
+    pub fn next_frame(&self) -> Result<(), Box<SendError<RenderAppEvent>>> {
+        self.render_event_tx
+            .send(RenderAppEvent::StartFrame)
+            .map_err(Box::new)
+    }
+}
 impl<S: AppState> GameThreadInner<S> {
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn run(mut self) {
         loop {
             if !self.pump_events() {

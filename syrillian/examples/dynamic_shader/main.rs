@@ -10,7 +10,6 @@ use std::error::Error;
 use std::fs;
 use std::sync::mpsc;
 use std::sync::mpsc::TryRecvError;
-use std::time::Instant;
 use syrillian::assets::{HMaterial, HShader, Material, Shader, StoreType};
 use syrillian::components::RotateComponent;
 use syrillian::core::GameObjectId;
@@ -18,6 +17,7 @@ use syrillian::prefabs::CubePrefab;
 use syrillian::utils::validate_wgsl_source;
 use syrillian::{AppState, World};
 use syrillian_macros::SyrillianApp;
+use web_time::Instant;
 
 #[cfg(debug_assertions)]
 use syrillian::rendering::DebugRenderer;

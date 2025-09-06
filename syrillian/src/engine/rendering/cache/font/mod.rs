@@ -12,9 +12,12 @@ use fdsm::transform::Transform;
 use fdsm_ttf_parser::load_shape_from_face;
 use image::RgbImage;
 use nalgebra::Affine2;
-use std::sync::{Arc, RwLock, mpsc};
+use std::sync::{Arc, RwLock};
 use ttf_parser::Face;
 use wgpu::{Device, Queue};
+
+#[cfg(not(target_arch = "wasm32"))]
+use std::sync::mpsc;
 
 pub mod glyph;
 pub mod msdf_atlas;
@@ -29,7 +32,7 @@ pub struct FontAtlas {
     ready_rx: mpsc::Receiver<GlyphBitmap>,
 
     #[cfg(target_arch = "wasm32")]
-    pending: std::collections::VecDeque<char>,
+    pending: RwLock<std::collections::VecDeque<char>>,
 
     #[cfg(target_arch = "wasm32")]
     wasm_face_bytes: Arc<Vec<u8>>,
@@ -71,7 +74,7 @@ impl CacheType for Font {
         #[cfg(target_arch = "wasm32")]
         let (pending, wasm_face_bytes, wasm_units_per_em, wasm_shrinkage, wasm_range) = {
             let (fb, upm, s, r) = atlas.read().unwrap().font_params();
-            (std::collections::VecDeque::new(), fb, upm, s, r)
+            (RwLock::default(), fb, upm, s, r)
         };
 
         FontAtlas {
@@ -119,7 +122,7 @@ impl FontAtlas {
                 #[cfg(not(target_arch = "wasm32"))]
                 let _ = self.gen_tx.send(ch);
                 #[cfg(target_arch = "wasm32")]
-                self.pending.push_back(ch);
+                self.pending.write().unwrap().push_back(ch);
             }
         }
     }
@@ -148,7 +151,7 @@ impl FontAtlas {
 
         #[cfg(target_arch = "wasm32")]
         while processed < max_glyphs {
-            let Some(ch) = self.pending.pop_front() else {
+            let Some(ch) = self.pending.write().unwrap().pop_front() else {
                 break;
             };
             if let Some(bmp) = rasterize_msdf_glyph(

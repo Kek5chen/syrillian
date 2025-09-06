@@ -91,13 +91,14 @@ fn test_material_store() {
 #[ignore]
 fn test_font_store() {
     let store = AssetStore::new();
-    let font = Font::new("Arial".to_string(), None);
+    let font = Font::new("Noto Sans".to_string(), None).expect("default font not found");
     let handle = store.fonts.add(font);
     let retrieved_font = store.fonts.try_get(handle);
     assert!(retrieved_font.is_some());
 }
 
 #[test]
+#[cfg(not(target_arch = "wasm32"))]
 fn test_sound_store() {
     let store = AssetStore::new();
     let sound = Sound::load_sound("examples/assets/pop.wav").expect("Failed to load sound");
@@ -110,11 +111,8 @@ fn test_sound_store() {
 #[ignore]
 fn test_find_font() {
     let store = AssetStore::new();
-    let font = Font::new("Arial".to_string(), None);
-    let handle = store.fonts.add(font);
-    let found_handle = store.fonts.find("Arial");
-    assert!(found_handle.is_some());
-    assert_eq!(found_handle.unwrap(), handle);
+    let font = store.fonts.find("Noto Sans");
+    assert!(font.is_some());
 }
 
 #[test]

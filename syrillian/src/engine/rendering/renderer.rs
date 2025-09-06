@@ -24,8 +24,8 @@ use snafu::ResultExt;
 use std::collections::HashMap;
 use std::mem::swap;
 use std::sync::{Arc, RwLock, mpsc};
-use std::time::{Duration, Instant};
 use syrillian_utils::debug_panic;
+use web_time::{Duration, Instant};
 use wgpu::{
     Color, CommandEncoderDescriptor, LoadOp, Operations, RenderPass, RenderPassColorAttachment,
     RenderPassDepthStencilAttachment, RenderPassDescriptor, StoreOp, SurfaceError, TextureView,

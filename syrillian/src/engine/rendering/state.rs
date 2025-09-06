@@ -52,7 +52,7 @@ impl State {
     fn setup_surface(instance: &Instance, window: &Window) -> Result<Surface<'static>> {
         unsafe {
             // We are creating a 'static lifetime out of a local reference
-            // VERY UNSAFE: Make absolutely sure `window` lives as long as `surface`
+            // VERY UNSAFE: Make sure `window` lives as long as `surface`
             let surface = instance.create_surface(window).context(CreateSurfaceErr)?;
             Ok(std::mem::transmute::<Surface, Surface<'static>>(surface))
         }

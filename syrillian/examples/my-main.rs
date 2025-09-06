@@ -149,7 +149,8 @@ impl AppState for MyMain {
 
         big_cube_right.at(-100.0, 10.0, 200.0).scale(100.);
 
-        let mut pop_sound = Sound::load_sound("./examples/assets/pop.wav")?;
+        let pop_sound_data = include_bytes!("../examples/assets/pop.wav");
+        let mut pop_sound = Sound::load_sound_data(pop_sound_data.to_vec())?;
         pop_sound.set_start_position(0.2);
 
         let pop_sound = pop_sound.store(world);
@@ -448,11 +449,8 @@ impl Prefab for City {
     }
 
     fn build(&self, world: &mut World) -> GameObjectId {
-        let Ok(mut city) = SceneLoader::load(world, "./testmodels/testmap/testmap.glb") else {
-            panic!(
-                "Failed to load the city file. Please run this example from the project root directory."
-            );
-        };
+        let testmap = include_bytes!("../testmodels/testmap/testmap.glb");
+        let mut city = SceneLoader::load_buffer(world, testmap).expect("Failed to load city file");
 
         // add colliders to city
         city.add_child_components_then(Collider3D::please_use_mesh);

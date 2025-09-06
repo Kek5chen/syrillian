@@ -23,7 +23,7 @@ use slotmap::{HopSlotMap, Key};
 use std::collections::HashSet;
 use std::mem::swap;
 use std::sync::{Arc, mpsc};
-use std::time::{Duration, Instant};
+use web_time::{Duration, Instant};
 
 static mut G_WORLD: *mut World = std::ptr::null_mut();
 

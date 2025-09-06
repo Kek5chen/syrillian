@@ -6,16 +6,19 @@ use crate::windowing::game_thread::GameThread;
 use log::{error, info, trace};
 use std::error::Error;
 use std::sync::mpsc;
-use std::time::Instant;
+use web_time::Instant;
 use winit::application::ApplicationHandler;
 use winit::error::EventLoopError;
 use winit::event::{DeviceEvent, DeviceId, StartCause, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{CursorGrabMode, WindowAttributes, WindowId};
 
+#[cfg(target_arch = "wasm32")]
+use winit::platform::web::{EventLoopExtWebSys, WindowExtWebSys};
+
 pub struct App<S: AppState> {
     window_attributes: WindowAttributes,
-    game_thread: Option<GameThread>,
+    game_thread: Option<GameThread<S>>,
     state: Option<S>,
     renderer: Option<Renderer>,
 }
@@ -58,8 +61,15 @@ impl<S: AppState> AppSettings<S> {
 }
 
 impl<S: AppState> App<S> {
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn run(mut self, event_loop: EventLoop<()>) -> Result<(), Box<dyn Error>> {
         event_loop.run_app(&mut self)?;
+        Ok(())
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub fn run(self, event_loop: EventLoop<()>) -> Result<(), Box<dyn Error>> {
+        event_loop.spawn_app(self);
         Ok(())
     }
 
@@ -70,18 +80,28 @@ impl<S: AppState> App<S> {
 
         let (render_state_tx, render_state_rx) = mpsc::channel();
         let state = self.state.take().unwrap();
-        let game_thread = match GameThread::new(state, asset_store.clone(), render_state_tx) {
-            Ok(r) => r,
-            Err(e) => {
-                error!("Error when creating renderer: {e}");
-                event_loop.exit();
-                return;
-            }
-        };
+
+        #[allow(unused_mut)]
+        let mut game_thread = GameThread::new(state, asset_store.clone(), render_state_tx);
 
         let window = event_loop
             .create_window(self.window_attributes.clone())
             .unwrap();
+
+        #[cfg(target_arch = "wasm32")]
+        if let Some(canvas) = window.canvas() {
+            web_sys::window()
+                .unwrap()
+                .document()
+                .unwrap()
+                .get_elements_by_tag_name("body")
+                .get_with_index(0)
+                .unwrap()
+                .append_child(&canvas)
+                .unwrap();
+        }
+
+        trace!("Created render surface");
 
         let renderer = match Renderer::new(render_state_rx, window, asset_store) {
             Ok(r) => r,
@@ -92,17 +112,21 @@ impl<S: AppState> App<S> {
             }
         };
 
-        if let Err(e) = game_thread.init() {
-            error!("Error when initializing Game Thread: {e}");
+        trace!("Created Renderer");
+
+        if !game_thread.init() {
+            error!("Couldn't initialize Game Thread");
             event_loop.exit();
             return;
         }
+
+        trace!("Created Game Thread");
 
         self.game_thread = Some(game_thread);
         self.renderer = Some(renderer);
     }
 
-    fn handle_events(game_thread: &GameThread, renderer: &mut Renderer) {
+    fn handle_events(game_thread: &GameThread<S>, renderer: &mut Renderer) {
         for event in game_thread.receive_events() {
             match event {
                 GameAppEvent::UpdateWindowTitle(title) => renderer.window_mut().set_title(&title),

@@ -4,7 +4,8 @@ use kira::sound::static_sound::{StaticSoundData, StaticSoundSettings};
 use kira::sound::{IntoOptionalRegion, PlaybackPosition};
 use kira::{Decibels, Frame, Panning, PlaybackRate, StartTime, Tween, Value};
 use std::error::Error;
-use std::time::Duration;
+use std::io::Cursor;
+use web_time::Duration;
 
 #[derive(Debug, Clone)]
 pub struct Sound {
@@ -26,8 +27,17 @@ impl StoreType for Sound {
 }
 
 impl Sound {
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn load_sound(path: &str) -> Result<Sound, Box<dyn Error>> {
         let data = StaticSoundData::from_file(path)?;
+
+        let sound = Sound { inner: data };
+
+        Ok(sound)
+    }
+
+    pub fn load_sound_data(sound: Vec<u8>) -> Result<Sound, Box<dyn Error>> {
+        let data = StaticSoundData::from_cursor(Cursor::new(sound))?;
 
         let sound = Sound { inner: data };
 

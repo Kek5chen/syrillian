@@ -1,6 +1,6 @@
 use serial_test::serial;
-use std::time::Duration;
 use syrillian::World;
+use web_time::Duration;
 
 #[test]
 #[serial]

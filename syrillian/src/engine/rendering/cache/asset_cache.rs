@@ -8,7 +8,7 @@ use crate::engine::rendering::cache::generic_cache::Cache;
 use crate::rendering::cache::GpuTexture;
 use crate::rendering::{FontAtlas, RuntimeMaterial, RuntimeMesh, RuntimeShader};
 use std::sync::{Arc, Mutex};
-use std::time::Instant;
+use web_time::Instant;
 use wgpu::BindGroupLayout;
 
 pub struct AssetCache {
