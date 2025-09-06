@@ -21,7 +21,7 @@ struct PushConstants {
 var<push_constant> pc: PushConstants;
 
 @vertex
-fn vs_main(in: GlyphIn) -> VOut {
+fn text_2d_vs_main(in: GlyphIn) -> VOut {
     var out: VOut;
     let screen_size = vec2<f32>(system.screen);
     let pos_em = vec2(in.pos_em.x, -in.pos_em.y);
@@ -39,7 +39,7 @@ fn median3(a: vec3<f32>) -> f32 {
 }
 
 @fragment
-fn fs_main(in: VOut) -> @location(0) vec4<f32> {
+fn text_2d_fs_main(in: VOut) -> @location(0) vec4<f32> {
     let msdf = textureSample(t_diffuse, s_diffuse, in.uv).rgb;
     let sig = median3(msdf);
     var dist = (sig - 0.5) * pc.msdf_range_px;

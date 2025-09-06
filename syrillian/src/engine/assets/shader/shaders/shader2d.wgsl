@@ -1,5 +1,5 @@
 @vertex
-fn vs_main(in: VInput) -> FInput {
+fn vs_main_2d(in: VInput) -> FInput {
     var out: FInput;
 
     out.clip = model.transform * vec4<f32>(in.position, 1.0);
@@ -9,7 +9,7 @@ fn vs_main(in: VInput) -> FInput {
 }
 
 @fragment
-fn fs_main(in: FInput) -> @location(0) vec4<f32> {
+fn fs_main_2d(in: FInput) -> @location(0) vec4<f32> {
     if material.use_diffuse_texture != 0u {
         return textureSample(t_diffuse, s_diffuse, in.uv);
     } else {

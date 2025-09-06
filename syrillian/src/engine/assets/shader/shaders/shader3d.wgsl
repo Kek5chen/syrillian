@@ -215,7 +215,7 @@ fn eval_sun(
 }
 
 @fragment
-fn fs_main(in: FInput) -> @location(0) vec4<f32> {
+fn fs_main_3d(in: FInput) -> @location(0) vec4<f32> {
     // Base color (linear)
     var base_rgba: vec4<f32>;
     if material.use_diffuse_texture != 0u {

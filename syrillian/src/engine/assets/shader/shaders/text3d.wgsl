@@ -23,7 +23,7 @@ var<push_constant> pc: PushConstants;
 
 
 @vertex
-fn vs_main(in: GlyphIn) -> VOut {
+fn text_3d_vs_main(in: GlyphIn) -> VOut {
     var out: VOut;
     let world_pos = vec4(pc.text_pos + in.pos_em * pc.em_scale, 0.0, 1.0);
     out.position = camera.view_proj_mat * model.transform * world_pos;
@@ -36,7 +36,7 @@ fn median3(a: vec3<f32>) -> f32 {
 }
 
 @fragment
-fn fs_main(in: VOut) -> @location(0) vec4<f32> {
+fn text_3d_fs_main(in: VOut) -> @location(0) vec4<f32> {
     let msdf = textureSample(t_diffuse, s_diffuse, in.uv).rgb;
     let sig = median3(msdf);
     var dist = (sig - 0.5) * pc.msdf_range_px;
