@@ -191,7 +191,6 @@ impl AppState for MyMain {
             text.transform.set_position(-15., 2., 2.);
             text.transform.set_euler_rotation_deg(0., 90., 0.);
             text3d.set_rainbow_mode(true);
-            text3d.set_font("GeistMono Nerd Font Mono");
 
             world.add_child(text);
             self.text3d = text;
@@ -209,7 +208,6 @@ impl AppState for MyMain {
             let mut text2d = text.add_component::<Text2D>();
 
             text2d.set_text("Meow");
-            text2d.set_font("Impact");
             text2d.set_size(50.);
             text2d.set_position(0., 50.);
             text2d.set_rainbow_mode(true);

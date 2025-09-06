@@ -3,8 +3,6 @@ use crate::store_add_checked;
 use font_kit::family_name::FamilyName;
 use font_kit::properties::Properties;
 use font_kit::source::SystemSource;
-use itertools::Itertools;
-use nalgebra::Vector2;
 use std::convert::Into;
 use std::sync::Arc;
 
@@ -50,20 +48,6 @@ impl StoreTypeFallback for Font {
     }
 }
 
-pub const FONT_ATLAS_GRID_N: u32 = 10;
-pub const FONT_ATLAS_CHARS: [[char; FONT_ATLAS_GRID_N as usize]; FONT_ATLAS_GRID_N as usize] = [
-    ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'],
-    ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j'],
-    ['k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't'],
-    ['u', 'v', 'w', 'x', 'y', 'z', 'A', 'B', 'C', 'D'],
-    ['E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N'],
-    ['O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X'],
-    ['Y', 'Z', '!', '@', '#', '$', '%', '^', '&', '*'],
-    ['(', ')', '-', '_', '+', '=', '[', ']', '{', '}'],
-    ['|', '\\', ':', ';', '"', '\'', '<', '>', ',', '.'],
-    ['/', '?', '`', '~', ' ', ' ', ' ', ' ', ' ', ' '],
-];
-
 pub const DEFAULT_ATLAS_SIZE: u32 = 1024;
 
 impl Font {
@@ -80,12 +64,7 @@ impl Font {
 }
 
 impl Store<Font> {
-    #[inline]
     pub fn load(&self, font_family: &str, atlas_em_px: Option<u32>) -> HFont {
-        self.load_sized(font_family, atlas_em_px)
-    }
-
-    pub fn load_sized(&self, font_family: &str, atlas_em_px: Option<u32>) -> HFont {
         if let Some(font) = self.find(font_family) {
             return font;
         }
@@ -98,15 +77,6 @@ impl Store<Font> {
             .find(|item| item.family_name == family_name)
             .map(|item| (*item.key()).into())
     }
-}
-
-pub fn id_from_atlas(character: char) -> Vector2<u32> {
-    for (y, row) in FONT_ATLAS_CHARS.iter().enumerate() {
-        if let Some((x, _)) = row.iter().find_position(|c| **c == character) {
-            return Vector2::new(x as u32, y as u32);
-        }
-    }
-    Vector2::new(0, 0)
 }
 
 fn find_font_and_bytes(family_name: String) -> (font_kit::font::Font, Arc<Vec<u8>>) {

@@ -131,16 +131,14 @@ impl<const D: u8, DIM: TextDim<D>> TextProxy<D, DIM> {
         data: &mut TextRenderData,
         local_to_world: &Matrix4<f32>,
     ) {
-        if self.text_dirty {
-            self.regenerate_geometry(renderer);
-        }
-
         let hot_font = renderer.cache.font(self.font);
         hot_font.pump(&renderer.cache, &renderer.state.queue, 10);
 
         self.translation.update(local_to_world);
 
         if self.text_dirty {
+            self.regenerate_geometry(renderer);
+
             if (data.glyph_vbo.size() as usize) < size_of_val(&self.glyph_data[..]) {
                 data.glyph_vbo = renderer
                     .state
