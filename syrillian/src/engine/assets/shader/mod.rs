@@ -79,23 +79,24 @@ impl H<Shader> {
     pub const POST_PROCESS_ID: u32 = 3;
     pub const TEXT_2D_ID: u32 = 4;
     pub const TEXT_3D_ID: u32 = 5;
+    pub const SKYBOX_CUBEMAP_ID: u32 = 6;
     #[cfg(not(debug_assertions))]
-    pub const MAX_BUILTIN_ID: u32 = 5;
+    pub const MAX_BUILTIN_ID: u32 = 6;
 
     #[cfg(debug_assertions)]
-    pub const DEBUG_EDGES_ID: u32 = 6;
+    pub const DEBUG_EDGES_ID: u32 = 7;
     #[cfg(debug_assertions)]
-    pub const DEBUG_VERTEX_NORMALS_ID: u32 = 7;
+    pub const DEBUG_VERTEX_NORMALS_ID: u32 = 8;
     #[cfg(debug_assertions)]
-    pub const DEBUG_LINES_ID: u32 = 8;
+    pub const DEBUG_LINES_ID: u32 = 9;
     #[cfg(debug_assertions)]
-    pub const DEBUG_TEXT2D_GEOMETRY_ID: u32 = 9;
+    pub const DEBUG_TEXT2D_GEOMETRY_ID: u32 = 10;
     #[cfg(debug_assertions)]
-    pub const DEBUG_TEXT3D_GEOMETRY_ID: u32 = 10;
+    pub const DEBUG_TEXT3D_GEOMETRY_ID: u32 = 11;
     #[cfg(debug_assertions)]
-    pub const DEBUG_LIGHT_ID: u32 = 11;
+    pub const DEBUG_LIGHT_ID: u32 = 12;
     #[cfg(debug_assertions)]
-    pub const MAX_BUILTIN_ID: u32 = 11;
+    pub const MAX_BUILTIN_ID: u32 = 12;
 
     // The fallback shader if a pipeline fails
     pub const FALLBACK: H<Shader> = H::new(Self::FALLBACK_ID);
@@ -132,6 +133,9 @@ impl H<Shader> {
     pub const DEBUG_TEXT3D_GEOMETRY: H<Shader> = H::new(Self::DEBUG_TEXT3D_GEOMETRY_ID);
     #[cfg(debug_assertions)]
     pub const DEBUG_LIGHT: H<Shader> = H::new(Self::DEBUG_LIGHT_ID);
+
+    // Skybox Cubemap shader
+    pub const SKYBOX_CUBEMAP: H<Shader> = H::new(Self::SKYBOX_CUBEMAP_ID);
 }
 
 const SHADER_FALLBACK3D: &str = include_str!("shaders/fallback_shader3d.wgsl");
@@ -153,6 +157,8 @@ const DEBUG_TEXT2D_GEOMETRY: &str = include_str!("shaders/debug/text2d_geometry.
 const DEBUG_TEXT3D_GEOMETRY: &str = include_str!("shaders/debug/text3d_geometry.wgsl");
 #[cfg(debug_assertions)]
 const DEBUG_LIGHT_SHADER: &str = include_str!("shaders/debug/light.wgsl");
+
+const SHADER_SKYBOX_CUBEMAP: &str = include_str!("shaders/skybox/skybox_cubemap.wgsl");
 
 impl StoreDefaults for Shader {
     fn populate(store: &mut Store<Self>) {
@@ -212,7 +218,11 @@ impl StoreDefaults for Shader {
                 shadow_transparency: true,
             }
         );
-
+        store_add_checked!(
+            store,
+            HShader::SKYBOX_CUBEMAP_ID,
+            Shader::new_default("Skybox Cubemap", SHADER_SKYBOX_CUBEMAP)
+        );
         #[cfg(debug_assertions)]
         {
             use crate::rendering::DEFAULT_VBL;
@@ -390,6 +400,7 @@ impl StoreType for Shader {
             HShader::DEBUG_TEXT3D_GEOMETRY_ID => "Debug Text 3D Geometry Shader",
             #[cfg(debug_assertions)]
             HShader::DEBUG_LIGHT_ID => "Debug Lights Shader",
+            HShader::SKYBOX_CUBEMAP_ID => "Skybox Cubemap Shader",
 
             _ => return HandleName::Id(handle),
         };
