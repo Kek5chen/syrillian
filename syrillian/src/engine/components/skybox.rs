@@ -213,7 +213,12 @@ mod tests {
         assert!(component.is_enabled());
 
         // Test set_rotation
-        let new_rotation = Quaternion::new(0.7071, 0.0, 0.7071, 0.0); // Simple quaternion
+        let new_rotation = Quaternion::new(
+            std::f32::consts::FRAC_1_SQRT_2,
+            0.0,
+            std::f32::consts::FRAC_1_SQRT_2,
+            0.0,
+        );
         component.set_rotation(new_rotation);
         assert_eq!(component.rotation(), &new_rotation);
 
