@@ -2,6 +2,9 @@ use crate::World;
 use crate::components::Component;
 use crate::core::GameObjectId;
 use crate::engine::assets::HCubemap;
+use crate::engine::rendering::CPUDrawCtx;
+use crate::rendering::proxies::SceneProxy;
+use crate::rendering::proxies::SkyboxProxy;
 use nalgebra::{Quaternion, Vector3};
 
 /// Color representation for skybox parameters
@@ -86,6 +89,7 @@ pub struct SkyboxComponent {
     intensity: f32,
     rotation: Quaternion<f32>,
     enabled: bool,
+    dirty_skybox: bool,
 }
 
 impl Component for SkyboxComponent {
@@ -96,11 +100,27 @@ impl Component for SkyboxComponent {
             intensity: 1.0,
             rotation: Quaternion::identity(),
             enabled: true,
+            dirty_skybox: true,
         }
     }
 
-    fn update(&mut self, _world: &mut World) {
-        // Update logic will be implemented when rendering system is integrated
+    fn create_render_proxy(&mut self, _world: &World) -> Option<Box<dyn SceneProxy>> {
+        if !self.enabled {
+            return None;
+        }
+
+        match &self.skybox_type {
+            SkyboxType::Cubemap(cubemap_handle) => {
+                Some(Box::new(SkyboxProxy::new(*cubemap_handle)))
+            }
+            _ => None,
+        }
+    }
+
+    fn update_proxy(&mut self, _world: &World, mut _ctx: CPUDrawCtx) {
+        if self.dirty_skybox {
+            self.dirty_skybox = false;
+        }
     }
 
     fn parent(&self) -> GameObjectId {
@@ -111,6 +131,7 @@ impl Component for SkyboxComponent {
 impl SkyboxComponent {
     pub fn set_skybox_type(&mut self, skybox_type: SkyboxType) {
         self.skybox_type = skybox_type;
+        self.dirty_skybox = true;
     }
 
     pub fn set_intensity(&mut self, intensity: f32) {
@@ -123,6 +144,7 @@ impl SkyboxComponent {
 
     pub fn toggle_enabled(&mut self) {
         self.enabled = !self.enabled;
+        self.dirty_skybox = true;
     }
 
     pub fn skybox_type(&self) -> &SkyboxType {
@@ -232,5 +254,47 @@ mod tests {
             }
             _ => panic!("Expected cubemap type"),
         }
+    }
+
+    #[test]
+    fn test_dirty_flag_set_on_skybox_type_change() {
+        let parent_id = GameObjectId::from_ffi(1);
+        let mut component = SkyboxComponent::new(parent_id);
+        let cubemap = HCubemap::FALLBACK_CUBEMAP;
+        component.set_skybox_type(SkyboxType::Cubemap(cubemap));
+
+        assert!(component.dirty_skybox);
+    }
+
+    #[test]
+    fn test_enable_disable_functionality() {
+        let parent_id = GameObjectId::from_ffi(1);
+        let mut component = SkyboxComponent::new(parent_id);
+        let cubemap = HCubemap::FALLBACK_CUBEMAP;
+        component.set_skybox_type(SkyboxType::Cubemap(cubemap));
+        component.toggle_enabled();
+        component.toggle_enabled();
+
+        assert!(component.is_enabled());
+        assert!(component.dirty_skybox);
+    }
+
+    #[test]
+    fn test_dirty_flags_with_setters() {
+        let parent_id = GameObjectId::from_ffi(1);
+        let mut component = SkyboxComponent::new(parent_id);
+
+        assert!(component.dirty_skybox);
+
+        component.dirty_skybox = false;
+        let cubemap = HCubemap::FALLBACK_CUBEMAP;
+        component.set_skybox_type(SkyboxType::Cubemap(cubemap));
+
+        assert!(component.dirty_skybox);
+
+        component.dirty_skybox = false;
+        component.toggle_enabled();
+
+        assert!(component.dirty_skybox);
     }
 }
