@@ -7,6 +7,7 @@ use winit::window::Window;
 
 pub mod image;
 pub mod mesh_proxy;
+pub mod skybox_proxy;
 pub mod text_proxy;
 
 #[cfg(debug_assertions)]
@@ -14,6 +15,7 @@ pub mod debug_proxy;
 
 pub use image::*;
 pub use mesh_proxy::*;
+pub use skybox_proxy::*;
 pub use text_proxy::*;
 
 use crate::assets::AssetStore;

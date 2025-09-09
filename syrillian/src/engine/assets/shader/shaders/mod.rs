@@ -70,3 +70,6 @@ test_custom_shader!(debug_light, "Debug Light Geometry Shader" => "debug/light.w
 
 // Post-Processing Shaders
 test_post_shader!(fullscreen_passthrough, "Fullscreen Passthrough Shader" => "fullscreen_passhthrough.wgsl");
+
+// Skybox Shaders
+test_shader!(skybox_cubemap, "Skybox Cubemap Shader" => "skybox/skybox_cubemap.wgsl");

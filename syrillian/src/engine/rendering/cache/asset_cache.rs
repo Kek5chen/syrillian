@@ -18,6 +18,7 @@ pub struct AssetCache {
     pub materials: Cache<Material>,
     pub bgls: Cache<BGL>,
     pub fonts: Cache<Font>,
+    pub cubemaps: Cache<Cubemap>,
 
     store: Arc<AssetStore>,
 
@@ -35,6 +36,7 @@ impl AssetCache {
             materials: Cache::new(store.materials.clone(), device.clone(), queue.clone()),
             bgls: Cache::new(store.bgls.clone(), device.clone(), queue.clone()),
             fonts: Cache::new(store.fonts.clone(), device.clone(), queue.clone()),
+            cubemaps: Cache::new(store.cubemaps.clone(), device.clone(), queue.clone()),
             store,
             last_refresh: Mutex::new(Instant::now()),
         }
@@ -83,6 +85,14 @@ impl AssetCache {
             None => self.textures.get(alt, self),
             Some(handle) => self.textures.get(handle, self),
         }
+    }
+
+    pub fn cubemap(&self, handle: HCubemap) -> Option<Arc<GpuTexture>> {
+        self.cubemaps.try_get(handle, self)
+    }
+
+    pub fn cubemap_fallback(&self) -> Arc<GpuTexture> {
+        self.cubemaps.get(HCubemap::FALLBACK_CUBEMAP, self)
     }
 
     pub fn material(&self, handle: HMaterial) -> Arc<RuntimeMaterial> {
