@@ -1,6 +1,7 @@
 use crate::rendering::FontAtlas;
 use crate::rendering::msdf_atlas::{FontLineMetrics, GlyphAtlasEntry};
 use nalgebra::Vector2;
+use static_assertions::{const_assert, const_assert_eq};
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
@@ -9,11 +10,27 @@ pub struct GlyphVertex {
     uv: [f32; 2],
 }
 
+pub const GLYPH_TRIANGLE_COUNT: usize = 2;
+pub const GLYPH_VERTEX_COUNT: usize = GLYPH_TRIANGLE_COUNT * 3;
+
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct GlyphRenderData {
-    triangles: [[GlyphVertex; 3]; 2],
+    vertices: [GlyphVertex; GLYPH_VERTEX_COUNT],
 }
+
+impl GlyphRenderData {
+    pub const TRIANGLE_COUNT: usize = GLYPH_TRIANGLE_COUNT;
+    pub const VERTEX_COUNT: usize = GLYPH_VERTEX_COUNT;
+}
+
+const_assert_eq!(size_of::<GlyphVertex>(), size_of::<[f32; 4]>());
+const_assert_eq!(align_of::<GlyphVertex>(), align_of::<f32>());
+const_assert_eq!(
+    size_of::<GlyphRenderData>(),
+    size_of::<GlyphVertex>() * GlyphRenderData::VERTEX_COUNT
+);
+const_assert!(size_of::<GlyphRenderData>() % 16 == 0);
 
 #[derive(Debug, Copy, Clone)]
 pub enum TextAlignment {
@@ -62,8 +79,16 @@ impl GlyphRenderData {
         };
 
         Self {
-            triangles: [[v_tl, v_bl, v_tr], [v_tr, v_bl, v_br]],
+            vertices: [v_tl, v_bl, v_tr, v_tr, v_bl, v_br],
         }
+    }
+
+    pub fn vertices(&self) -> &[GlyphVertex] {
+        &self.vertices
+    }
+
+    pub fn vertices_mut(&mut self) -> &mut [GlyphVertex] {
+        &mut self.vertices
     }
 }
 
@@ -78,10 +103,8 @@ fn align_lines(glyphs: &mut [GlyphRenderData], alignment: TextAlignment, rows: &
         let dx = shift(width_em);
         for _ in 0..count {
             if let Some(g) = it.next() {
-                for tri in g.triangles.iter_mut() {
-                    for v in tri {
-                        v.pos[0] += dx;
-                    }
+                for v in g.vertices_mut() {
+                    v.pos[0] += dx;
                 }
             }
         }
