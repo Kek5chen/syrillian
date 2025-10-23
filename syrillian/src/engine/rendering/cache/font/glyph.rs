@@ -1,5 +1,5 @@
 use crate::rendering::FontAtlas;
-use crate::rendering::msdf_atlas::GlyphAtlasEntry;
+use crate::rendering::msdf_atlas::{FontLineMetrics, GlyphAtlasEntry};
 use nalgebra::Vector2;
 
 #[repr(C)]
@@ -99,9 +99,22 @@ pub fn generate_glyph_geometry_stream(
     }
 
     let metrics = atlas.metrics();
-    let baseline_dy =
-        (metrics.ascent_em + metrics.descent_em + metrics.line_gap_em) * line_height_mul;
+    let baseline_dy = baseline_step(metrics, line_height_mul);
+    let (mut quads, row_data) = layout_text_lines(text, atlas, baseline_dy);
+    align_lines(&mut quads, alignment, &row_data);
 
+    quads
+}
+
+fn baseline_step(metrics: FontLineMetrics, line_height_mul: f32) -> f32 {
+    (metrics.ascent_em + metrics.descent_em + metrics.line_gap_em) * line_height_mul
+}
+
+fn layout_text_lines(
+    text: &str,
+    atlas: &FontAtlas,
+    baseline_dy: f32,
+) -> (Vec<GlyphRenderData>, Vec<(usize, f32)>) {
     let mut quads = Vec::new();
     let mut row_data = Vec::<(usize, f32)>::new();
     let mut cursor = Vector2::new(0.0f32, 0.0f32);
@@ -110,23 +123,34 @@ pub fn generate_glyph_geometry_stream(
 
     for ch in text.chars() {
         if ch == '\n' {
-            row_data.push((row_glyphs, row_width_em));
-            cursor.x = 0.0;
-            cursor.y -= baseline_dy;
+            push_row(&mut row_data, row_glyphs, row_width_em);
+            begin_new_line(&mut cursor, baseline_dy);
             row_glyphs = 0;
             row_width_em = 0.0;
             continue;
         }
 
-        if let Some(entry) = atlas.entry(ch).or_else(|| atlas.entry(' ')) {
+        if let Some(entry) = glyph_entry(atlas, ch) {
             quads.push(GlyphRenderData::from_entry(cursor, &entry));
             cursor.x += entry.advance_em;
             row_width_em = row_width_em.max(cursor.x);
             row_glyphs += 1;
         }
     }
-    row_data.push((row_glyphs, row_width_em));
-    align_lines(&mut quads, alignment, &row_data);
 
-    quads
+    push_row(&mut row_data, row_glyphs, row_width_em);
+    (quads, row_data)
+}
+
+fn push_row(rows: &mut Vec<(usize, f32)>, glyphs: usize, width_em: f32) {
+    rows.push((glyphs, width_em));
+}
+
+fn begin_new_line(cursor: &mut Vector2<f32>, baseline_dy: f32) {
+    cursor.x = 0.0;
+    cursor.y -= baseline_dy;
+}
+
+fn glyph_entry(atlas: &FontAtlas, ch: char) -> Option<GlyphAtlasEntry> {
+    atlas.entry(ch).or_else(|| atlas.entry(' '))
 }

@@ -121,70 +121,12 @@ impl MsdfAtlas {
         queue: &wgpu::Queue,
         glyph: GlyphBitmap,
     ) -> Option<GlyphAtlasEntry> {
-        let pad = 2i32;
-        let alloc = self.alloc.allocate(size2(
-            glyph.width_px as i32 + 2 * pad,
-            glyph.height_px as i32 + 2 * pad,
-        ))?;
-        let rect = alloc.rectangle;
+        let region = self.allocate_region(&glyph)?;
 
-        let dest_x = (rect.min.x + pad) as u32;
-        let dest_y = (rect.min.y + pad) as u32;
+        self.blit_glyph(&glyph, &region);
+        self.upload_region(cache, queue, &region);
 
-        for row in 0..glyph.height_px {
-            let dst_off = ((dest_y + row) as usize * self.stride) + (dest_x as usize) * 4;
-            let src_off = (row as usize) * (glyph.width_px as usize) * 4;
-            self.pixels[dst_off..dst_off + (glyph.width_px as usize) * 4].copy_from_slice(
-                &glyph.pixels_rgba[src_off..src_off + (glyph.width_px as usize) * 4],
-            );
-        }
-
-        let gpu_texture = cache.textures.try_get(self.texture, cache).unwrap();
-        let copy = wgpu::TexelCopyTextureInfo {
-            texture: &gpu_texture.texture,
-            mip_level: 0,
-            origin: Origin3d {
-                x: rect.min.x.max(0) as u32,
-                y: rect.min.y.max(0) as u32,
-                z: 0,
-            },
-            aspect: TextureAspect::All,
-        };
-        queue.write_texture(
-            copy,
-            &self.pixels[((dest_y as usize) * self.stride) + (dest_x as usize) * 4
-                ..((dest_y + glyph.height_px - 1) as usize) * self.stride
-                    + (dest_x as usize) * 4
-                    + (glyph.width_px as usize) * 4],
-            TexelCopyBufferLayout {
-                offset: 0,
-                bytes_per_row: Some(self.stride as u32),
-                rows_per_image: Some(glyph.height_px),
-            },
-            Extent3d {
-                width: glyph.width_px,
-                height: glyph.height_px,
-                depth_or_array_layers: 1,
-            },
-        );
-
-        let uv_min = [
-            dest_x as f32 / self.width as f32,
-            dest_y as f32 / self.height as f32,
-        ];
-        let uv_max = [
-            (dest_x + glyph.width_px) as f32 / self.width as f32,
-            (dest_y + glyph.height_px) as f32 / self.height as f32,
-        ];
-
-        let entry = GlyphAtlasEntry {
-            uv_min,
-            uv_max,
-            plane_min: glyph.plane_min,
-            plane_max: glyph.plane_max,
-            advance_em: glyph.advance_em,
-            msdf_range_px: glyph.msdf_range_px,
-        };
+        let entry = self.build_entry(&glyph, &region);
         self.entries.write().unwrap().insert(glyph.ch, entry);
         Some(entry)
     }
@@ -207,5 +149,103 @@ impl MsdfAtlas {
 
     pub fn material(&self) -> HMaterial {
         self.material
+    }
+}
+
+struct AtlasRegion {
+    dest_x: u32,
+    dest_y: u32,
+    width: u32,
+    height: u32,
+    origin: Origin3d,
+}
+
+impl AtlasRegion {
+    fn byte_range(&self, stride: usize) -> std::ops::Range<usize> {
+        let start = (self.dest_y as usize * stride) + (self.dest_x as usize) * 4;
+        let end = start + (self.height as usize - 1) * stride + (self.width as usize) * 4;
+        start..end
+    }
+}
+
+impl MsdfAtlas {
+    fn allocate_region(&mut self, glyph: &GlyphBitmap) -> Option<AtlasRegion> {
+        let pad = 2i32;
+        let alloc = self.alloc.allocate(size2(
+            glyph.width_px as i32 + 2 * pad,
+            glyph.height_px as i32 + 2 * pad,
+        ))?;
+        let rect = alloc.rectangle;
+
+        let dest_x = (rect.min.x + pad) as u32;
+        let dest_y = (rect.min.y + pad) as u32;
+
+        Some(AtlasRegion {
+            dest_x,
+            dest_y,
+            width: glyph.width_px,
+            height: glyph.height_px,
+            origin: Origin3d {
+                x: rect.min.x.max(0) as u32,
+                y: rect.min.y.max(0) as u32,
+                z: 0,
+            },
+        })
+    }
+
+    fn blit_glyph(&mut self, glyph: &GlyphBitmap, region: &AtlasRegion) {
+        for row in 0..region.height {
+            let dst_off =
+                ((region.dest_y + row) as usize * self.stride) + (region.dest_x as usize) * 4;
+            let src_off = (row as usize) * (region.width as usize) * 4;
+            self.pixels[dst_off..dst_off + (region.width as usize) * 4].copy_from_slice(
+                &glyph.pixels_rgba[src_off..src_off + (region.width as usize) * 4],
+            );
+        }
+    }
+
+    fn upload_region(&self, cache: &AssetCache, queue: &wgpu::Queue, region: &AtlasRegion) {
+        let gpu_texture = cache.textures.try_get(self.texture, cache).unwrap();
+        let copy = wgpu::TexelCopyTextureInfo {
+            texture: &gpu_texture.texture,
+            mip_level: 0,
+            origin: region.origin,
+            aspect: TextureAspect::All,
+        };
+        let bytes = &self.pixels[region.byte_range(self.stride)];
+        queue.write_texture(
+            copy,
+            bytes,
+            TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(self.stride as u32),
+                rows_per_image: Some(region.height),
+            },
+            Extent3d {
+                width: region.width,
+                height: region.height,
+                depth_or_array_layers: 1,
+            },
+        );
+    }
+
+    fn build_entry(&self, glyph: &GlyphBitmap, region: &AtlasRegion) -> GlyphAtlasEntry {
+        let uv_min = [
+            region.dest_x as f32 / self.width as f32,
+            region.dest_y as f32 / self.height as f32,
+        ];
+        let uv_max = [
+            (region.dest_x + region.width) as f32 / self.width as f32,
+            (region.dest_y + region.height) as f32 / self.height as f32,
+        ];
+
+        GlyphAtlasEntry {
+            uv_min,
+            uv_max,
+            plane_min: glyph.plane_min,
+            plane_max: glyph.plane_max,
+            advance_em: glyph.advance_em,
+            msdf_range_px: glyph.msdf_range_px,
+        }
     }
 }

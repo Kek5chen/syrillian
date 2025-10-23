@@ -132,7 +132,11 @@ impl<const D: u8, DIM: TextDim<D>> TextProxy<D, DIM> {
         local_to_world: &Matrix4<f32>,
     ) {
         let hot_font = renderer.cache.font(self.font);
-        hot_font.pump(&renderer.cache, &renderer.state.queue, 10);
+        let glyphs_ready = hot_font.pump(&renderer.cache, &renderer.state.queue, 10);
+
+        if glyphs_ready {
+            self.text_dirty = true;
+        }
 
         self.translation.update(local_to_world);
 
