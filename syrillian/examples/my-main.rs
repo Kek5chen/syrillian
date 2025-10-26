@@ -58,17 +58,19 @@ struct MyMain {
 
 impl Default for MyMain {
     fn default() -> Self {
-        Self {
-            frame_counter: FrameCounter::default(),
-            player: GameObjectId::null(),
-            player_rb: CRef::null(),
-            picked_up: None,
-            text3d: GameObjectId::null(),
-            light1: CRef::null(),
-            light2: CRef::null(),
-            pop_sound: None,
-            sound_cube_emitter: CRef::null(),
-            sound_cube2_emitter: CRef::null(),
+        unsafe {
+            Self {
+                frame_counter: FrameCounter::default(),
+                player: GameObjectId::null(),
+                player_rb: CRef::null(),
+                picked_up: None,
+                text3d: GameObjectId::null(),
+                light1: CRef::null(),
+                light2: CRef::null(),
+                pop_sound: None,
+                sound_cube_emitter: CRef::null(),
+                sound_cube2_emitter: CRef::null(),
+            }
         }
     }
 }

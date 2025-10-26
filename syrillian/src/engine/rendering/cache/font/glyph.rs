@@ -30,7 +30,7 @@ const_assert_eq!(
     size_of::<GlyphRenderData>(),
     size_of::<GlyphVertex>() * GlyphRenderData::VERTEX_COUNT
 );
-const_assert!(size_of::<GlyphRenderData>() % 16 == 0);
+const_assert!(size_of::<GlyphRenderData>().is_multiple_of(16));
 
 #[derive(Debug, Copy, Clone)]
 pub enum TextAlignment {

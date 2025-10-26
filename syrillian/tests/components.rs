@@ -2,7 +2,7 @@ use nalgebra::Vector3;
 use serial_test::serial;
 use std::any::TypeId;
 use syrillian::World;
-use syrillian::components::{Component, TypedComponentId};
+use syrillian::components::Component;
 use syrillian::core::GameObjectId;
 
 struct MyComponent {
@@ -51,7 +51,7 @@ fn component() {
         2
     );
 
-    obj.remove_component(comp2, &mut world);
+    obj.remove_component(&comp2, &mut world);
     assert_eq!(obj.get_components::<MyComponent>().count(), 1);
     assert_eq!(world.components.values().count(), 1);
     assert_eq!(
@@ -78,7 +78,7 @@ fn check_typed() {
     let mut obj = world.new_object("Test");
 
     let comp = obj.add_component::<MyComponent>();
-    let typed = TypedComponentId::from(comp);
+    let typed = comp.typed_id();
 
     assert_eq!(typed.type_id(), TypeId::of::<MyComponent>());
 

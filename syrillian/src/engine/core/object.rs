@@ -1,10 +1,11 @@
+use std::borrow::Borrow;
 use std::collections::HashSet;
 use std::fmt::Debug;
 use std::ops::{Deref, DerefMut};
 
 use crate::components::{CRef, Component, TypedComponentId};
+use crate::ensure_aligned;
 use crate::world::World;
-use crate::{c_any_mut, ensure_aligned};
 use itertools::Itertools;
 use nalgebra::{Matrix4, Translation3, Vector3};
 use slotmap::{Key, KeyData, new_key_type};
@@ -77,7 +78,7 @@ pub struct GameObject {
     /// The transformation applied to the object.
     pub transform: Transform,
     /// Components attached to this object.
-    pub(crate) components: HashSet<TypedComponentId>,
+    pub(crate) components: HashSet<CRef<dyn Component>>,
 }
 
 impl GameObject {
@@ -123,9 +124,10 @@ impl GameObject {
         let mut comp: C = C::new(self.id);
         comp.init(world);
 
-        let id = world.components.add(comp);
-        self.components.insert(id.into());
-        id
+        let new_comp = world.components.add(comp);
+        let new_comp2 = new_comp.clone();
+        self.components.insert(new_comp.into_dyn());
+        new_comp2
     }
 
     /// Adds a new [`Component`] of type `C` to all children of this game object.
@@ -157,7 +159,7 @@ impl GameObject {
 
     /// Returns an iterator over all [`Component`] of type `C` attached to this game object.
     pub fn get_components<C: Component + 'static>(&self) -> impl Iterator<Item = CRef<C>> {
-        self.components.iter().filter_map(|c| c.as_a())
+        self.components.iter().filter_map(|c| c.clone().as_a())
     }
 
     /// Retrieves the first found [`Component`] of type `C` attached to a child of this game object.
@@ -175,8 +177,8 @@ impl GameObject {
     }
 
     /// Removes a [`Component`] by id from this game object and the world.
-    pub fn remove_component(&mut self, comp: impl Into<TypedComponentId>, world: &mut World) {
-        let comp = comp.into();
+    pub fn remove_component(&mut self, comp: impl Borrow<TypedComponentId>, world: &mut World) {
+        let comp = *comp.borrow();
         self.components.remove(&comp);
         world.components.remove(comp);
     }
@@ -191,7 +193,7 @@ impl GameObject {
         &self.children
     }
 
-    /// Destroys this game object tree, cleaning up any component specific data,
+    /// Destroys this game object tree, cleaning up any component-specific data,
     /// then unlinks and removes the object from the world.
     pub fn delete(&mut self) {
         for mut child in self.children.iter().copied() {
@@ -199,11 +201,9 @@ impl GameObject {
         }
 
         let world = World::instance();
-        for typed in self.components.drain() {
-            if let Some(comp) = c_any_mut!(typed) {
-                comp.delete_internal(world);
-                world.components.remove(typed);
-            }
+        for mut comp in self.components.drain() {
+            comp.delete_internal(world);
+            world.components.remove(&comp);
         }
 
         self.children.clear();

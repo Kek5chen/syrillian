@@ -29,7 +29,7 @@ static mut G_WORLD: *mut World = std::ptr::null_mut();
 
 /// Central structure representing the running scene.
 ///
-/// The world keeps track of all [`GameObject`](crate::core::GameObject)
+/// The world keeps track of all [`GameObject`](GameObject)
 /// instances and provides access to shared systems like physics and input.
 /// Only one instance can exist at a time and is globally accessible via
 /// [`World::instance`].
@@ -186,11 +186,13 @@ impl World {
     /// and added as a child of the world.
     pub fn new_camera(&mut self) -> CRef<CameraComponent> {
         let obj = CameraPrefab.build(self);
-        let camera = obj.get_component::<CameraComponent>().unwrap_or_default();
+        let camera = obj
+            .get_component::<CameraComponent>()
+            .expect("CameraPrefab should always attach a camera to itself");
 
         if !self.active_camera.exists(self) {
             self.add_child(obj);
-            self.set_active_camera(camera);
+            self.set_active_camera(camera.clone());
         }
 
         camera
@@ -267,9 +269,9 @@ impl World {
             if !obj.transform.is_dirty() {
                 continue;
             }
-            for ctid in obj.components.iter().copied() {
+            for comp in obj.components.iter() {
                 frame_proxy_batch.push(RenderMsg::UpdateTransform(
-                    ctid,
+                    comp.typed_id(),
                     obj.transform.get_global_transform_matrix(),
                 ));
             }

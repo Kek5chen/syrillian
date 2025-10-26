@@ -1,10 +1,11 @@
 use crate::components::{CRef, Component, ComponentId, TypedComponentId};
 use log::trace;
 use slotmap::HopSlotMap;
-use slotmap::hop::{Values, ValuesMut};
+use slotmap::hop::Values;
 use std::any::{Any, TypeId};
+use std::borrow::Borrow;
 use std::collections::HashMap;
-use std::marker::PhantomData;
+use std::sync::Arc;
 
 #[allow(unused)]
 pub(crate) trait HopSlotMapUntyped<K>
@@ -19,10 +20,10 @@ where
     fn iter_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item = (K, &'a mut dyn Component)> + 'a>;
     fn get(&self, key: K) -> Option<&dyn Component>;
     fn get_mut(&mut self, key: K) -> Option<&mut dyn Component>;
-    fn remove(&mut self, key: K) -> Option<Box<dyn Component>>;
+    fn remove(&mut self, key: K) -> Option<CRef<dyn Component>>;
 }
 
-impl<K, V> HopSlotMapUntyped<K> for HopSlotMap<K, V>
+impl<K, V> HopSlotMapUntyped<K> for HopSlotMap<K, CRef<V>>
 where
     K: slotmap::Key + Send + 'static,
     V: Component,
@@ -36,34 +37,34 @@ where
     }
 
     fn iter_comps<'a>(&'a self) -> Box<dyn Iterator<Item = &'a dyn Component> + 'a> {
-        Box::new(self.values().map(|v| v as &dyn Component))
+        Box::new(self.values().map(|v| &**v as &dyn Component))
     }
 
     fn iter_comps_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item = &'a mut dyn Component> + 'a> {
-        Box::new(self.values_mut().map(|v| v as &mut dyn Component))
+        Box::new(self.values_mut().map(|v| &mut **v as &mut dyn Component))
     }
 
     fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = (K, &'a dyn Component)> + 'a> {
-        Box::new(self.iter().map(|(k, v)| (k, v as &dyn Component)))
+        Box::new(self.iter().map(|(k, v)| (k, &**v as &dyn Component)))
     }
 
     fn iter_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item = (K, &'a mut dyn Component)> + 'a> {
-        Box::new(self.iter_mut().map(|(k, v)| (k, v as &mut dyn Component)))
+        Box::new(
+            self.iter_mut()
+                .map(|(k, v)| (k, &mut **v as &mut dyn Component)),
+        )
     }
 
     fn get(&self, key: K) -> Option<&dyn Component> {
-        self.get(key).map(|v| v as &dyn Component)
+        self.get(key).map(|v| &**v as &dyn Component)
     }
 
     fn get_mut(&mut self, key: K) -> Option<&mut dyn Component> {
-        self.get_mut(key).map(|v| v as &mut dyn Component)
+        self.get_mut(key).map(|v| &mut **v as &mut dyn Component)
     }
 
-    fn remove(&mut self, key: K) -> Option<Box<dyn Component>> {
-        self.remove(key).map(|v| {
-            let comp: Box<dyn Component> = Box::new(v);
-            comp
-        })
+    fn remove(&mut self, key: K) -> Option<CRef<dyn Component>> {
+        self.remove(key).map(|v| v.into_dyn())
     }
 }
 
@@ -87,36 +88,50 @@ impl ComponentStorage {
         Some(self.inner.get_mut(&tid)?.as_mut())
     }
 
-    pub(crate) fn _get<C: Component>(&self) -> Option<&HopSlotMap<ComponentId, C>> {
+    pub(crate) fn _get<C: Component>(&self) -> Option<&HopSlotMap<ComponentId, CRef<C>>> {
         let tid = TypeId::of::<C>();
 
         let typed = self
             ._get_from_id(tid)?
             .as_dyn()
-            .downcast_ref::<HopSlotMap<ComponentId, C>>()
+            .downcast_ref::<HopSlotMap<ComponentId, CRef<C>>>()
             .expect("Type ID was checked");
 
         Some(typed)
     }
 
-    pub(crate) fn _get_mut<C: Component>(&mut self) -> Option<&mut HopSlotMap<ComponentId, C>> {
+    pub(crate) fn _get_mut<C: Component>(
+        &mut self,
+    ) -> Option<&mut HopSlotMap<ComponentId, CRef<C>>> {
         let tid = TypeId::of::<C>();
 
         let typed = self
             ._get_mut_from_id(tid)?
             .as_dyn_mut()
-            .downcast_mut::<HopSlotMap<ComponentId, C>>()
+            .downcast_mut::<HopSlotMap<ComponentId, CRef<C>>>()
             .expect("Type ID was checked");
 
         Some(typed)
     }
 
-    pub fn get<C: Component>(&self, id: CRef<C>) -> Option<&C> {
-        self._get()?.get(id.0)
+    pub(crate) fn _get_or_insert_mut<C: Component>(
+        &mut self,
+    ) -> &mut HopSlotMap<ComponentId, CRef<C>> {
+        let tid = TypeId::of::<C>();
+        self.inner
+            .entry(tid)
+            .or_insert_with(|| Box::new(HopSlotMap::<ComponentId, CRef<C>>::with_key()))
+            .as_dyn_mut()
+            .downcast_mut()
+            .expect("Type ID was checked")
     }
 
-    pub fn get_mut<C: Component>(&mut self, id: CRef<C>) -> Option<&mut C> {
-        self._get_mut()?.get_mut(id.0)
+    pub fn get<C: Component>(&self, id: impl Into<ComponentId>) -> Option<&CRef<C>> {
+        self._get()?.get(id.into())
+    }
+
+    pub fn get_mut<C: Component>(&mut self, id: TypedComponentId) -> Option<&mut CRef<C>> {
+        self._get_mut()?.get_mut(id.1)
     }
 
     pub fn get_dyn(&self, id: TypedComponentId) -> Option<&dyn Component> {
@@ -127,12 +142,8 @@ impl ComponentStorage {
         self._get_mut_from_id(id.0)?.get_mut(id.1)
     }
 
-    pub fn values_of_type<C: Component>(&self) -> Option<Values<'_, ComponentId, C>> {
+    pub fn values_of_type<C: Component>(&self) -> Option<Values<'_, ComponentId, CRef<C>>> {
         Some(self._get()?.values())
-    }
-
-    pub fn values_mut_of_type<C: Component>(&mut self) -> Option<ValuesMut<'_, ComponentId, C>> {
-        Some(self._get_mut()?.values_mut())
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (TypedComponentId, &dyn Component)> {
@@ -159,25 +170,26 @@ impl ComponentStorage {
             .flat_map(|store| store.iter_comps_mut())
     }
 
-    pub(crate) fn map_mut<C: Component>(&mut self) -> &mut HopSlotMap<ComponentId, C> {
-        let tid = TypeId::of::<C>();
-        self.inner
-            .entry(tid)
-            .or_insert_with(|| Box::new(HopSlotMap::<ComponentId, C>::with_key()))
-            .as_dyn_mut()
-            .downcast_mut()
-            .unwrap()
-    }
-
     pub(crate) fn add<C: Component>(&mut self, component: C) -> CRef<C> {
-        let comp: CRef<C> = CRef(self.map_mut().insert(component), PhantomData);
+        let comp = Arc::new(component);
+
+        let store = self._get_or_insert_mut();
+        let id = store.insert(CRef(Some(comp), TypedComponentId::null::<C>()));
+        let tid = TypedComponentId::from_typed::<C>(id);
+
+        let cref = store.get_mut(id).expect("Element was just inserted");
+        cref.1 = tid;
+        let cref = cref.clone();
+
         self.len += 1;
-        self.fresh.push(comp.into());
-        comp
+        self.fresh.push(tid);
+        cref
     }
 
-    pub(crate) fn remove(&mut self, ctid: TypedComponentId) {
+    pub(crate) fn remove(&mut self, ctid: impl Borrow<TypedComponentId>) {
         trace!("Removed component");
+
+        let ctid = *ctid.borrow();
 
         let Some(map) = self._get_mut_from_id(ctid.0) else {
             // already empty
@@ -187,7 +199,7 @@ impl ComponentStorage {
         let comp = map.remove(ctid.1);
         debug_assert!(
             comp.is_some(),
-            "Component wasn't found despite still being on owned by a game object."
+            "Component wasn't found despite still being owned by a game object."
         );
         self.removed.push(ctid);
 

@@ -1,9 +1,9 @@
-//! The [`AssetStore`] is used to store "raw" data, like meshes, images (textues) etc.
+//! The [`AssetStore`] is used to store "raw" data, like meshes, images (textures) etc.
 //!
-//! It exists to cleanly differentiate between GPU state, and plain-old-data.
-//! You can safely add stuff to any store as you wish, and then request to use it
+//! It exists to cleanly differentiate between GPU state and plain-old-data.
+//! You can safely add stuff to any store as you wish and then request to use it
 //! when rendering. The [`AssetCache`](crate::rendering::AssetCache) is the other side of this component
-//! which you will interact with to retrieve the instantiated- hot GPU data.
+//! which you will interact with to retrieve the instantiated hot GPU data.
 //!
 //! See module level documentation for more info.
 

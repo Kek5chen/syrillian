@@ -6,7 +6,7 @@ use crate::rendering::lights::{Light, LightProxy, LightType};
 use crate::utils::FloatMathExt;
 use std::marker::PhantomData;
 
-pub trait LightTypeTrait {
+pub trait LightTypeTrait: Send + Sync {
     fn type_id() -> LightType;
 }
 
