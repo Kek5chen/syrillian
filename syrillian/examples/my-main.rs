@@ -15,9 +15,10 @@ use slotmap::Key;
 use std::error::Error;
 use syrillian::SyrillianApp;
 use syrillian::assets::scene_loader::SceneLoader;
-use syrillian::assets::{HMaterial, HSound, Sound, StoreType};
+use syrillian::assets::{HCubemap, HMaterial, HSound, Sound, StoreType};
 use syrillian::assets::{Material, Shader};
 use syrillian::components::audio::AudioEmitter;
+use syrillian::components::skybox::{SkyboxComponent, SkyboxType};
 use syrillian::components::{
     CRef, Collider3D, Component, FirstPersonCameraController, PointLightComponent,
     RigidBodyComponent, RopeComponent, RotateComponent, SpotLightComponent, SpringComponent,
@@ -77,8 +78,6 @@ impl AppState for MyMain {
     fn init(&mut self, world: &mut World) -> Result<(), Box<dyn Error>> {
         world.input.set_auto_cursor_lock(true);
         world.input.set_quit_on_escape(true);
-
-        // Set skybox background color to a pleasant sky blue
         world.set_skybox_background_color(wgpu::Color {
             r: 0.529, // 135/255
             g: 0.808, // 206/255
@@ -87,6 +86,10 @@ impl AppState for MyMain {
         });
 
         world.spawn(&City);
+        let mut skybox = world.new_object("Skybox");
+        skybox.add_component::<SkyboxComponent>()
+            .set_skybox_type(SkyboxType::Cubemap(HCubemap::FALLBACK_CUBEMAP));
+        world.add_child(skybox);
 
         self.player = world.spawn(&FirstPersonPlayerPrefab);
         self.player_rb = self.player.get_component::<RigidBodyComponent>().unwrap();

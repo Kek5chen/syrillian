@@ -33,16 +33,15 @@ mod asset_store;
 pub(crate) mod generic_store;
 
 mod bind_group_layout;
+mod cubemaps;
 mod font;
+mod handle;
+mod key;
 mod material;
 mod mesh;
 mod shader;
-mod texture;
-
-mod cubemaps;
-mod handle;
-mod key;
 mod sound;
+mod texture;
 
 pub use self::asset_store::*;
 pub use self::handle::*;

@@ -218,10 +218,28 @@ impl StoreDefaults for Shader {
                 shadow_transparency: true,
             }
         );
+        const SKYBOX_VBL: &[VertexBufferLayout] = &[VertexBufferLayout {
+            array_stride: 12,
+            step_mode: VertexStepMode::Vertex,
+            attributes: &[VertexAttribute {
+                format: VertexFormat::Float32x3,
+                offset: 0,
+                shader_location: 0,
+            }],
+        }];
+
         store_add_checked!(
             store,
             HShader::SKYBOX_CUBEMAP_ID,
-            Shader::new_default("Skybox Cubemap", SHADER_SKYBOX_CUBEMAP)
+            Shader::Custom {
+                name: "Skybox Cubemap".to_string(),
+                code: ShaderCode::Full(SHADER_SKYBOX_CUBEMAP.to_string()),
+                polygon_mode: PolygonMode::Fill,
+                topology: PrimitiveTopology::TriangleList,
+                vertex_buffers: SKYBOX_VBL,
+                push_constant_ranges: &[],
+                shadow_transparency: false,
+            }
         );
         #[cfg(debug_assertions)]
         {
@@ -566,6 +584,7 @@ impl Shader {
             HBGL::MATERIAL_ID => "material",
             HBGL::LIGHT_ID => "light",
             HBGL::SHADOW_ID => "shadow",
+            HBGL::CUBEMAP_ID => "cubemap",
 
             HBGL::RENDER_ID => return true,
             _ => return false,
@@ -594,6 +613,7 @@ impl Shader {
         let lgt_bgl = cache.bgl_light();
         let sdw_bgl = cache.bgl_shadow();
         let pp_bgl = cache.bgl_post_process();
+        let cubemap_bgl = cache.bgl_cubemap();
         let empty_bgl = cache.bgl_empty();
 
         let mut slots: [Option<&BindGroupLayout>; 6] = [None; 6];
@@ -602,7 +622,9 @@ impl Shader {
         if self.is_post_process() {
             slots[1] = Some(&pp_bgl);
         } else {
-            if self.needs_bgl(HBGL::MODEL) {
+            if self.is_custom() && self.needs_bgl(HBGL::CUBEMAP) {
+                slots[1] = Some(&cubemap_bgl);
+            } else if self.needs_bgl(HBGL::MODEL) {
                 slots[1] = Some(&mdl_bgl);
             }
             if self.needs_bgl(HBGL::MATERIAL) {

@@ -145,6 +145,12 @@ impl AssetCache {
             .expect("Post Process is a default layout")
     }
 
+    pub fn bgl_cubemap(&self) -> Arc<BindGroupLayout> {
+        self.bgls
+            .try_get(HBGL::CUBEMAP, self)
+            .expect("Cubemap is a default layout")
+    }
+
     pub fn font(&self, handle: HFont) -> Arc<FontAtlas> {
         self.fonts.get(handle, self)
     }

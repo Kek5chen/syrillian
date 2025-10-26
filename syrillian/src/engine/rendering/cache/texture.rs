@@ -33,7 +33,6 @@ impl CacheType for Cubemap {
     type Hot = GpuTexture;
 
     fn upload(self, device: &Device, queue: &Queue, _cache: &AssetCache) -> Self::Hot {
-        // Use existing cubemap methods to avoid code duplication
         let texture = self.to_gpu_texture(device, queue);
         let view = self.create_view(&texture);
         GpuTexture { texture, view }

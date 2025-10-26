@@ -20,8 +20,9 @@ impl H<BGL> {
     pub(super) const SHADOW_ID: u32 = 4;
     pub(super) const POST_PROCESS_ID: u32 = 5;
     pub(super) const EMPTY_ID: u32 = 6;
+    pub(super) const CUBEMAP_ID: u32 = 7;
 
-    const MAX_BUILTIN_ID: u32 = 6;
+    const MAX_BUILTIN_ID: u32 = 7;
 
     pub const RENDER: HBGL = HBGL::new(Self::RENDER_ID);
     pub const MODEL: HBGL = HBGL::new(Self::MODEL_ID);
@@ -30,6 +31,7 @@ impl H<BGL> {
     pub const SHADOW: HBGL = HBGL::new(Self::SHADOW_ID);
     pub const POST_PROCESS: HBGL = HBGL::new(Self::POST_PROCESS_ID);
     pub const EMPTY: HBGL = HBGL::new(Self::EMPTY_ID);
+    pub const CUBEMAP: HBGL = HBGL::new(Self::CUBEMAP_ID);
 }
 
 impl StoreType for BGL {
@@ -45,6 +47,7 @@ impl StoreType for BGL {
             HBGL::LIGHT_ID => HandleName::Static("Light Bind Group Layout"),
             HBGL::SHADOW_ID => HandleName::Static("Shadow Bind Group Layout"),
             HBGL::POST_PROCESS_ID => HandleName::Static("Post Process Bind Group Layout"),
+            HBGL::CUBEMAP_ID => HandleName::Static("Cubemap Bind Group Layout"),
             _ => HandleName::Id(handle),
         }
     }
@@ -199,6 +202,25 @@ const PP_ENTRIES: [BindGroupLayoutEntry; 2] = [
     },
 ];
 
+const CUBEMAP_ENTRIES: [BindGroupLayoutEntry; 2] = [
+    BindGroupLayoutEntry {
+        binding: 0,
+        visibility: ShaderStages::FRAGMENT,
+        ty: BindingType::Texture {
+            sample_type: TextureSampleType::Float { filterable: true },
+            view_dimension: TextureViewDimension::Cube,
+            multisampled: false,
+        },
+        count: None,
+    },
+    BindGroupLayoutEntry {
+        binding: 1,
+        visibility: ShaderStages::FRAGMENT,
+        ty: BindingType::Sampler(SamplerBindingType::Filtering),
+        count: None,
+    },
+];
+
 impl StoreDefaults for BGL {
     fn populate(store: &mut Store<Self>) {
         store_add_checked!(
@@ -261,6 +283,15 @@ impl StoreDefaults for BGL {
             BGL {
                 label: "".to_string(),
                 entries: [].to_vec()
+            }
+        );
+
+        store_add_checked!(
+            store,
+            HBGL::CUBEMAP_ID,
+            BGL {
+                label: HBGL::CUBEMAP.ident(),
+                entries: CUBEMAP_ENTRIES.to_vec()
             }
         );
     }

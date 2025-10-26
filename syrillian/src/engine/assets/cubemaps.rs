@@ -39,20 +39,16 @@ impl Cubemap {
         })
     }
 
-    /// Load cubemap from 6 individual face files
-    /// Order: [+X (right), -X (left), +Y (top), -Y (bottom), +Z (front), -Z (back)]
+    // Load cubemap from 6 individual face files
     pub fn from_files(paths: [&str; 6]) -> Result<Self, Box<dyn Error>> {
-        // Load images from file paths
         let mut faces = Vec::new();
         let mut width = 0;
         let mut height = 0;
 
         for (i, path) in paths.iter().enumerate() {
-            // Try to load the image file
             let img = match image::open(path) {
                 Ok(img) => img,
                 Err(_) => {
-                    // If file doesn't exist, use fallback color for that face
                     let fallback_size = 64;
                     let face_data = Self::FACE_COLORS[i].repeat(fallback_size * fallback_size);
                     if i == 0 {
@@ -64,14 +60,12 @@ impl Cubemap {
                 }
             };
 
-            // Convert to RGBA8
             let rgba_img = img.to_rgba8();
             if i == 0 {
                 width = rgba_img.width();
                 height = rgba_img.height();
             }
 
-            // Ensure all faces have the same dimensions
             let resized_img = if rgba_img.width() != width || rgba_img.height() != height {
                 image::imageops::resize(
                     &rgba_img,
@@ -86,7 +80,6 @@ impl Cubemap {
             faces.push(resized_img.into_raw());
         }
 
-        // Convert Vec to array
         let faces_array: [Vec<u8>; 6] = faces
             .try_into()
             .map_err(|_| "Failed to convert faces vector to array")?;
@@ -101,11 +94,9 @@ impl Cubemap {
 
     /// Load cubemap from single equirectangular image
     pub fn from_single_image(path: &str) -> Result<Self, Box<dyn Error>> {
-        // Load equirectangular image
         let img = match image::open(path) {
             Ok(img) => img,
             Err(_) => {
-                // If file doesn't exist, return fallback cubemap
                 return Ok(Cubemap {
                     faces: Self::gen_fallback_cubemap(64),
                     width: 64,
@@ -119,10 +110,7 @@ impl Cubemap {
         let img_width = rgba_img.width();
         let _img_height = rgba_img.height();
 
-        // Determine face size (typically 1/4 of equirectangular width)
         let face_size = (img_width / 4).max(64);
-
-        // Convert equirectangular to cubemap faces
         let faces = Self::equirectangular_to_cubemap(&rgba_img, face_size);
 
         Ok(Cubemap {
@@ -141,8 +129,6 @@ impl Cubemap {
         let img_width = rgba_img.width() as f32;
         let img_height = rgba_img.height() as f32;
 
-        // Define face directions for cubemap sampling
-        // Order: [+X (right), -X (left), +Y (top), -Y (bottom), +Z (front), -Z (back)]
         let face_directions = [
             // +X (Right)
             ([1.0, 0.0, 0.0], [0.0, -1.0, 0.0], [0.0, 0.0, -1.0]),
@@ -164,30 +150,24 @@ impl Cubemap {
 
             for y in 0..face_size {
                 for x in 0..face_size {
-                    // Convert to normalized coordinates [-1, 1]
                     let u = (x as f32 / (face_size - 1) as f32) * 2.0 - 1.0;
                     let v = (y as f32 / (face_size - 1) as f32) * 2.0 - 1.0;
 
-                    // Calculate 3D direction vector for this pixel
                     let dir_x = forward[0] + u * right[0] + v * up[0];
                     let dir_y = forward[1] + u * right[1] + v * up[1];
                     let dir_z = forward[2] + u * right[2] + v * up[2];
 
-                    // Normalize the direction vector
                     let len = (dir_x * dir_x + dir_y * dir_y + dir_z * dir_z).sqrt();
                     let dir_x = dir_x / len;
                     let dir_y = dir_y / len;
                     let dir_z = dir_z / len;
 
-                    // Convert 3D direction to spherical coordinates
-                    let theta = dir_z.atan2(dir_x); // longitude [-π, π]
-                    let phi = dir_y.asin(); // latitude [-π/2, π/2]
+                    let theta = dir_z.atan2(dir_x);
+                    let phi = dir_y.asin();
 
-                    // Convert to equirectangular UV coordinates [0, 1]
                     let eq_u = (theta / (2.0 * std::f32::consts::PI) + 0.5).clamp(0.0, 1.0);
                     let eq_v = (phi / std::f32::consts::PI + 0.5).clamp(0.0, 1.0);
 
-                    // Sample from equirectangular image
                     let sample_x = (eq_u * (img_width - 1.0)).clamp(0.0, img_width - 1.0) as u32;
                     let sample_y = (eq_v * (img_height - 1.0)).clamp(0.0, img_height - 1.0) as u32;
 
@@ -209,7 +189,7 @@ impl Cubemap {
             size: Extent3d {
                 width: self.width,
                 height: self.height,
-                depth_or_array_layers: 6, // 6 faces for cubemap
+                depth_or_array_layers: 6,
             },
             mip_level_count: 1,
             sample_count: 1,
@@ -218,8 +198,6 @@ impl Cubemap {
             usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
             view_formats: &[],
         });
-
-        // Copy face data to GPU texture
 
         for (face_idx, face_data) in self.faces.iter().enumerate() {
             queue.write_texture(
@@ -262,7 +240,7 @@ impl Cubemap {
             base_mip_level: 0,
             mip_level_count: Some(1),
             base_array_layer: 0,
-            array_layer_count: Some(6), // All 6 faces
+            array_layer_count: Some(6),
             usage: Some(wgpu::TextureUsages::TEXTURE_BINDING),
         })
     }
@@ -316,7 +294,6 @@ mod tests {
 
     #[test]
     fn test_from_files_returns_ok() {
-        // Simple GREEN test - verify from_files returns Ok
         let paths = [
             "test1.png",
             "test2.png",
@@ -337,7 +314,6 @@ mod tests {
 
     #[test]
     fn test_from_single_image_returns_ok() {
-        // Simple GREEN test - verify from_single_image returns Ok
         let result = Cubemap::from_single_image("test.hdr");
         assert!(result.is_ok(), "from_single_image should return Ok");
 
@@ -349,7 +325,6 @@ mod tests {
 
     #[test]
     fn test_basic_cubemap_properties() {
-        // Test basic cubemap structure
         let cubemap = Cubemap {
             faces: Cubemap::gen_fallback_cubemap(32),
             width: 32,
@@ -362,27 +337,23 @@ mod tests {
         assert_eq!(cubemap.faces.len(), 6);
         assert_eq!(cubemap.format, TextureFormat::Rgba8UnormSrgb);
 
-        // Each face should have the correct size
         for face in &cubemap.faces {
-            assert_eq!(face.len(), (32 * 32 * 4) as usize); // 32x32 RGBA
+            assert_eq!(face.len(), (32 * 32 * 4) as usize);
         }
     }
 
     #[test]
     fn test_handle_based_cubemap_integration() {
-        // Test Handle-based asset integration
         use crate::engine::assets::generic_store::Store;
         use std::sync::Arc;
 
         let store: Arc<Store<Cubemap>> = Arc::new(Store::populated());
 
-        // Test fallback cubemap access
         let fallback_handle = HCubemap::FALLBACK_CUBEMAP;
         let cubemap_ref = store.get(fallback_handle);
 
-        // Dereference the DashMap Ref to access the cubemap
         assert_eq!(cubemap_ref.faces.len(), 6);
-        assert_eq!(cubemap_ref.width, 32); // Fallback size
+        assert_eq!(cubemap_ref.width, 32);
         assert_eq!(cubemap_ref.height, 32);
     }
 }

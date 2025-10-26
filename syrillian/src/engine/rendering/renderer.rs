@@ -425,7 +425,7 @@ impl Renderer {
         &mut self.window
     }
 
-    fn get_skybox_background_color(&self) -> Color {
+    fn skybox_background_color(&self) -> Color {
         self.skybox_background_color
     }
 
@@ -480,7 +480,7 @@ impl Renderer {
         encoder: &'a mut wgpu::CommandEncoder,
         ctx: &mut FrameCtx,
     ) -> RenderPass<'a> {
-        let default_color = self.get_skybox_background_color();
+        let default_color = self.skybox_background_color();
 
         encoder.begin_render_pass(&RenderPassDescriptor {
             label: Some("Offscreen Render Pass"),

@@ -1,20 +1,12 @@
 use crate::assets::{AssetStore, HCubemap, HShader};
 use crate::rendering::proxies::SceneProxy;
-use crate::rendering::uniform::ShaderUniform;
 use crate::rendering::{GPUDrawCtx, Renderer};
-use crate::{must_pipeline, proxy_data, proxy_data_mut};
+use crate::{must_pipeline, proxy_data};
 use nalgebra::{Matrix4, Vector3};
 use std::any::Any;
-use syrillian_macros::UniformIndex;
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::{BindGroup, Buffer, BufferUsages};
 use winit::window::Window;
-
-#[repr(u8)]
-#[derive(Copy, Clone, Debug, UniformIndex)]
-pub enum SkyboxUniformIndex {
-    Camera = 0,
-}
 
 const SKYBOX_VERTICES: &[Vector3<f32>] = &[
     // Front face
@@ -64,7 +56,6 @@ const SKYBOX_VERTICES: &[Vector3<f32>] = &[
 #[derive(Debug)]
 pub struct RuntimeSkyboxData {
     pub cubemap_bind_group: Option<BindGroup>,
-    pub uniform: ShaderUniform<SkyboxUniformIndex>,
     pub vertex_buffer: Buffer,
     pub vertex_count: u32,
 }
@@ -88,9 +79,6 @@ impl SceneProxy for SkyboxProxy {
     ) -> Box<dyn Any> {
         let device = &renderer.state.device;
 
-        let camera_bgl = renderer.cache.bgl_render();
-        let uniform = ShaderUniform::<SkyboxUniformIndex>::builder(&camera_bgl).build(device);
-
         let vertex_buffer = device.create_buffer_init(&BufferInitDescriptor {
             label: Some("Skybox Vertex Buffer"),
             contents: bytemuck::cast_slice(SKYBOX_VERTICES),
@@ -99,6 +87,7 @@ impl SceneProxy for SkyboxProxy {
 
         let cubemap_bind_group = if let Some(cubemap_texture) = renderer.cache.cubemap(self.cubemap)
         {
+
             let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some("Skybox Bind Group Layout"),
                 entries: &[
@@ -152,7 +141,6 @@ impl SceneProxy for SkyboxProxy {
 
         Box::new(RuntimeSkyboxData {
             cubemap_bind_group,
-            uniform,
             vertex_buffer,
             vertex_count: SKYBOX_VERTICES.len() as u32,
         })
@@ -161,11 +149,10 @@ impl SceneProxy for SkyboxProxy {
     fn update_render(
         &mut self,
         _renderer: &Renderer,
-        data: &mut dyn Any,
+        _data: &mut dyn Any,
         _window: &Window,
         _local_to_world: &Matrix4<f32>,
     ) {
-        let _data: &mut RuntimeSkyboxData = proxy_data_mut!(data);
     }
 
     fn render(
@@ -189,9 +176,7 @@ impl SceneProxy for SkyboxProxy {
 
         pass.set_vertex_buffer(0, data.vertex_buffer.slice(..));
 
-        pass.set_bind_group(0, cubemap_bind_group, &[]);
-
-        pass.set_bind_group(1, data.uniform.bind_group(), &[]);
+        pass.set_bind_group(1, cubemap_bind_group, &[]);
 
         pass.draw(0..data.vertex_count, 0..1);
     }
