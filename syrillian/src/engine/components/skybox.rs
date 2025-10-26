@@ -1,88 +1,23 @@
-use crate::World;
+use crate::{proxy_data_mut, World};
 use crate::components::Component;
 use crate::core::GameObjectId;
 use crate::engine::assets::HCubemap;
 use crate::engine::rendering::CPUDrawCtx;
 use crate::rendering::proxies::SceneProxy;
 use crate::rendering::proxies::SkyboxProxy;
-use nalgebra::{Quaternion, Vector3};
+use nalgebra::Quaternion;
 
-/// Color representation for skybox parameters
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Color {
-    pub r: f32,
-    pub g: f32,
-    pub b: f32,
-    pub a: f32,
-}
-
-impl Color {
-    pub const WHITE: Color = Color {
-        r: 1.0,
-        g: 1.0,
-        b: 1.0,
-        a: 1.0,
-    };
-    pub const BLACK: Color = Color {
-        r: 0.0,
-        g: 0.0,
-        b: 0.0,
-        a: 1.0,
-    };
-    pub const BLUE: Color = Color {
-        r: 0.0,
-        g: 0.0,
-        b: 1.0,
-        a: 1.0,
-    };
-    pub const CYAN: Color = Color {
-        r: 0.0,
-        g: 1.0,
-        b: 1.0,
-        a: 1.0,
-    };
-}
-
-/// Different types of skybox implementations
-#[derive(Debug, Clone, PartialEq)]
 pub enum SkyboxType {
-    /// Cubemap-based skybox with 6 face textures
     Cubemap(HCubemap),
-    /// Simple gradient from top to bottom color
-    Gradient {
-        top_color: Color,
-        bottom_color: Color,
-    },
-    /// Procedural skybox with dynamic parameters
-    Procedural {
-        cloud_density: f32,
-        sun_position: Vector3<f32>,
-        time: f32,
-    },
-    /// Pixel art style skybox with limited color palette
-    Pixel {
-        palette: Vec<Color>,
-        resolution: u32,
-        dither_strength: f32,
-    },
-    /// Physically-based atmospheric simulation
-    Realistic {
-        sun_position: Vector3<f32>,
-        atmosphere_density: f32,
-        time_of_day: f32,
-    },
 }
 
 impl Default for SkyboxType {
     fn default() -> Self {
-        SkyboxType::Gradient {
-            top_color: Color::BLUE,
-            bottom_color: Color::CYAN,
-        }
+        SkyboxType::Cubemap(HCubemap::FALLBACK_CUBEMAP)
     }
 }
 
-/// SkyboxComponent for managing 3D scene backgrounds
 pub struct SkyboxComponent {
     parent: GameObjectId,
     skybox_type: SkyboxType,
@@ -90,6 +25,7 @@ pub struct SkyboxComponent {
     rotation: Quaternion<f32>,
     enabled: bool,
     dirty_skybox: bool,
+    was_enabled: bool,
 }
 
 impl Component for SkyboxComponent {
@@ -100,27 +36,36 @@ impl Component for SkyboxComponent {
             intensity: 1.0,
             rotation: Quaternion::identity(),
             enabled: true,
-            dirty_skybox: true,
+            dirty_skybox: false,
+            was_enabled: true,
         }
     }
 
     fn create_render_proxy(&mut self, _world: &World) -> Option<Box<dyn SceneProxy>> {
-        if !self.enabled {
-            return None;
-        }
-
-        match &self.skybox_type {
-            SkyboxType::Cubemap(cubemap_handle) => {
-                Some(Box::new(SkyboxProxy::new(*cubemap_handle)))
-            }
-            _ => None,
-        }
+        let SkyboxType::Cubemap(cubemap_handle) = self.skybox_type;
+        Some(Box::new(SkyboxProxy::new(cubemap_handle)))
     }
 
-    fn update_proxy(&mut self, _world: &World, mut _ctx: CPUDrawCtx) {
-        if self.dirty_skybox {
-            self.dirty_skybox = false;
-        }
+    fn update_proxy(&mut self, _world: &World, mut ctx: CPUDrawCtx) {
+        if self.enabled != self.was_enabled {
+          if self.enabled {
+              ctx.enable_proxy();
+          } else {
+              ctx.disable_proxy();
+          }
+          self.was_enabled = self.enabled;
+      }
+
+      if self.dirty_skybox {
+          if self.enabled {
+              let SkyboxType::Cubemap(cubemap) = self.skybox_type;
+              ctx.send_proxy_update(move |sc| {
+                  let data: &mut SkyboxProxy = proxy_data_mut!(sc);
+                  data.cubemap = cubemap;
+              });
+          }
+          self.dirty_skybox = false;
+      }
     }
 
     fn parent(&self) -> GameObjectId {
@@ -178,40 +123,11 @@ mod tests {
         assert_eq!(component.intensity(), 1.0);
         assert!(component.is_enabled());
         assert_eq!(component.rotation(), &Quaternion::identity());
+        assert!(!component.dirty_skybox);
+        assert!(component.was_enabled);
 
-        // Check default skybox type
-        match component.skybox_type() {
-            SkyboxType::Gradient {
-                top_color,
-                bottom_color,
-            } => {
-                assert_eq!(*top_color, Color::BLUE);
-                assert_eq!(*bottom_color, Color::CYAN);
-            }
-            _ => panic!("Expected default gradient"),
-        }
-    }
-
-    #[test]
-    fn test_skybox_type_default() {
-        let default_type = SkyboxType::default();
-        match default_type {
-            SkyboxType::Gradient {
-                top_color,
-                bottom_color,
-            } => {
-                assert_eq!(top_color, Color::BLUE);
-                assert_eq!(bottom_color, Color::CYAN);
-            }
-            _ => panic!("Expected gradient default"),
-        }
-    }
-
-    #[test]
-    fn test_color_constants() {
-        assert_eq!(Color::WHITE.r, 1.0);
-        assert_eq!(Color::BLACK.r, 0.0);
-        assert_eq!(Color::BLUE.b, 1.0);
+        let SkyboxType::Cubemap(handle) = component.skybox_type();
+        assert_eq!(*handle, HCubemap::FALLBACK_CUBEMAP);
     }
 
     #[test]
@@ -219,22 +135,18 @@ mod tests {
         let parent_id = GameObjectId::from_ffi(1);
         let mut component = SkyboxComponent::new(parent_id);
 
-        // Test set_intensity
         component.set_intensity(0.5);
         assert_eq!(component.intensity(), 0.5);
 
-        // Test intensity clamping
         component.set_intensity(-1.0);
         assert_eq!(component.intensity(), 0.0);
 
-        // Test toggle_enabled
         assert!(component.is_enabled());
         component.toggle_enabled();
         assert!(!component.is_enabled());
         component.toggle_enabled();
         assert!(component.is_enabled());
 
-        // Test set_rotation
         let new_rotation = Quaternion::new(
             std::f32::consts::FRAC_1_SQRT_2,
             0.0,
@@ -244,16 +156,11 @@ mod tests {
         component.set_rotation(new_rotation);
         assert_eq!(component.rotation(), &new_rotation);
 
-        // Test set_skybox_type
         let cubemap = HCubemap::FALLBACK_CUBEMAP;
         let new_type = SkyboxType::Cubemap(cubemap);
-        component.set_skybox_type(new_type.clone());
-        match component.skybox_type() {
-            SkyboxType::Cubemap(handle) => {
-                assert_eq!(*handle, cubemap);
-            }
-            _ => panic!("Expected cubemap type"),
-        }
+        component.set_skybox_type(new_type);
+        let SkyboxType::Cubemap(handle) = component.skybox_type();
+        assert_eq!(*handle, cubemap);
     }
 
     #[test]
@@ -284,9 +191,8 @@ mod tests {
         let parent_id = GameObjectId::from_ffi(1);
         let mut component = SkyboxComponent::new(parent_id);
 
-        assert!(component.dirty_skybox);
+        assert!(!component.dirty_skybox);
 
-        component.dirty_skybox = false;
         let cubemap = HCubemap::FALLBACK_CUBEMAP;
         component.set_skybox_type(SkyboxType::Cubemap(cubemap));
 
