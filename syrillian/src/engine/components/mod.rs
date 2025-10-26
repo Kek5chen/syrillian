@@ -87,11 +87,13 @@ use crate::rendering::proxies::SceneProxy;
 use delegate::delegate;
 use slotmap::{Key, new_key_type};
 use std::any::{Any, TypeId};
+use std::borrow::Borrow;
 use std::fmt::{Debug, Formatter};
-use std::hash::Hash;
+use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
 use std::mem;
 use std::ops::{Deref, DerefMut};
+use std::sync::Arc;
 
 new_key_type! { pub struct ComponentId; }
 
@@ -123,39 +125,32 @@ macro_rules! c_any_mut {
     };
 }
 
-pub struct CRef<C: Component>(pub(crate) ComponentId, pub(crate) PhantomData<C>);
+pub struct CRef<C: Component + ?Sized>(pub(crate) Option<Arc<C>>, pub(crate) TypedComponentId);
 
-impl<C: Component> Clone for CRef<C> {
+impl<C: Component + ?Sized> Clone for CRef<C> {
     fn clone(&self) -> Self {
-        *self
+        Self(self.0.clone(), self.1)
     }
 }
-
-impl<C: Component> Copy for CRef<C> {}
 
 impl<C: Component> Deref for CRef<C> {
     type Target = C;
 
     fn deref(&self) -> &Self::Target {
-        World::instance()
-            .components
-            .get(CRef(self.0, PhantomData))
-            .unwrap()
+        unsafe { self.0.as_ref().unwrap_unchecked() }
     }
 }
 
 impl<C: Component> DerefMut for CRef<C> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        World::instance()
-            .components
-            .get_mut(CRef(self.0, PhantomData))
-            .unwrap()
+        unsafe { &mut *(Arc::as_ptr(self.0.as_ref().unwrap_unchecked()) as *mut _) }
+        // unsafe { &mut *(&raw const *self.0.assume_init_ref() as *mut _) }
     }
 }
 
-impl<C: Component> From<CRef<C>> for CWeak<C> {
-    fn from(value: CRef<C>) -> Self {
-        CWeak(value.0, value.1)
+impl<C: Component + ?Sized> Hash for CRef<C> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.typed_id().hash(state)
     }
 }
 
@@ -169,30 +164,76 @@ impl<C: Component> CRef<C> {
         self.into()
     }
 
-    pub fn null() -> CRef<C> {
-        CRef(ComponentId::null(), PhantomData)
-    }
-
-    delegate! {
-        to self.0 {
-            fn is_null(&self) -> bool;
+    pub fn into_dyn(self) -> CRef<dyn Component> {
+        unsafe {
+            CRef(
+                Some(self.0.as_ref().unwrap_unchecked().clone() as Arc<dyn Component>),
+                self.1,
+            )
         }
     }
-}
 
-impl<C: Component> Default for CRef<C> {
-    fn default() -> Self {
-        CRef(ComponentId::default(), PhantomData)
+    /// # SAFETY
+    ///
+    /// This is uninitialized territory. If you use this, you'll need to make sure to
+    /// overwrite it before using it. Accessing this in any way is UB.
+    ///
+    /// The only reason this exists is that you can save References for components which
+    /// are also managed by a component so you can avoid Option. It's not recommended to
+    /// use this.
+    pub unsafe fn null() -> CRef<C> {
+        unsafe { CRef(None, TypedComponentId::null::<C>()) }
     }
 }
 
-impl<C: Component> PartialEq<Self> for CRef<C> {
+impl<C: Component + ?Sized> CRef<C> {
+    pub fn is_a<O: Component>(&self) -> bool {
+        self.1.0 == TypeId::of::<O>()
+    }
+
+    pub fn typed_id(&self) -> TypedComponentId {
+        self.1
+    }
+}
+
+impl CRef<dyn Component> {
+    pub fn as_a<C: Component>(&self) -> Option<CRef<C>> {
+        if !self.is_a::<C>() {
+            return None;
+        }
+        let downcasted =
+            Arc::downcast::<C>(unsafe { self.0.as_ref().unwrap_unchecked() }.clone()).ok()?;
+        Some(CRef(Some(downcasted), self.1))
+    }
+}
+
+impl Deref for CRef<dyn Component> {
+    type Target = dyn Component;
+
+    fn deref(&self) -> &Self::Target {
+        unsafe { self.0.as_ref().unwrap_unchecked().as_ref() }
+    }
+}
+
+impl DerefMut for CRef<dyn Component> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        unsafe { &mut *(&raw const **self.0.as_ref().unwrap_unchecked() as *mut _) }
+    }
+}
+
+impl<C: Component + ?Sized> From<CRef<C>> for CWeak<C> {
+    fn from(value: CRef<C>) -> Self {
+        CWeak(value.1.1, PhantomData)
+    }
+}
+
+impl<C: ?Sized + Component> PartialEq<Self> for CRef<C> {
     fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
+        self.typed_id() == other.typed_id()
     }
 }
 
-impl<C: Component> Eq for CRef<C> {}
+impl<C: ?Sized + Component> Eq for CRef<C> {}
 
 impl<C: Component> Debug for CRef<C> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -200,7 +241,19 @@ impl<C: Component> Debug for CRef<C> {
     }
 }
 
-pub struct CWeak<C: Component>(pub(crate) ComponentId, pub(crate) PhantomData<C>);
+impl<C: Component + ?Sized> Borrow<TypedComponentId> for CRef<C> {
+    fn borrow(&self) -> &TypedComponentId {
+        &self.1
+    }
+}
+
+impl<C: Component + ?Sized> Borrow<TypedComponentId> for &CRef<C> {
+    fn borrow(&self) -> &TypedComponentId {
+        &self.1
+    }
+}
+
+pub struct CWeak<C: Component + ?Sized>(pub(crate) ComponentId, pub(crate) PhantomData<C>);
 
 impl<C: Component> Clone for CWeak<C> {
     fn clone(&self) -> Self {
@@ -233,8 +286,9 @@ impl<C: Component> CWeak<C> {
             .map(|c| c.contains_key(self.0))
             .unwrap_or(false)
     }
+
     pub fn upgrade(&self, world: &World) -> Option<CRef<C>> {
-        self.exists(world).then_some(CRef(self.0, self.1))
+        world.components.get::<C>(self.0).cloned()
     }
 
     pub fn null() -> CWeak<C> {
@@ -263,23 +317,21 @@ impl From<TypedComponentId> for ComponentId {
     }
 }
 
-impl<C: Component> From<CRef<C>> for TypedComponentId {
-    fn from(value: CRef<C>) -> Self {
-        TypedComponentId(TypeId::of::<C>(), value.0)
-    }
-}
-
 impl TypedComponentId {
     pub fn is_a<C: Component>(&self) -> bool {
         self.0 == TypeId::of::<C>()
     }
 
-    pub fn as_a<C: Component>(&self) -> Option<CRef<C>> {
-        self.is_a::<C>().then_some(CRef(self.1, PhantomData))
-    }
-
     pub fn type_id(&self) -> TypeId {
         self.0
+    }
+
+    pub(crate) fn null<C: Component>() -> TypedComponentId {
+        Self::from_typed::<C>(ComponentId::null())
+    }
+
+    pub(crate) fn from_typed<C: Component + ?Sized>(id: ComponentId) -> Self {
+        TypedComponentId(TypeId::of::<C>(), id)
     }
 }
 
@@ -319,7 +371,7 @@ impl TypedComponentId {
 /// }
 ///```
 #[allow(unused)]
-pub trait Component: Any {
+pub trait Component: Any + Send + Sync {
     fn new(parent: GameObjectId) -> Self
     where
         Self: Sized;

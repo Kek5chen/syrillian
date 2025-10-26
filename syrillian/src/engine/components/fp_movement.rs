@@ -37,8 +37,8 @@ impl Component for FirstPersonMovementController {
     }
 
     fn init(&mut self, _world: &mut World) {
-        let rigid = self.parent().get_component::<RigidBodyComponent>();
-        if let Some(mut rigid) = rigid
+        let mut rigid = self.parent().get_component::<RigidBodyComponent>();
+        if let Some(rigid) = &mut rigid
             && let Some(rigid) = rigid.get_body_mut()
         {
             rigid.set_locked_axes(LockedAxes::ROTATION_LOCKED, false);

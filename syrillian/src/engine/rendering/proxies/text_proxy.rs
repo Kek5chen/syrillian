@@ -44,7 +44,7 @@ pub struct ThreeD;
 #[derive(Debug, Copy, Clone)]
 pub struct TwoD;
 
-pub trait TextDim<const D: u8>: Copy + Clone + Debug + Send + 'static {
+pub trait TextDim<const D: u8>: Copy + Clone + Debug + Send + Sync + 'static {
     fn shader() -> HShader;
     #[cfg(debug_assertions)]
     fn debug_shader() -> HShader;
