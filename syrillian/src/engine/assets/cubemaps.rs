@@ -5,8 +5,110 @@ use std::error::Error;
 use wgpu::{Device, Texture, TextureFormat, TextureView};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CubemapFaces {
+    pub positive_x: Vec<u8>,
+    pub negative_x: Vec<u8>,
+    pub positive_y: Vec<u8>,
+    pub negative_y: Vec<u8>,
+    pub positive_z: Vec<u8>,
+    pub negative_z: Vec<u8>,
+}
+
+impl CubemapFaces {
+    pub fn new(
+        positive_x: Vec<u8>,
+        negative_x: Vec<u8>,
+        positive_y: Vec<u8>,
+        negative_y: Vec<u8>,
+        positive_z: Vec<u8>,
+        negative_z: Vec<u8>,
+    ) -> Self {
+        Self {
+            positive_x,
+            negative_x,
+            positive_y,
+            negative_y,
+            positive_z,
+            negative_z,
+        }
+    }
+
+    fn from_colors(colors: [FaceColor; 6], size: u32) -> Self {
+        let pixel_count = size as usize * size as usize;
+        Self::new(
+            Into::<[u8; 4]>::into(colors[0]).repeat(pixel_count),
+            Into::<[u8; 4]>::into(colors[1]).repeat(pixel_count),
+            Into::<[u8; 4]>::into(colors[2]).repeat(pixel_count),
+            Into::<[u8; 4]>::into(colors[3]).repeat(pixel_count),
+            Into::<[u8; 4]>::into(colors[4]).repeat(pixel_count),
+            Into::<[u8; 4]>::into(colors[5]).repeat(pixel_count),
+        )
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &Vec<u8>> {
+        [
+            &self.positive_x,
+            &self.negative_x,
+            &self.positive_y,
+            &self.negative_y,
+            &self.positive_z,
+            &self.negative_z,
+        ]
+        .into_iter()
+    }
+
+    pub fn len(&self) -> usize {
+        6
+    }
+
+    pub fn is_empty(&self) -> bool {
+        false
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct FaceColor {
+    r: u8,
+    g: u8,
+    b: u8,
+    a: u8,
+}
+
+impl FaceColor {
+    const fn new(r: u8, g: u8, b: u8, a: u8) -> Self {
+        Self { r, g, b, a }
+    }
+
+    #[inline]
+    #[allow(dead_code)]
+    const fn to_array(self) -> [u8; 4] {
+        [self.r, self.g, self.b, self.a]
+    }
+}
+
+impl From<FaceColor> for [u8; 4] {
+    #[inline]
+    fn from(color: FaceColor) -> Self {
+        [color.r, color.g, color.b, color.a]
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct FaceDirection {
+    forward: [f32; 3],
+    up: [f32; 3],
+    right: [f32; 3],
+}
+
+impl FaceDirection {
+    const fn new(forward: [f32; 3], up: [f32; 3], right: [f32; 3]) -> Self {
+        Self { forward, up, right }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Cubemap {
-    pub faces: [Vec<u8>; 6],
+    pub faces: CubemapFaces,
     pub width: u32,
     pub height: u32,
     pub format: TextureFormat,
@@ -24,19 +126,17 @@ impl H<Cubemap> {
 impl Cubemap {
     const BYTES_PER_PIXEL: u32 = 4; // RGBA
 
-    const FACE_COLORS: [[u8; 4]; 6] = [
-        [255, 0, 0, 255],   // Right - Red
-        [0, 255, 0, 255],   // Left - Green
-        [0, 0, 255, 255],   // Top - Blue
-        [255, 255, 0, 255], // Bottom - Yellow
-        [255, 0, 255, 255], // Front - Magenta
-        [0, 255, 255, 255], // Back - Cyan
+    const FACE_COLORS: [FaceColor; 6] = [
+        FaceColor::new(255, 0, 0, 255),   // Right - Red
+        FaceColor::new(0, 255, 0, 255),   // Left - Green
+        FaceColor::new(0, 0, 255, 255),   // Top - Blue
+        FaceColor::new(255, 255, 0, 255), // Bottom - Yellow
+        FaceColor::new(255, 0, 255, 255), // Front - Magenta
+        FaceColor::new(0, 255, 255, 255), // Back - Cyan
     ];
 
-    pub fn gen_fallback_cubemap(size: u32) -> [Vec<u8>; 6] {
-        std::array::from_fn(|face_idx| {
-            Self::FACE_COLORS[face_idx].repeat(size as usize * size as usize)
-        })
+    pub fn gen_fallback_cubemap(size: u32) -> CubemapFaces {
+        CubemapFaces::from_colors(Self::FACE_COLORS, size)
     }
 
     // Load cubemap from 6 individual face files
@@ -50,7 +150,7 @@ impl Cubemap {
                 Ok(img) => img,
                 Err(_) => {
                     let fallback_size = 64;
-                    let face_data = Self::FACE_COLORS[i].repeat(fallback_size * fallback_size);
+                    let face_data = Into::<[u8; 4]>::into(Self::FACE_COLORS[i]).repeat(fallback_size * fallback_size);
                     if i == 0 {
                         width = fallback_size as u32;
                         height = fallback_size as u32;
@@ -85,7 +185,14 @@ impl Cubemap {
             .map_err(|_| "Failed to convert faces vector to array")?;
 
         Ok(Cubemap {
-            faces: faces_array,
+            faces: CubemapFaces::new(
+                faces_array[0].clone(),
+                faces_array[1].clone(),
+                faces_array[2].clone(),
+                faces_array[3].clone(),
+                faces_array[4].clone(),
+                faces_array[5].clone(),
+            ),
             width,
             height,
             format: TextureFormat::Rgba8UnormSrgb,
@@ -125,27 +232,27 @@ impl Cubemap {
     fn equirectangular_to_cubemap(
         rgba_img: &image::ImageBuffer<image::Rgba<u8>, Vec<u8>>,
         face_size: u32,
-    ) -> [Vec<u8>; 6] {
+    ) -> CubemapFaces {
         let img_width = rgba_img.width() as f32;
         let img_height = rgba_img.height() as f32;
 
         let face_directions = [
             // +X (Right)
-            ([1.0, 0.0, 0.0], [0.0, -1.0, 0.0], [0.0, 0.0, -1.0]),
+            FaceDirection::new([1.0, 0.0, 0.0], [0.0, -1.0, 0.0], [0.0, 0.0, -1.0]),
             // -X (Left)
-            ([-1.0, 0.0, 0.0], [0.0, -1.0, 0.0], [0.0, 0.0, 1.0]),
+            FaceDirection::new([-1.0, 0.0, 0.0], [0.0, -1.0, 0.0], [0.0, 0.0, 1.0]),
             // +Y (Top)
-            ([0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [1.0, 0.0, 0.0]),
+            FaceDirection::new([0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [1.0, 0.0, 0.0]),
             // -Y (Bottom)
-            ([0.0, -1.0, 0.0], [0.0, 0.0, -1.0], [1.0, 0.0, 0.0]),
+            FaceDirection::new([0.0, -1.0, 0.0], [0.0, 0.0, -1.0], [1.0, 0.0, 0.0]),
             // +Z (Front)
-            ([0.0, 0.0, 1.0], [0.0, -1.0, 0.0], [1.0, 0.0, 0.0]),
+            FaceDirection::new([0.0, 0.0, 1.0], [0.0, -1.0, 0.0], [1.0, 0.0, 0.0]),
             // -Z (Back)
-            ([0.0, 0.0, -1.0], [0.0, -1.0, 0.0], [-1.0, 0.0, 0.0]),
+            FaceDirection::new([0.0, 0.0, -1.0], [0.0, -1.0, 0.0], [-1.0, 0.0, 0.0]),
         ];
 
-        std::array::from_fn(|face_idx| {
-            let (forward, up, right) = face_directions[face_idx];
+        let faces_array: [Vec<u8>; 6] = std::array::from_fn(|face_idx| {
+            let direction = &face_directions[face_idx];
             let mut face_data = Vec::with_capacity((face_size * face_size * 4) as usize);
 
             for y in 0..face_size {
@@ -153,9 +260,9 @@ impl Cubemap {
                     let u = (x as f32 / (face_size - 1) as f32) * 2.0 - 1.0;
                     let v = (y as f32 / (face_size - 1) as f32) * 2.0 - 1.0;
 
-                    let dir_x = forward[0] + u * right[0] + v * up[0];
-                    let dir_y = forward[1] + u * right[1] + v * up[1];
-                    let dir_z = forward[2] + u * right[2] + v * up[2];
+                    let dir_x = direction.forward[0] + u * direction.right[0] + v * direction.up[0];
+                    let dir_y = direction.forward[1] + u * direction.right[1] + v * direction.up[1];
+                    let dir_z = direction.forward[2] + u * direction.right[2] + v * direction.up[2];
 
                     let len = (dir_x * dir_x + dir_y * dir_y + dir_z * dir_z).sqrt();
                     let dir_x = dir_x / len;
@@ -177,7 +284,16 @@ impl Cubemap {
             }
 
             face_data
-        })
+        });
+
+        CubemapFaces::new(
+            faces_array[0].clone(),
+            faces_array[1].clone(),
+            faces_array[2].clone(),
+            faces_array[3].clone(),
+            faces_array[4].clone(),
+            faces_array[5].clone(),
+        )
     }
 
     /// Convert to GPU texture
@@ -337,7 +453,7 @@ mod tests {
         assert_eq!(cubemap.faces.len(), 6);
         assert_eq!(cubemap.format, TextureFormat::Rgba8UnormSrgb);
 
-        for face in &cubemap.faces {
+        for face in cubemap.faces.iter() {
             assert_eq!(face.len(), (32 * 32 * 4) as usize);
         }
     }
