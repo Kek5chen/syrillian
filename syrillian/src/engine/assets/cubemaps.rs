@@ -146,19 +146,9 @@ impl Cubemap {
         let mut height = 0;
 
         for (i, path) in paths.iter().enumerate() {
-            let img = match image::open(path) {
-                Ok(img) => img,
-                Err(_) => {
-                    let fallback_size = 64;
-                    let face_data = Into::<[u8; 4]>::into(Self::FACE_COLORS[i]).repeat(fallback_size * fallback_size);
-                    if i == 0 {
-                        width = fallback_size as u32;
-                        height = fallback_size as u32;
-                    }
-                    faces.push(face_data);
-                    continue;
-                }
-            };
+            let img = image::open(path).map_err(|e| {
+                format!("Failed to load cubemap face {} from '{}': {}", i, path, e)
+            })?;
 
             let rgba_img = img.to_rgba8();
             if i == 0 {
@@ -201,17 +191,9 @@ impl Cubemap {
 
     /// Load cubemap from single equirectangular image
     pub fn from_single_image(path: &str) -> Result<Self, Box<dyn Error>> {
-        let img = match image::open(path) {
-            Ok(img) => img,
-            Err(_) => {
-                return Ok(Cubemap {
-                    faces: Self::gen_fallback_cubemap(64),
-                    width: 64,
-                    height: 64,
-                    format: TextureFormat::Rgba8UnormSrgb,
-                });
-            }
-        };
+        let img = image::open(path).map_err(|e| {
+            format!("Failed to load equirectangular image from '{}': {}", path, e)
+        })?;
 
         let rgba_img = img.to_rgba8();
         let img_width = rgba_img.width();
@@ -409,34 +391,30 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_from_files_returns_ok() {
+    fn test_from_files_returns_err_for_missing_files() {
         let paths = [
-            "test1.png",
-            "test2.png",
-            "test3.png",
-            "test4.png",
-            "test5.png",
-            "test6.png",
+            "nonexistent1.png",
+            "nonexistent2.png",
+            "nonexistent3.png",
+            "nonexistent4.png",
+            "nonexistent5.png",
+            "nonexistent6.png",
         ];
 
         let result = Cubemap::from_files(paths);
-        assert!(result.is_ok(), "from_files should return Ok");
-
-        let cubemap = result.unwrap();
-        assert_eq!(cubemap.width, 64);
-        assert_eq!(cubemap.height, 64);
-        assert_eq!(cubemap.faces.len(), 6);
+        assert!(
+            result.is_err(),
+            "from_files should return Err for missing files"
+        );
     }
 
     #[test]
-    fn test_from_single_image_returns_ok() {
-        let result = Cubemap::from_single_image("test.hdr");
-        assert!(result.is_ok(), "from_single_image should return Ok");
-
-        let cubemap = result.unwrap();
-        assert_eq!(cubemap.width, 64);
-        assert_eq!(cubemap.height, 64);
-        assert_eq!(cubemap.faces.len(), 6);
+    fn test_from_single_image_returns_err_for_missing_file() {
+        let result = Cubemap::from_single_image("nonexistent.hdr");
+        assert!(
+            result.is_err(),
+            "from_single_image should return Err for missing file"
+        );
     }
 
     #[test]
