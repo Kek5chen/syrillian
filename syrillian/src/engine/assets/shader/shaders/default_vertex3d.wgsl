@@ -49,7 +49,7 @@ fn vs_main(in: VInput) -> FInput {
     out.position = ws_pos.xyz;
     out.clip = camera.view_proj_mat * ws_pos;
 
-    out.uv = vec2<f32>(in.uv.x, 1.0 - in.uv.y);
+    out.uv = vec2<f32>(in.uv.x, in.uv.y);
 
     // FIXME: This is only correct for uniform scaling + rotation.
     // For non-uniform scaling, transform using the inverse transpose of the model matrix (normal_mat).
