@@ -37,7 +37,7 @@ macro_rules! proxy_data_mut {
 #[macro_export]
 macro_rules! proxy_data {
     ($data:expr) => {
-        if let Some(data) = ($data as &dyn Any).downcast_ref() {
+        if let Some(data) = ($data as &dyn std::any::Any).downcast_ref() {
             data
         } else {
             ::syrillian_utils::debug_panic!(
