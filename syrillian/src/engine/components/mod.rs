@@ -97,34 +97,6 @@ use std::sync::Arc;
 
 new_key_type! { pub struct ComponentId; }
 
-#[macro_export]
-macro_rules! c {
-    ($id:expr) => {
-        $crate::World::instance().components.get($id)
-    };
-}
-
-#[macro_export]
-macro_rules! c_mut {
-    ($id:expr) => {
-        $crate::World::instance().components.get_mut($id)
-    };
-}
-
-#[macro_export]
-macro_rules! c_any {
-    ($id:expr) => {
-        $crate::World::instance().components.get_dyn($id)
-    };
-}
-
-#[macro_export]
-macro_rules! c_any_mut {
-    ($id:expr) => {
-        $crate::World::instance().components.get_dyn_mut($id)
-    };
-}
-
 pub struct CRef<C: Component + ?Sized>(pub(crate) Option<Arc<C>>, pub(crate) TypedComponentId);
 
 impl<C: Component + ?Sized> Clone for CRef<C> {
