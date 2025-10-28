@@ -85,12 +85,19 @@ impl AnimationComponent {
         let mut map_nodes = HashMap::<String, GameObjectId>::new();
         collect_subtree_by_name(self.parent, &mut map_nodes);
 
-        let mut bone_map = HashMap::<String, (GameObjectId, usize)>::new();
+        let mut bone_map = HashMap::<String, Vec<(GameObjectId, usize)>>::new();
         let mut stack = vec![self.parent];
         while let Some(go) = stack.pop() {
             if let Some(skel) = go.get_component::<SkeletalComponent>() {
                 for (i, name) in skel.bones().names.iter().enumerate() {
-                    bone_map.insert(name.clone(), (go, i));
+                    match bone_map.get_mut(name) {
+                        None => {
+                            bone_map.insert(name.clone(), vec![(go, i)]);
+                        }
+                        Some(map) => {
+                            map.push((go, i));
+                        }
+                    }
                 }
             }
             for c in go.children().iter().copied() {
@@ -101,14 +108,16 @@ impl AnimationComponent {
         for clip in self.clips.iter() {
             let mut binds = Vec::<ChannelBinding>::with_capacity(clip.channels.len());
             for (ch_index, ch) in clip.channels.iter().enumerate() {
-                if let Some(&(skel_go, i)) = bone_map.get(&ch.target_name) {
-                    binds.push(ChannelBinding {
-                        ch_index,
-                        target: Binding::Bone {
-                            skel: skel_go,
-                            idx: i,
-                        },
-                    });
+                if let Some(bones) = bone_map.get(&ch.target_name) {
+                    for (skel_go, i) in bones.iter().copied() {
+                        binds.push(ChannelBinding {
+                            ch_index,
+                            target: Binding::Bone {
+                                skel: skel_go,
+                                idx: i,
+                            },
+                        });
+                    }
                 } else if let Some(&go) = map_nodes.get(&ch.target_name) {
                     binds.push(ChannelBinding {
                         ch_index,
