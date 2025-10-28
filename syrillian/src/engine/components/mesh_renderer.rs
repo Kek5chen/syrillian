@@ -36,7 +36,7 @@ impl BoneData {
     }
 
     pub fn set_first_n(&mut self, mats: &[Matrix4<f32>]) {
-        for (i, m) in mats.iter().enumerate() {
+        for (i, m) in mats.iter().take(self.bones.len()).enumerate() {
             self.bones[i].transform = *m;
         }
     }
