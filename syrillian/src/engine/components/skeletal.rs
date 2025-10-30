@@ -1,15 +1,19 @@
 use crate::World;
 use crate::components::{Component, MeshRenderer};
 use crate::core::{Bones, GameObjectId};
-use crate::utils::MATRIX4_ID;
+use crate::utils::{ExtraMatrixMath, MATRIX4_ID};
+use itertools::izip;
 use log::warn;
-use nalgebra::{Matrix4, Scale3, Vector3};
+use nalgebra::{Matrix4, Rotation3, Scale3, Vector3};
 use nalgebra::{Translation3, UnitQuaternion};
 
 pub struct SkeletalComponent {
     parent: GameObjectId,
     bones_static: Bones,
-    delta_local: Vec<Matrix4<f32>>,
+    skin_transform: Vec<Matrix4<f32>>,
+    skin_rotation: Vec<Matrix4<f32>>,
+    skin_scale: Vec<Matrix4<f32>>,
+    skin_local: Vec<Matrix4<f32>>,
     globals: Vec<Matrix4<f32>>,
     palette: Vec<Matrix4<f32>>,
     dirty: bool,
@@ -20,7 +24,10 @@ impl Component for SkeletalComponent {
         Self {
             parent,
             bones_static: Bones::none(),
-            delta_local: Vec::new(),
+            skin_transform: Vec::new(),
+            skin_rotation: Vec::new(),
+            skin_scale: Vec::new(),
+            skin_local: Vec::new(),
             globals: Vec::new(),
             palette: Vec::new(),
             dirty: true,
@@ -40,9 +47,30 @@ impl Component for SkeletalComponent {
         let n = mesh.bones.len();
         self.bones_static = mesh.bones.clone();
 
-        self.delta_local = vec![Matrix4::identity(); n];
+        let (t, r, s, sl): (Vec<_>, Vec<_>, Vec<_>, Vec<_>) = self
+            .bones_static
+            .bind_local
+            .iter()
+            .map(|l| {
+                let (t, r, s) = l.decompose();
+                let (t, r, s) = (
+                    Translation3::from(t).to_homogeneous(),
+                    Rotation3::from(r).to_homogeneous(),
+                    Scale3::from(s).to_homogeneous(),
+                );
+                let sl = t * r * s;
+                (t, r, s, sl)
+            })
+            .collect();
+
+        self.skin_transform = t;
+        self.skin_rotation = r;
+        self.skin_scale = s;
+        self.skin_local = sl;
+
         self.globals = vec![Matrix4::identity(); n];
         self.palette = vec![Matrix4::identity(); n];
+
         self.dirty = true;
     }
 
@@ -67,27 +95,33 @@ impl SkeletalComponent {
         locals: &[(Vector3<f32>, UnitQuaternion<f32>, Vector3<f32>)],
     ) {
         let n = self.bones_static.len();
-        self.delta_local.resize(n, MATRIX4_ID);
+        self.skin_transform.resize(n, MATRIX4_ID);
+        self.skin_rotation.resize(n, MATRIX4_ID);
+        self.skin_scale.resize(n, MATRIX4_ID);
+        self.skin_local.resize(n, MATRIX4_ID);
+
         for (i, (pos, rot, scale)) in locals.iter().enumerate().take(n) {
-            let m = Translation3::from(*pos).to_homogeneous()
-                * rot.to_homogeneous()
-                * Scale3::from(*scale).to_homogeneous();
-            self.set_local_transform(i, m);
+            self.set_local_transform(i, Translation3::from(*pos));
+            self.set_local_rotation(i, rot.to_rotation_matrix());
+            self.set_local_scale(i, Scale3::from(*scale));
         }
         self.dirty = true;
     }
 
-    /// Set a bone's local delta rotation (about its local origin)
-    pub fn set_local_rotation(&mut self, index: usize, q: UnitQuaternion<f32>) {
-        let mut rot = Matrix4::identity();
-        rot.fixed_view_mut::<3, 3>(0, 0)
-            .copy_from(q.to_rotation_matrix().matrix());
-        self.delta_local[index] = rot;
+    pub fn set_local_transform(&mut self, index: usize, pos: Translation3<f32>) {
+        self.skin_transform[index] = pos.to_homogeneous();
         self.dirty = true;
     }
 
-    pub fn set_local_transform(&mut self, index: usize, pos: Matrix4<f32>) {
-        self.delta_local[index] = pos;
+    pub fn set_local_rotation(&mut self, index: usize, q: Rotation3<f32>) {
+        let mut rot = Matrix4::identity();
+        rot.fixed_view_mut::<3, 3>(0, 0).copy_from(q.matrix());
+        self.skin_rotation[index] = rot;
+        self.dirty = true;
+    }
+
+    pub fn set_local_scale(&mut self, index: usize, scale: Scale3<f32>) {
+        self.skin_scale[index] = scale.to_homogeneous();
         self.dirty = true;
     }
 
@@ -95,25 +129,34 @@ impl SkeletalComponent {
         &self.palette
     }
 
+    fn recalculate_skin_locals(&mut self) {
+        for (i, (t, r, s)) in
+            izip!(&self.skin_transform, &self.skin_rotation, &self.skin_scale).enumerate()
+        {
+            self.skin_local[i] = t * r * s;
+        }
+    }
+
     pub fn update_palette(&mut self) -> bool {
         if !self.dirty {
             return false;
         }
 
+        self.recalculate_skin_locals();
+
         fn visit(
             i: usize,
             bones: &Bones,
             globals: &mut [Matrix4<f32>],
-            delta_local: &[Matrix4<f32>],
+            skin_locals: &[Matrix4<f32>],
             palette: &mut [Matrix4<f32>],
             parent_global: Matrix4<f32>,
         ) {
-            let local_new = bones.bind_local[i] * delta_local[i];
-            let g = parent_global * local_new;
+            let g = parent_global * skin_locals[i];
             globals[i] = g;
             palette[i] = g * bones.inverse_bind[i];
             for &c in &bones.children[i] {
-                visit(c, bones, globals, delta_local, palette, g);
+                visit(c, bones, globals, skin_locals, palette, g);
             }
         }
 
@@ -122,7 +165,7 @@ impl SkeletalComponent {
                 root,
                 &self.bones_static,
                 &mut self.globals,
-                &self.delta_local,
+                &self.skin_local,
                 &mut self.palette,
                 MATRIX4_ID,
             );

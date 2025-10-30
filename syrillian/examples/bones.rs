@@ -67,7 +67,7 @@ impl Component for BoneChainWave {
                 let angle = (phase).sin() * 20.0_f32.to_radians();
                 skel.set_local_rotation(
                     i,
-                    UnitQuaternion::from_axis_angle(&Vector3::z_axis(), angle),
+                    UnitQuaternion::from_axis_angle(&Vector3::z_axis(), angle).to_rotation_matrix(),
                 );
             }
         }

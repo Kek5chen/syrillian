@@ -204,17 +204,29 @@ impl AnimationComponent {
                     }
 
                     let tr = &mut go.transform;
-                    tr.set_local_position_vec(tr.local_position().lerp(&t, weight));
-                    tr.set_local_rotation(tr.local_rotation().slerp(&r, weight));
-                    let cur_s = tr.local_scale();
-                    tr.set_nonuniform_local_scale(cur_s.lerp(&s, weight));
+                    if let Some(t) = t {
+                        tr.set_local_position_vec(tr.local_position().lerp(&t, weight));
+                    }
+                    if let Some(r) = r {
+                        tr.set_local_rotation(tr.local_rotation().slerp(&r, weight));
+                    }
+                    if let Some(s) = s {
+                        let cur_s = tr.local_scale();
+                        tr.set_nonuniform_local_scale(cur_s.lerp(&s, weight));
+                    }
                 }
                 Binding::Bone { skel, idx } => {
                     if let Some(locals) = Self::ensure_pose(skel, &mut skel_locals) {
                         let (lt, lr, ls) = &mut locals[idx];
-                        *lt = lt.lerp(&t, weight);
-                        *lr = lr.slerp(&r, weight);
-                        *ls = ls.lerp(&s, weight);
+                        if let Some(t) = t {
+                            *lt = lt.lerp(&t, weight);
+                        }
+                        if let Some(r) = r {
+                            *lr = lr.slerp(&r, weight);
+                        }
+                        if let Some(s) = s {
+                            *ls = ls.lerp(&s, weight);
+                        }
                     } else {
                         warn!("Binding bone not found");
                     }

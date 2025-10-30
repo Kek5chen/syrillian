@@ -99,59 +99,59 @@ fn lerp_vec3(a: &Vector3<f32>, b: &Vector3<f32>, alpha: f32) -> Vector3<f32> {
     a * (1.0 - alpha) + b * alpha
 }
 
-pub fn sample_translation(keys: &TransformKeys, t: f32) -> Vector3<f32> {
+pub fn sample_translation(keys: &TransformKeys, t: f32) -> Option<Vector3<f32>> {
     let n = keys.t_times.len();
     if n == 0 {
-        return Vector3::zeros();
+        return None;
     }
     if n == 1 {
-        return keys.t_values[0];
+        return Some(keys.t_values[0]);
     }
 
     let i = find_key(&keys.t_times, t);
     if i == n - 1 {
-        return keys.t_values[i];
+        return Some(keys.t_values[i]);
     }
     let t0 = keys.t_times[i];
     let t1 = keys.t_times[i + 1];
     let a = if t1 > t0 { (t - t0) / (t1 - t0) } else { 0.0 };
-    lerp_vec3(&keys.t_values[i], &keys.t_values[i + 1], a)
+    Some(lerp_vec3(&keys.t_values[i], &keys.t_values[i + 1], a))
 }
 
-pub fn sample_scale(keys: &TransformKeys, t: f32) -> Vector3<f32> {
+pub fn sample_scale(keys: &TransformKeys, t: f32) -> Option<Vector3<f32>> {
     let n = keys.s_times.len();
     if n == 0 {
-        return Vector3::new(1.0, 1.0, 1.0);
+        return None;
     }
     if n == 1 {
-        return keys.s_values[0];
+        return Some(keys.s_values[0]);
     }
 
     let i = find_key(&keys.s_times, t);
     if i == n - 1 {
-        return keys.s_values[i];
+        return Some(keys.s_values[i]);
     }
     let t0 = keys.s_times[i];
     let t1 = keys.s_times[i + 1];
     let a = if t1 > t0 { (t - t0) / (t1 - t0) } else { 0.0 };
-    lerp_vec3(&keys.s_values[i], &keys.s_values[i + 1], a)
+    Some(lerp_vec3(&keys.s_values[i], &keys.s_values[i + 1], a))
 }
 
-pub fn sample_rotation(keys: &TransformKeys, t: f32) -> UnitQuaternion<f32> {
+pub fn sample_rotation(keys: &TransformKeys, t: f32) -> Option<UnitQuaternion<f32>> {
     let n = keys.r_times.len();
     if n == 0 {
-        return UnitQuaternion::identity();
+        return None;
     }
     if n == 1 {
-        return keys.r_values[0];
+        return Some(keys.r_values[0]);
     }
 
     let i = find_key(&keys.r_times, t);
     if i == n - 1 {
-        return keys.r_values[i];
+        return Some(keys.r_values[i]);
     }
     let t0 = keys.r_times[i];
     let t1 = keys.r_times[i + 1];
     let a = if t1 > t0 { (t - t0) / (t1 - t0) } else { 0.0 };
-    keys.r_values[i].slerp(&keys.r_values[i + 1], a)
+    Some(keys.r_values[i].slerp(&keys.r_values[i + 1], a))
 }
