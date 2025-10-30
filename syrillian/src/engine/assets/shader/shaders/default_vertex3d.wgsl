@@ -4,10 +4,8 @@ fn sum4(v: vec4<f32>) -> f32 {
     return v.x + v.y + v.z + v.w;
 }
 
-fn skin_pos(p: vec4<f32>, idx: vec4<u32>, w: vec4<f32>) -> vec4<f32> {
-    if (length(w) < 1e-6) {
-        return p;
-    }
+fn skin_pos(p: vec4<f32>, idx: vec4<u32>, ow: vec4<f32>) -> vec4<f32> {
+    let w = normalize(ow);
     return (bones.mats[idx.x] * p) * w.x +
            (bones.mats[idx.y] * p) * w.y +
            (bones.mats[idx.z] * p) * w.z +
@@ -49,7 +47,7 @@ fn vs_main(in: VInput) -> FInput {
     out.position = ws_pos.xyz;
     out.clip = camera.view_proj_mat * ws_pos;
 
-    out.uv = vec2<f32>(in.uv.x, in.uv.y);
+    out.uv = in.uv;
 
     // FIXME: This is only correct for uniform scaling + rotation.
     // For non-uniform scaling, transform using the inverse transpose of the model matrix (normal_mat).

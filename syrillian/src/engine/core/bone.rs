@@ -16,12 +16,15 @@ pub struct Bones {
     pub names: Vec<String>,
     /// Parent bone index; None for roots.
     pub parents: Vec<Option<usize>>,
+    pub children: Vec<Vec<usize>>,
+    pub roots: Vec<usize>,
     pub inverse_bind: Vec<Matrix4<f32>>,
     pub bind_global: Vec<Matrix4<f32>>,
     pub bind_local: Vec<Matrix4<f32>>,
     /// Fast lookup from name to index.
     pub index_of: HashMap<String, usize>,
 }
+
 impl Bones {
     pub fn new() -> Self {
         Self::default()

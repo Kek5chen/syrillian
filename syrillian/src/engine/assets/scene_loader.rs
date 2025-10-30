@@ -6,7 +6,6 @@ use crate::components::{
 };
 use crate::core::{Bones, GameObjectId, Vertex3D};
 use crate::rendering::lights::Light;
-use crate::utils::ExtraMatrixMath;
 use crate::utils::animation::{AnimationClip, Channel, TransformKeys};
 use gltf::animation::util::ReadOutputs;
 use gltf::image::Format;
@@ -135,11 +134,11 @@ impl SceneLoader {
             Self::attach_mesh(world, materials, &mut obj, mesh, mats);
         }
 
-        let m = Matrix4::from(node.transform().matrix());
-        let (position, rotation, scale) = m.decompose();
-        obj.transform.set_local_position_vec(position);
-        obj.transform.set_local_rotation(rotation);
-        obj.transform.set_nonuniform_local_scale(scale);
+        let (p, r, s) = node.transform().decomposed();
+        obj.transform.set_local_position_vec(Vector3::from(p));
+        obj.transform
+            .set_local_rotation(UnitQuaternion::from_quaternion(Quaternion::from(r)));
+        obj.transform.set_nonuniform_local_scale(Vector3::from(s));
 
         load_node_light(node.clone(), obj);
 
@@ -446,8 +445,17 @@ fn build_bones_from_skin(
         };
     }
 
+    let mut children = vec![Vec::new(); names.len()];
+    for (i, parent) in parents.iter().enumerate() {
+        match *parent {
+            None => out.roots.push(i),
+            Some(p) => children[p].push(i),
+        }
+    }
+
     out.names = names;
     out.parents = parents;
+    out.children = children;
     out.inverse_bind = inverse_bind;
     out.bind_global = bind_global;
     out.bind_local = bind_local;

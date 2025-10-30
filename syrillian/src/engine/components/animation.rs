@@ -165,6 +165,10 @@ impl AnimationComponent {
         skel_go: GameObjectId,
         locals: &mut HashMap<GameObjectId, Vec<SkeletonLocals>>,
     ) -> Option<&mut Vec<SkeletonLocals>> {
+        if !skel_go.exists() {
+            return None;
+        }
+
         match locals.entry(skel_go) {
             Entry::Occupied(o) => Some(o.into_mut()),
             Entry::Vacant(e) => {

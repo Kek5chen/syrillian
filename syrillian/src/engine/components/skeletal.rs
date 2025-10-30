@@ -1,9 +1,10 @@
 use crate::World;
 use crate::components::{Component, MeshRenderer};
 use crate::core::{Bones, GameObjectId};
+use crate::utils::MATRIX4_ID;
 use log::warn;
-use nalgebra::{Matrix4, Vector3};
-use nalgebra::{Scale3, Translation3, UnitQuaternion};
+use nalgebra::{Matrix4, Scale3, Vector3};
+use nalgebra::{Translation3, UnitQuaternion};
 
 pub struct SkeletalComponent {
     parent: GameObjectId,
@@ -66,9 +67,7 @@ impl SkeletalComponent {
         locals: &[(Vector3<f32>, UnitQuaternion<f32>, Vector3<f32>)],
     ) {
         let n = self.bones_static.len();
-        if self.delta_local.len() != n {
-            self.delta_local = vec![Matrix4::identity(); n];
-        }
+        self.delta_local.resize(n, MATRIX4_ID);
         for (i, (pos, rot, scale)) in locals.iter().enumerate().take(n) {
             let m = Translation3::from(*pos).to_homogeneous()
                 * rot.to_homogeneous()
@@ -80,19 +79,19 @@ impl SkeletalComponent {
 
     /// Set a bone's local delta rotation (about its local origin)
     pub fn set_local_rotation(&mut self, index: usize, q: UnitQuaternion<f32>) {
-        let mut m = Matrix4::identity();
-        m.fixed_view_mut::<3, 3>(0, 0)
+        let mut rot = Matrix4::identity();
+        rot.fixed_view_mut::<3, 3>(0, 0)
             .copy_from(q.to_rotation_matrix().matrix());
-        self.delta_local[index] = m;
+        self.delta_local[index] = rot;
         self.dirty = true;
     }
 
-    pub fn set_local_transform(&mut self, index: usize, m: Matrix4<f32>) {
-        self.delta_local[index] = m;
+    pub fn set_local_transform(&mut self, index: usize, pos: Matrix4<f32>) {
+        self.delta_local[index] = pos;
         self.dirty = true;
     }
 
-    pub fn palette(&mut self) -> &[Matrix4<f32>] {
+    pub fn palette(&self) -> &[Matrix4<f32>] {
         &self.palette
     }
 
@@ -100,20 +99,35 @@ impl SkeletalComponent {
         if !self.dirty {
             return false;
         }
-        let n = self.bone_count();
 
-        // globals = parent_global * (bind_local * delta_local)
-        for i in 0..n {
-            let local_new = self.bones_static.bind_local[i] * self.delta_local[i];
-            self.globals[i] = match self.bones_static.parents[i] {
-                None => local_new,
-                Some(p) => self.globals[p] * local_new,
-            };
+        fn visit(
+            i: usize,
+            bones: &Bones,
+            globals: &mut [Matrix4<f32>],
+            delta_local: &[Matrix4<f32>],
+            palette: &mut [Matrix4<f32>],
+            parent_global: Matrix4<f32>,
+        ) {
+            let local_new = bones.bind_local[i] * delta_local[i];
+            let g = parent_global * local_new;
+            globals[i] = g;
+            palette[i] = g * bones.inverse_bind[i];
+            for &c in &bones.children[i] {
+                visit(c, bones, globals, delta_local, palette, g);
+            }
         }
-        // palette = global_new * inverse_bind
-        for i in 0..n {
-            self.palette[i] = self.globals[i] * self.bones_static.inverse_bind[i];
+
+        for &root in &self.bones_static.roots {
+            visit(
+                root,
+                &self.bones_static,
+                &mut self.globals,
+                &self.delta_local,
+                &mut self.palette,
+                MATRIX4_ID,
+            );
         }
+
         self.dirty = false;
         true
     }
