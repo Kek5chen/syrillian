@@ -5,6 +5,9 @@ fn sum4(v: vec4<f32>) -> f32 {
 }
 
 fn skin_pos(p: vec4<f32>, idx: vec4<u32>, ow: vec4<f32>) -> vec4<f32> {
+    if (length(ow) < 1e-6) {
+        return p;
+    }
     let w = normalize(ow);
     return (bones.mats[idx.x] * p) * w.x +
            (bones.mats[idx.y] * p) * w.y +
