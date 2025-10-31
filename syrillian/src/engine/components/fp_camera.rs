@@ -108,7 +108,8 @@ impl Component for FirstPersonCameraController {
 
     fn update(&mut self, world: &mut World) {
         let input = &world.input;
-        let transform = &mut (self.parent.clone()).transform;
+        let mut parent = self.parent;
+        let transform = &mut parent.transform;
         let delta_time = world.delta_time().as_secs_f32();
 
         self.calculate_jump_bob(delta_time);
