@@ -232,7 +232,7 @@ fn rasterize_msdf_glyph(
     let (width_px, height_px) = glyph_dimensions(bbox, shrinkage, range);
     let transform = glyph_transform(bbox, shrinkage, range);
 
-    let mut shape: Shape<_> = load_shape_from_face(&face, gid);
+    let mut shape: Shape<_> = load_shape_from_face(&face, gid)?;
     shape.transform(&transform);
     let prepared = Shape::edge_coloring_simple(shape, 0.03, 0xD15EA5u64).prepare();
 

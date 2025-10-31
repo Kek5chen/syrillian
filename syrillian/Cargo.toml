@@ -19,13 +19,13 @@ readme = "../README.md"
 [dependencies]
 wgpu = { version = "25.0", default-features = false, features = ["wgsl"] }
 winit = { version = "0.30" }
-bytemuck = "1.23"
+bytemuck = "1.24"
 log = "0.4"
-nalgebra = { version = "0.33", features = ["bytemuck", "mint"] }
+nalgebra = { version = "0.34", features = ["bytemuck", "mint"] }
 num-traits = "0.2"
 itertools = "0.14"
 image = "0.25"
-rapier3d = "0.27"
+rapier3d = "0.30"
 futures = "0.3"
 static_assertions = "1.1"
 snafu = "0.8"
@@ -35,20 +35,20 @@ obj = "0.10"
 syrillian_macros.workspace = true
 syrillian_utils.workspace = true
 dashmap = "6.1"
-bon = "3.6"
+bon = "3.8"
 const_format = "0.2"
 gilrs = "0.11"
-uuid = { version = "1.17.0", features = ["v4"] }
+uuid = { version = "1.18", features = ["v4"] }
 fontdb = "0.23"
-fdsm = "0.7"
-fdsm-ttf-parser = "0.1"
+fdsm = "0.8"
+fdsm-ttf-parser = "0.2"
 etagere = "0.2"
 ttf-parser = "0.25"
 delegate = "0.13"
 slotmap = "1.0"
 num_enum = "0.7"
-kira = { version = "0.10.8", default-features = false, features = ["flac", "mp3", "ogg", "wav"] }
-once_cell = "1.21.3"
+kira = { version = "0.10", default-features = false, features = ["flac", "mp3", "ogg", "wav"] }
+once_cell = "1.21"
 web-time = "1.0"
 
 [build-dependencies]
@@ -57,8 +57,8 @@ chrono = "0.4"
 [dev-dependencies]
 chrono = "0.4"
 env_logger = { version = "0.11", features = ["auto-color"] }
-serial_test = "3.2.0"
-notify = "8.1.0"
+serial_test = "3.2"
+notify = "8.2"
 
 
 
