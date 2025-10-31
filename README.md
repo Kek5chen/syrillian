@@ -5,51 +5,76 @@
 
 # Syrillian Engine
 
-Syrillian Engine is a Rust-based, real-time, mainly 3D game engine, focusing on flexibility, modularity, and a straightforward,
+Syrillian Engine is a Rust-based, real-time, mainly 3D game engine, focusing on flexibility, modularity, and a
+straightforward,
 entity-component-driven workflow.
 
-It's designed to be easy, simple and extensible. We aim to provide a robust foundation for building modern 3D
-applications, rendering pipelines, and visually pleasing gameplay.
+It's designed to be frictionless and extensible. We aim to provide a robust foundation for building modern 3D
+applications, cross-platform rendering pipelines, and visually pleasing gameplay.
 
-## We're doing it different!
+---
 
-**We're unique**, in the sense that we aim to show how *flexible* Rust can be as a language. With the milestone to
-provide
+## Syrillian's doing it different
+
+**This project is trying to be uniquely simple and frictionless**.
+
+Syrillian aims to show how *flexible* Rust can be as a general programming language. With the milestone to provide
 a **simple, iteration-strong game engine**, which people **have fun** making games with. The goal is to look beyond the
-boundaries so that users can simply focus on iteration speed. **Not fighting a language.**
+boundaries so that users can simply focus on **frictionless development that feels like magic**, *not like fighting a
+language.*
 
 The goal is that even new developers, and people familiar with other languages, have a comfortable dip into the Rust
-game-dev atmosphere!
+game-dev atmosphere and the growing Syrillian ecosystem!
+
+---
 
 ### Showroom
 
 **Feel free to add your own expositions here :)**
 
+![](https://i.ibb.co/fVJ83sQG/rabbit.gif)
+
+*An animated rabbit, roaming in the scene*
+
+---
+
 ![](https://i.ibb.co/F9gywNk/Screenshot-2025-08-04-at-12-37-22.png)
 
-*Me picking up a shader-animated, physics-enabled cube which is emitting a
+*Picking up a physics-enabled cube with an animated shader, which is emitting a
 lightsource* [From this Example](./examples/my-main.rs)
+
+---
 
 ## Features
 
 - Simple "Just get it started" approach. High focus on user-side simplicity, and even fresh rust users should feel
   welcome.
-- Lots of preset (components - prefabs - compatibility)! All boxed up, ready to be dropped in.
+- Lots of preset (components, prefabs, compatibility)!
 - Mesh and Physics, Visual debugging features.
 - Game Objects that are *builder extensible*. Providing a fluid object creation and behavior specification workflow.
-- Built in giants:
-    - Strong battle-tested Physics Integration provided by [rapier](https://github.com/dimforge/rapier)
-    - Ultra dynamic Graphics Abstraction provided by [wgpu](https://github.com/gfx-rs/wgpu) (DirectX, Vulkan, Metal,
+- The open-source internals that make this project possible:
+    - Physics Integration provided by [rapier](https://github.com/dimforge/rapier)
+    - Dynamic Graphics Abstraction provided by [wgpu](https://github.com/gfx-rs/wgpu) (DirectX, Vulkan, Metal,
       WebGL)
 
 ## Getting Started
 
 ### Prerequisites
 
-- Have a Rust Toolchain Installed.
+- Have a modern Rust Toolchain installed.
 - Have a GPU
 
 ### Building & Running
+
+#### Use as a library in your own game
+
+1. Add it as a dependency to your cargo project:
+
+```bash
+cargo add syrillian
+```
+
+#### Development Setup or Try it out
 
 1. Clone the repository:
    ```bash
@@ -67,16 +92,15 @@ lightsource* [From this Example](./examples/my-main.rs)
    cargo run --example my-main
    ```
 
-4. Dance in circles (optional)
-
 **NixOS** *Development Flakes are provided with the project.*
 
-If successful, a window should appear displaying a rendered scene.
+If successful, a window should appear, displaying a rendered scene.
 
 ### Minimal Setup
 
-We, optionally, provide
-the [SyrillianApp Proc Macro](https://docs.rs/syrillian_macros/latest/syrillian_macros/derive.SyrillianApp.html).
+We, optionally, provide the
+[SyrillianApp Proc Macro](https://docs.rs/syrillian_macros/latest/syrillian_macros/derive.SyrillianApp.html).
+
 Usage example:
 
 ```rust
@@ -111,7 +135,7 @@ It's simple... Really!
 ### Roadmap & Contributing
 
 The whole feature map has moved into
-the [Issues](https://github.com/Kek5chen/syrillian/issues?q=state%3Aopen%20label%3Aepic)
+[GitHub Issues](https://github.com/Kek5chen/syrillian/issues?q=state%3Aopen%20label%3Aepic)
 
 Contributions are welcome! If you find a bug or have a feature request:
 
@@ -128,14 +152,15 @@ cargo clippy
 
 ### History
 
-This project has been a big personal gem of mine, and I've poured probably a good 100+ hours of my freetime into it.
-I am not monetized to work on this, and I do it out of pure personal interest.
+This project started as a hobby project - a big personal gem - and had poured hundreds of hours of solo-development
+into it before catching onto the first early contributors.
+This project is not monetized or developed to be monetized.
 
-**Any help**, getting this project [better, stable, improved, ..] is very welcome, and I'll make sure to show or explain
-anything that's not clear. Even feedback or rants on the user-facing API are more than welcome, as I wish to provide
-patterns that make is as simple as possible to use.
+**Any help**, getting this project [better, stable, improved, ..] is very welcome, and we'll try to show or explain
+anything that's not clear. Even feedback or rants on the user-facing API are more than welcome. We wish to provide
+patterns that make the engine as simple to use as possible.
 
-If you need *anything*: Don't hesitate to join the [discord](https://discord.gg/hZWycSwSm4) to discuss :)
+**Join the community on [Discord](https://discord.gg/hZWycSwSm4).**
 
 ### License
 
