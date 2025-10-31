@@ -18,6 +18,7 @@ pub struct AssetCache {
     pub materials: Cache<Material>,
     pub bgls: Cache<BGL>,
     pub fonts: Cache<Font>,
+    pub cubemaps: Cache<Cubemap>,
 
     store: Arc<AssetStore>,
 
@@ -35,6 +36,7 @@ impl AssetCache {
             materials: Cache::new(store.materials.clone(), device.clone(), queue.clone()),
             bgls: Cache::new(store.bgls.clone(), device.clone(), queue.clone()),
             fonts: Cache::new(store.fonts.clone(), device.clone(), queue.clone()),
+            cubemaps: Cache::new(store.cubemaps.clone(), device.clone(), queue.clone()),
             store,
             last_refresh: Mutex::new(Instant::now()),
         }
@@ -85,6 +87,14 @@ impl AssetCache {
         }
     }
 
+    pub fn cubemap(&self, handle: HCubemap) -> Option<Arc<GpuTexture>> {
+        self.cubemaps.try_get(handle, self)
+    }
+
+    pub fn cubemap_fallback(&self) -> Arc<GpuTexture> {
+        self.cubemaps.get(HCubemap::FALLBACK_CUBEMAP, self)
+    }
+
     pub fn material(&self, handle: HMaterial) -> Arc<RuntimeMaterial> {
         self.materials.get(handle, self)
     }
@@ -133,6 +143,12 @@ impl AssetCache {
         self.bgls
             .try_get(HBGL::POST_PROCESS, self)
             .expect("Post Process is a default layout")
+    }
+
+    pub fn bgl_cubemap(&self) -> Arc<BindGroupLayout> {
+        self.bgls
+            .try_get(HBGL::CUBEMAP, self)
+            .expect("Cubemap is a default layout")
     }
 
     pub fn font(&self, handle: HFont) -> Arc<FontAtlas> {

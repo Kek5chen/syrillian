@@ -33,20 +33,21 @@ mod asset_store;
 pub(crate) mod generic_store;
 
 mod bind_group_layout;
+mod cubemaps;
 mod font;
+mod handle;
+mod key;
 mod material;
 mod mesh;
 mod shader;
-mod texture;
-
-mod handle;
-mod key;
 mod sound;
+mod texture;
 
 pub use self::asset_store::*;
 pub use self::handle::*;
 
 pub use self::bind_group_layout::*;
+pub use self::cubemaps::*;
 pub use self::font::*;
 pub use self::material::*;
 pub use self::mesh::*;
@@ -66,3 +67,4 @@ pub type HShader = H<Shader>;
 pub type HTexture = H<Texture>;
 pub type HFont = H<Font>;
 pub type HSound = H<Sound>;
+pub type HCubemap = H<Cubemap>;

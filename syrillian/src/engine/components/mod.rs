@@ -51,6 +51,7 @@ pub mod rigid_body;
 pub mod rope;
 pub mod rotate;
 pub mod skeletal;
+pub mod skybox;
 pub mod spring;
 pub mod text;
 

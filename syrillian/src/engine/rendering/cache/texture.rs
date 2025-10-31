@@ -1,4 +1,4 @@
-use crate::engine::assets::Texture as CpuTexture;
+use crate::engine::assets::{Cubemap, Texture as CpuTexture};
 use crate::engine::rendering::cache::{AssetCache, CacheType};
 use wgpu::util::{DeviceExt, TextureDataOrder};
 use wgpu::{Device, Queue, Texture as WgpuTexture, TextureView};
@@ -25,6 +25,16 @@ impl CacheType for CpuTexture {
 
         let view = texture.create_view(&self.view_desc());
 
+        GpuTexture { texture, view }
+    }
+}
+
+impl CacheType for Cubemap {
+    type Hot = GpuTexture;
+
+    fn upload(self, device: &Device, queue: &Queue, _cache: &AssetCache) -> Self::Hot {
+        let texture = self.to_gpu_texture(device, queue);
+        let view = self.create_view(&texture);
         GpuTexture { texture, view }
     }
 }

@@ -79,23 +79,24 @@ impl H<Shader> {
     pub const POST_PROCESS_ID: u32 = 3;
     pub const TEXT_2D_ID: u32 = 4;
     pub const TEXT_3D_ID: u32 = 5;
+    pub const SKYBOX_CUBEMAP_ID: u32 = 6;
     #[cfg(not(debug_assertions))]
-    pub const MAX_BUILTIN_ID: u32 = 5;
+    pub const MAX_BUILTIN_ID: u32 = 6;
 
     #[cfg(debug_assertions)]
-    pub const DEBUG_EDGES_ID: u32 = 6;
+    pub const DEBUG_EDGES_ID: u32 = 7;
     #[cfg(debug_assertions)]
-    pub const DEBUG_VERTEX_NORMALS_ID: u32 = 7;
+    pub const DEBUG_VERTEX_NORMALS_ID: u32 = 8;
     #[cfg(debug_assertions)]
-    pub const DEBUG_LINES_ID: u32 = 8;
+    pub const DEBUG_LINES_ID: u32 = 9;
     #[cfg(debug_assertions)]
-    pub const DEBUG_TEXT2D_GEOMETRY_ID: u32 = 9;
+    pub const DEBUG_TEXT2D_GEOMETRY_ID: u32 = 10;
     #[cfg(debug_assertions)]
-    pub const DEBUG_TEXT3D_GEOMETRY_ID: u32 = 10;
+    pub const DEBUG_TEXT3D_GEOMETRY_ID: u32 = 11;
     #[cfg(debug_assertions)]
-    pub const DEBUG_LIGHT_ID: u32 = 11;
+    pub const DEBUG_LIGHT_ID: u32 = 12;
     #[cfg(debug_assertions)]
-    pub const MAX_BUILTIN_ID: u32 = 11;
+    pub const MAX_BUILTIN_ID: u32 = 12;
 
     // The fallback shader if a pipeline fails
     pub const FALLBACK: H<Shader> = H::new(Self::FALLBACK_ID);
@@ -132,6 +133,9 @@ impl H<Shader> {
     pub const DEBUG_TEXT3D_GEOMETRY: H<Shader> = H::new(Self::DEBUG_TEXT3D_GEOMETRY_ID);
     #[cfg(debug_assertions)]
     pub const DEBUG_LIGHT: H<Shader> = H::new(Self::DEBUG_LIGHT_ID);
+
+    // Skybox Cubemap shader
+    pub const SKYBOX_CUBEMAP: H<Shader> = H::new(Self::SKYBOX_CUBEMAP_ID);
 }
 
 const SHADER_FALLBACK3D: &str = include_str!("shaders/fallback_shader3d.wgsl");
@@ -153,6 +157,8 @@ const DEBUG_TEXT2D_GEOMETRY: &str = include_str!("shaders/debug/text2d_geometry.
 const DEBUG_TEXT3D_GEOMETRY: &str = include_str!("shaders/debug/text3d_geometry.wgsl");
 #[cfg(debug_assertions)]
 const DEBUG_LIGHT_SHADER: &str = include_str!("shaders/debug/light.wgsl");
+
+const SHADER_SKYBOX_CUBEMAP: &str = include_str!("shaders/skybox/skybox_cubemap.wgsl");
 
 impl StoreDefaults for Shader {
     fn populate(store: &mut Store<Self>) {
@@ -212,7 +218,29 @@ impl StoreDefaults for Shader {
                 shadow_transparency: true,
             }
         );
+        const SKYBOX_VBL: &[VertexBufferLayout] = &[VertexBufferLayout {
+            array_stride: 12,
+            step_mode: VertexStepMode::Vertex,
+            attributes: &[VertexAttribute {
+                format: VertexFormat::Float32x3,
+                offset: 0,
+                shader_location: 0,
+            }],
+        }];
 
+        store_add_checked!(
+            store,
+            HShader::SKYBOX_CUBEMAP_ID,
+            Shader::Custom {
+                name: "Skybox Cubemap".to_string(),
+                code: ShaderCode::Full(SHADER_SKYBOX_CUBEMAP.to_string()),
+                polygon_mode: PolygonMode::Fill,
+                topology: PrimitiveTopology::TriangleList,
+                vertex_buffers: SKYBOX_VBL,
+                push_constant_ranges: &[],
+                shadow_transparency: false,
+            }
+        );
         #[cfg(debug_assertions)]
         {
             use crate::rendering::DEFAULT_VBL;
@@ -390,6 +418,7 @@ impl StoreType for Shader {
             HShader::DEBUG_TEXT3D_GEOMETRY_ID => "Debug Text 3D Geometry Shader",
             #[cfg(debug_assertions)]
             HShader::DEBUG_LIGHT_ID => "Debug Lights Shader",
+            HShader::SKYBOX_CUBEMAP_ID => "Skybox Cubemap Shader",
 
             _ => return HandleName::Id(handle),
         };
@@ -555,6 +584,7 @@ impl Shader {
             HBGL::MATERIAL_ID => "material",
             HBGL::LIGHT_ID => "light",
             HBGL::SHADOW_ID => "shadow",
+            HBGL::CUBEMAP_ID => "cubemap",
 
             HBGL::RENDER_ID => return true,
             _ => return false,
@@ -583,6 +613,7 @@ impl Shader {
         let lgt_bgl = cache.bgl_light();
         let sdw_bgl = cache.bgl_shadow();
         let pp_bgl = cache.bgl_post_process();
+        let cubemap_bgl = cache.bgl_cubemap();
         let empty_bgl = cache.bgl_empty();
 
         let mut slots: [Option<&BindGroupLayout>; 6] = [None; 6];
@@ -591,7 +622,9 @@ impl Shader {
         if self.is_post_process() {
             slots[1] = Some(&pp_bgl);
         } else {
-            if self.needs_bgl(HBGL::MODEL) {
+            if self.is_custom() && self.needs_bgl(HBGL::CUBEMAP) {
+                slots[1] = Some(&cubemap_bgl);
+            } else if self.needs_bgl(HBGL::MODEL) {
                 slots[1] = Some(&mdl_bgl);
             }
             if self.needs_bgl(HBGL::MATERIAL) {

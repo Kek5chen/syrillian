@@ -326,6 +326,13 @@ impl World {
         }
     }
 
+    /// Set the skybox background color for the renderer
+    pub fn set_skybox_background_color(&self, color: wgpu::Color) {
+        self.render_tx
+            .send(RenderMsg::SetSkyboxBackgroundColor(color))
+            .expect("Failed to send skybox background color message");
+    }
+
     /// Internally sync new components to the Render Thread for proxy creation
     fn sync_fresh_components(&mut self) {
         if self.components.fresh.is_empty() {
