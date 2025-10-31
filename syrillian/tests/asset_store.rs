@@ -78,9 +78,7 @@ fn test_texture_store() {
 #[test]
 fn test_material_store() {
     let store = AssetStore::new();
-    let material = Material::builder()
-        .name("Test Material".to_string())
-        .build();
+    let material = Material::builder().name("Test Material").build();
     let handle = store.materials.add(material);
     let retrieved_material = store.materials.try_get(handle);
     assert!(retrieved_material.is_some());
@@ -91,7 +89,7 @@ fn test_material_store() {
 #[ignore]
 fn test_font_store() {
     let store = AssetStore::new();
-    let font = Font::new("Noto Sans".to_string(), None).expect("default font not found");
+    let font = Font::new("Noto Sans", None).expect("default font not found");
     let handle = store.fonts.add(font);
     let retrieved_font = store.fonts.try_get(handle);
     assert!(retrieved_font.is_some());

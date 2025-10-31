@@ -80,7 +80,7 @@ impl MsdfAtlas {
         let texture = world.assets.textures.add(texture);
 
         let material = Material::builder()
-            .name("MSDF Font Atlas".into())
+            .name("MSDF Font Atlas")
             .diffuse_texture(texture)
             .build();
         let material = world.assets.materials.add(material);

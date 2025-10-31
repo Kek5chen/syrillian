@@ -34,8 +34,7 @@ impl StoreDefaults for Font {
         store_add_checked!(
             store,
             HFont::DEFAULT_ID,
-            Font::new("Noto Sans".to_string(), None)
-                .expect("Default font should always be loadable")
+            Font::new("Noto Sans", None).expect("Default font should always be loadable")
         );
     }
 }
@@ -50,7 +49,8 @@ pub const DEFAULT_ATLAS_SIZE: u32 = 1024;
 
 impl Font {
     /// The default atlas glyph size is 100 pixels
-    pub fn new(family_name: String, atlas_em_px: Option<u32>) -> Option<Self> {
+    pub fn new(family_name: impl Into<String>, atlas_em_px: Option<u32>) -> Option<Self> {
+        let family_name = family_name.into();
         let atlas_em_px = atlas_em_px.unwrap_or(DEFAULT_ATLAS_SIZE);
         let bytes = find_font_and_bytes(&family_name)?;
         Some(Self {
@@ -68,7 +68,7 @@ impl Store<Font> {
             return Some(font);
         }
 
-        let loaded_font = Font::new(font_family.to_string(), atlas_em_px)?;
+        let loaded_font = Font::new(font_family, atlas_em_px)?;
         Some(self.add(loaded_font))
     }
 

@@ -6,6 +6,7 @@ use nalgebra::Vector3;
 
 #[derive(Debug, Clone, Builder)]
 pub struct Material {
+    #[builder(into)]
     pub name: String,
     #[builder(default = Vector3::new(0.7, 0.7, 0.7))]
     pub color: Vector3<f32>,

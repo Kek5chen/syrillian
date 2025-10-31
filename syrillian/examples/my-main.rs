@@ -95,15 +95,15 @@ impl AppState for MyMain {
         let shader3 = Shader::new_fragment("Funky Shader 3", SHADER3).store(world);
 
         let shader_mat_1 = Material::builder()
-            .name("Cube Material 1".into())
+            .name("Cube Material 1")
             .shader(shader)
             .store(&world);
         let shader_mat_2 = Material::builder()
-            .name("Cube Material 2".into())
+            .name("Cube Material 2")
             .shader(shader2)
             .store(&world);
         let shader_mat_3 = Material::builder()
-            .name("Cube Material 3".into())
+            .name("Cube Material 3")
             .shader(shader3)
             .store(&world);
 

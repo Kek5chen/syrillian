@@ -13,7 +13,7 @@
 //! fn update(world: &mut World) {
 //!     // make a Material
 //!     let material: Material = Material::builder()
-//!         .name("Test Material".to_string())
+//!         .name("Test Material")
 //!         .build();
 //!
 //!     // add an asset

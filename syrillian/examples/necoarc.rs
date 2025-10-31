@@ -40,7 +40,7 @@ impl AppState for NecoArc {
 
         let material = world.assets.materials.add(
             Material::builder()
-                .name("Neco Arc".into())
+                .name("Neco Arc")
                 .diffuse_texture(texture)
                 .build(),
         );
