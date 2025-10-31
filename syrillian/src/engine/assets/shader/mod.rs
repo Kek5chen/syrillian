@@ -139,7 +139,7 @@ const SHADER_DIM2: &str = include_str!("shaders/shader2d.wgsl");
 const SHADER_DIM3: &str = include_str!("shaders/shader3d.wgsl");
 const SHADER_TEXT2D: &str = include_str!("shaders/text2d.wgsl");
 const SHADER_TEXT3D: &str = include_str!("shaders/text3d.wgsl");
-const SHADER_FS_COPY: &str = include_str!("shaders/fullscreen_passhthrough.wgsl");
+const SHADER_FS_COPY: &str = include_str!("shaders/fullscreen_passthrough.wgsl");
 
 #[cfg(debug_assertions)]
 const DEBUG_EDGES_SHADER: &str = include_str!("shaders/debug/edges.wgsl");

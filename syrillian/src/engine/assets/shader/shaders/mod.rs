@@ -69,4 +69,4 @@ test_custom_shader!(debug_text3d, "Debug Text 3D Geometry Shader" => "debug/text
 test_custom_shader!(debug_light, "Debug Light Geometry Shader" => "debug/light.wgsl");
 
 // Post-Processing Shaders
-test_post_shader!(fullscreen_passthrough, "Fullscreen Passthrough Shader" => "fullscreen_passhthrough.wgsl");
+test_post_shader!(fullscreen_passthrough, "Fullscreen Passthrough Shader" => "fullscreen_passthrough.wgsl");
