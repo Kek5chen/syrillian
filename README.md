@@ -32,9 +32,9 @@ game-dev atmosphere and the growing Syrillian ecosystem!
 
 **Feel free to add your own expositions here :)**
 
-![](https://i.ibb.co/fVJ83sQG/rabbit.gif)
+![rabbit_hires](https://github.com/user-attachments/assets/19a0f25d-c1f3-44e7-b9a4-93a7865087ff)
 
-*An animated rabbit, roaming in the scene*
+*An animated rabbit, roaming in the scene \*click to view the video\**
 
 ---
 
