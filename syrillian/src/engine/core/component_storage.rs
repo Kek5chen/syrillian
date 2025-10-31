@@ -1,4 +1,5 @@
 use crate::components::{CRef, Component, ComponentId, TypedComponentId};
+use crate::core::GameObjectId;
 use log::trace;
 use slotmap::HopSlotMap;
 use slotmap::hop::Values;
@@ -18,8 +19,8 @@ where
     fn iter_comps_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item = &'a mut dyn Component> + 'a>;
     fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = (K, &'a dyn Component)> + 'a>;
     fn iter_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item = (K, &'a mut dyn Component)> + 'a>;
-    fn get(&self, key: K) -> Option<&dyn Component>;
-    fn get_mut(&mut self, key: K) -> Option<&mut dyn Component>;
+    fn get(&self, key: K) -> Option<CRef<dyn Component>>;
+    fn get_mut(&mut self, key: K) -> Option<CRef<dyn Component>>;
     fn remove(&mut self, key: K) -> Option<CRef<dyn Component>>;
 }
 
@@ -55,12 +56,12 @@ where
         )
     }
 
-    fn get(&self, key: K) -> Option<&dyn Component> {
-        self.get(key).map(|v| &**v as &dyn Component)
+    fn get(&self, key: K) -> Option<CRef<dyn Component>> {
+        self.get(key).map(|v| v.clone().into_dyn())
     }
 
-    fn get_mut(&mut self, key: K) -> Option<&mut dyn Component> {
-        self.get_mut(key).map(|v| &mut **v as &mut dyn Component)
+    fn get_mut(&mut self, key: K) -> Option<CRef<dyn Component>> {
+        self.get_mut(key).map(|v| v.clone().into_dyn())
     }
 
     fn remove(&mut self, key: K) -> Option<CRef<dyn Component>> {
@@ -134,12 +135,8 @@ impl ComponentStorage {
         self._get_mut()?.get_mut(id.1)
     }
 
-    pub fn get_dyn(&self, id: TypedComponentId) -> Option<&dyn Component> {
+    pub fn get_dyn(&self, id: TypedComponentId) -> Option<CRef<dyn Component>> {
         self._get_from_id(id.0)?.get(id.1)
-    }
-
-    pub fn get_dyn_mut(&mut self, id: TypedComponentId) -> Option<&mut dyn Component> {
-        self._get_mut_from_id(id.0)?.get_mut(id.1)
     }
 
     pub fn values_of_type<C: Component>(&self) -> Option<Values<'_, ComponentId, CRef<C>>> {
@@ -170,16 +167,17 @@ impl ComponentStorage {
             .flat_map(|store| store.iter_comps_mut())
     }
 
-    pub(crate) fn add<C: Component>(&mut self, component: C) -> CRef<C> {
+    pub(crate) fn add<C: Component>(&mut self, component: C, parent: GameObjectId) -> CRef<C> {
         let comp = Arc::new(component);
 
         let store = self._get_or_insert_mut();
-        let id = store.insert(CRef(Some(comp), TypedComponentId::null::<C>()));
-        let tid = TypedComponentId::from_typed::<C>(id);
+        let id = store.insert_with_key(|id| {
+            let tid = TypedComponentId::from_typed::<C>(id);
+            CRef::new(comp, tid, parent)
+        });
 
-        let cref = store.get_mut(id).expect("Element was just inserted");
-        cref.1 = tid;
-        let cref = cref.clone();
+        let tid = TypedComponentId::from_typed::<C>(id);
+        let cref = store.get(id).expect("Element was just inserted").clone();
 
         self.len += 1;
         self.fresh.push(tid);

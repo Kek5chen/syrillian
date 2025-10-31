@@ -1,5 +1,5 @@
 use crate::World;
-use crate::components::{Component, MeshRenderer};
+use crate::components::{Component, MeshRenderer, NewComponent};
 use crate::core::{Bones, GameObjectId};
 use crate::utils::{ExtraMatrixMath, MATRIX4_ID};
 use itertools::izip;
@@ -19,7 +19,7 @@ pub struct SkeletalComponent {
     dirty: bool,
 }
 
-impl Component for SkeletalComponent {
+impl NewComponent for SkeletalComponent {
     fn new(parent: GameObjectId) -> Self {
         Self {
             parent,
@@ -33,7 +33,9 @@ impl Component for SkeletalComponent {
             dirty: true,
         }
     }
+}
 
+impl Component for SkeletalComponent {
     fn init(&mut self, world: &mut World) {
         let Some(renderer) = self.parent.get_component::<MeshRenderer>() else {
             warn!("No Mesh Renderer found on Skeletal Object");
@@ -72,10 +74,6 @@ impl Component for SkeletalComponent {
         self.palette = vec![Matrix4::identity(); n];
 
         self.dirty = true;
-    }
-
-    fn parent(&self) -> GameObjectId {
-        self.parent
     }
 }
 

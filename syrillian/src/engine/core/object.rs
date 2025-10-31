@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use std::fmt::Debug;
 use std::ops::{Deref, DerefMut};
 
-use crate::components::{CRef, Component, TypedComponentId};
+use crate::components::{CRef, Component, NewComponent, TypedComponentId};
 use crate::ensure_aligned;
 use crate::world::World;
 use itertools::Itertools;
@@ -118,13 +118,13 @@ impl GameObject {
     /// and returns the component ID.
     pub fn add_component<C>(&mut self) -> CRef<C>
     where
-        C: Component + 'static,
+        C: NewComponent + 'static,
     {
         let world = World::instance();
         let mut comp: C = C::new(self.id);
         comp.init(world);
 
-        let new_comp = world.components.add(comp);
+        let new_comp = world.components.add(comp, self.id);
         let new_comp2 = new_comp.clone();
         self.components.insert(new_comp.into_dyn());
         new_comp2
@@ -133,7 +133,7 @@ impl GameObject {
     /// Adds a new [`Component`] of type `C` to all children of this game object.
     pub fn add_child_components<C>(&mut self)
     where
-        C: Component + 'static,
+        C: NewComponent + 'static,
     {
         for child in &mut self.children {
             child.add_component::<C>();
@@ -144,7 +144,7 @@ impl GameObject {
     /// function `f` to each newly added component.
     pub fn add_child_components_then<C>(&mut self, f: impl Fn(&mut C))
     where
-        C: Component + 'static,
+        C: NewComponent + 'static,
     {
         for child in &mut self.children {
             let mut comp = child.add_component::<C>();

@@ -1,6 +1,6 @@
 use self::SpringComponentError::*;
 use crate::World;
-use crate::components::{Component, RigidBodyComponent};
+use crate::components::{Component, NewComponent, RigidBodyComponent};
 use crate::core::GameObjectId;
 use log::warn;
 use rapier3d::prelude::*;
@@ -26,11 +26,8 @@ pub struct SpringComponent {
     damping: f32,
 }
 
-impl Component for SpringComponent {
-    fn new(parent: GameObjectId) -> Self
-    where
-        Self: Sized,
-    {
+impl NewComponent for SpringComponent {
+    fn new(parent: GameObjectId) -> Self {
         SpringComponent {
             parent,
             connected: None,
@@ -40,7 +37,9 @@ impl Component for SpringComponent {
             damping: 1.0,
         }
     }
+}
 
+impl Component for SpringComponent {
     fn update(&mut self, _world: &mut World) {}
 
     fn delete(&mut self, world: &mut World) {
@@ -49,10 +48,6 @@ impl Component for SpringComponent {
             self.handle = None;
             self.connected = None;
         }
-    }
-
-    fn parent(&self) -> GameObjectId {
-        self.parent
     }
 }
 

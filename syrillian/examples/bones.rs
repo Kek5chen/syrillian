@@ -1,12 +1,12 @@
 //! Skeletal Mesh and Animation experimentation example.
 //!
-//! The goal of this is to test if bones are working as expected, and to
+//! The goal of this is to test if bones are working as expected and to
 //! aid in the development in the first place.
 
 use nalgebra::{UnitQuaternion, Vector3};
 use std::error::Error;
 use syrillian::assets::scene_loader::SceneLoader;
-use syrillian::components::{Component, SkeletalComponent};
+use syrillian::components::{Component, NewComponent, SkeletalComponent};
 use syrillian::core::GameObjectId;
 use syrillian::{AppState, World};
 use syrillian_macros::SyrillianApp;
@@ -54,10 +54,14 @@ pub struct BoneChainWave {
     parent: GameObjectId,
     t: f32,
 }
-impl Component for BoneChainWave {
+
+impl NewComponent for BoneChainWave {
     fn new(parent: GameObjectId) -> Self {
         Self { parent, t: 0.0 }
     }
+}
+
+impl Component for BoneChainWave {
     fn update(&mut self, world: &mut World) {
         self.t += world.delta_time().as_secs_f32() * 2.0;
         if let Some(mut skel) = self.parent.get_component::<SkeletalComponent>() {
@@ -71,9 +75,5 @@ impl Component for BoneChainWave {
                 );
             }
         }
-    }
-
-    fn parent(&self) -> GameObjectId {
-        self.parent
     }
 }

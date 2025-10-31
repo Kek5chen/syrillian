@@ -3,7 +3,7 @@
 use std::error::Error;
 
 use syrillian::assets::scene_loader::SceneLoader;
-use syrillian::components::{Component, RotateComponent};
+use syrillian::components::RotateComponent;
 use syrillian::utils::frame_counter::FrameCounter;
 use syrillian::world::World;
 use syrillian::{AppState, ENGINE_STR};

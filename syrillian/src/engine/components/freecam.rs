@@ -1,5 +1,5 @@
 use crate::World;
-use crate::components::Component;
+use crate::components::{Component, NewComponent};
 use crate::core::GameObjectId;
 use gilrs::{Axis, Button};
 use nalgebra::{UnitQuaternion, Vector2, Vector3};
@@ -13,11 +13,8 @@ pub struct FreecamController {
     pub pitch: f32,
 }
 
-impl Component for FreecamController {
-    fn new(parent: GameObjectId) -> Self
-    where
-        Self: Sized,
-    {
+impl NewComponent for FreecamController {
+    fn new(parent: GameObjectId) -> Self {
         FreecamController {
             move_speed: 30.0f32,
             look_sensitivity: 0.1f32,
@@ -26,10 +23,12 @@ impl Component for FreecamController {
             pitch: 0.0,
         }
     }
+}
 
+impl Component for FreecamController {
     fn update(&mut self, world: &mut World) {
         let delta_time = world.delta_time().as_secs_f32();
-        let transform = &mut self.parent().transform;
+        let transform = &mut self.parent.transform;
 
         let input = &world.input;
 
@@ -111,9 +110,5 @@ impl Component for FreecamController {
             direction.normalize_mut();
             transform.translate(direction * move_speed * delta_time);
         }
-    }
-
-    fn parent(&self) -> GameObjectId {
-        self.parent
     }
 }

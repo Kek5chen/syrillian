@@ -335,7 +335,7 @@ impl World {
         let mut fresh = Vec::new();
         swap(&mut fresh, &mut self.components.fresh);
         for cid in fresh {
-            let Some(comp) = World::instance().components.get_dyn_mut(cid) else {
+            let Some(mut comp) = self.components.get_dyn(cid) else {
                 continue;
             };
 

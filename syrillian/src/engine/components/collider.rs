@@ -2,7 +2,7 @@ use crate::World;
 use crate::components::ColliderError::{
     DesyncedCollider, InvalidMesh, InvalidMeshRef, NoMeshRenderer,
 };
-use crate::components::{Component, MeshRenderer, RigidBodyComponent};
+use crate::components::{Component, MeshRenderer, NewComponent, RigidBodyComponent};
 use crate::core::GameObjectId;
 use crate::engine::assets::Mesh;
 use log::{trace, warn};
@@ -58,11 +58,8 @@ pub enum ColliderError {
     InvalidMesh,
 }
 
-impl Component for Collider3D {
-    fn new(parent: GameObjectId) -> Self
-    where
-        Self: Sized,
-    {
+impl NewComponent for Collider3D {
+    fn new(parent: GameObjectId) -> Self {
         let scale = parent.transform.scale();
         let shape = SharedShape::cuboid(scale.x / 2., scale.y / 2., scale.z / 2.);
         let collider = Self::default_collider(parent, shape);
@@ -84,7 +81,9 @@ impl Component for Collider3D {
             was_debug_enabled: true,
         }
     }
+}
 
+impl Component for Collider3D {
     #[cfg(debug_assertions)]
     fn update(&mut self, world: &mut World) {
         match self.debug_collider_mesh {
@@ -150,10 +149,6 @@ impl Component for Collider3D {
             &mut world.physics.rigid_body_set,
             false,
         );
-    }
-
-    fn parent(&self) -> GameObjectId {
-        self.parent
     }
 }
 

@@ -1,5 +1,5 @@
 use crate::World;
-use crate::components::Component;
+use crate::components::{Component, NewComponent};
 use crate::core::GameObjectId;
 use crate::utils::math::QuaternionEuler;
 use nalgebra::{Isometry3, Translation3};
@@ -14,7 +14,7 @@ pub struct RigidBodyComponent {
     curr_iso: Isometry3<f32>,
 }
 
-impl Component for RigidBodyComponent {
+impl NewComponent for RigidBodyComponent {
     fn new(parent: GameObjectId) -> Self {
         let initial_translation = parent.transform.position();
         let initial_rotation = parent.transform.rotation().euler_vector();
@@ -34,7 +34,9 @@ impl Component for RigidBodyComponent {
             curr_iso: Isometry3::default(),
         }
     }
+}
 
+impl Component for RigidBodyComponent {
     fn pre_fixed_update(&mut self, _world: &mut World) {
         let rb = World::instance()
             .physics
@@ -60,9 +62,9 @@ impl Component for RigidBodyComponent {
             self.curr_iso =
                 Isometry3::from_parts(Translation3::from(*rb.translation()), *rb.rotation());
             if rb.is_dynamic() {
-                self.parent().transform.set_position_vec(*rb.translation());
+                self.parent.transform.set_position_vec(*rb.translation());
                 if rb.is_rotation_locked().iter().all(|l| !l) {
-                    self.parent().transform.set_rotation(*rb.rotation());
+                    self.parent.transform.set_rotation(*rb.rotation());
                 }
             }
         }
@@ -77,10 +79,6 @@ impl Component for RigidBodyComponent {
             &mut world.physics.multibody_joint_set,
             false,
         );
-    }
-
-    fn parent(&self) -> GameObjectId {
-        self.parent
     }
 }
 
