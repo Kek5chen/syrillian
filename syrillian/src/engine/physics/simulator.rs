@@ -39,7 +39,7 @@ impl Default for PhysicsManager {
             narrow_phase: NarrowPhase::default(),
             impulse_joint_set: ImpulseJointSet::default(),
             multibody_joint_set: MultibodyJointSet::default(),
-            ccd_solver: CCDSolver::default(),
+            ccd_solver: CCDSolver,
             physics_hooks: (),
             event_handler: (),
             last_update: Instant::now(),
