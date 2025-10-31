@@ -1,5 +1,5 @@
 use crate::World;
-use crate::components::{Component, SkeletalComponent};
+use crate::components::{Component, NewComponent, SkeletalComponent};
 use crate::core::GameObjectId;
 use crate::utils::ExtraMatrixMath;
 use crate::utils::animation::{
@@ -27,7 +27,7 @@ pub struct AnimationComponent {
 /// Position, Rotation, Scale
 type SkeletonLocals = (Vector3<f32>, UnitQuaternion<f32>, Vector3<f32>);
 
-impl Component for AnimationComponent {
+impl NewComponent for AnimationComponent {
     fn new(parent: GameObjectId) -> Self {
         Self {
             parent,
@@ -37,7 +37,9 @@ impl Component for AnimationComponent {
             bindings: Vec::new(),
         }
     }
+}
 
+impl Component for AnimationComponent {
     fn update(&mut self, world: &mut World) {
         let Some(pb) = self.current.as_mut() else {
             return;
@@ -63,10 +65,6 @@ impl Component for AnimationComponent {
         let weight = pb.weight;
 
         self.evaluate_and_apply(clip_index, time, weight);
-    }
-
-    fn parent(&self) -> GameObjectId {
-        self.parent
     }
 }
 
@@ -148,7 +146,7 @@ impl AnimationComponent {
 
     pub fn play_index(&mut self, index: usize, looping: bool, speed: f32, weight: f32) {
         if index >= self.clips.len() {
-            warn!("No clip #{index} found in {}", self.parent().name);
+            warn!("No clip #{index} found in {}", self.parent.name);
             return;
         }
 

@@ -1,4 +1,4 @@
-use crate::components::Component;
+use crate::components::{Component, NewComponent};
 use crate::core::GameObjectId;
 use crate::engine::assets::HMaterial;
 use crate::engine::rendering::CPUDrawCtx;
@@ -60,11 +60,8 @@ impl Image {
     }
 }
 
-impl Component for Image {
-    fn new(parent: GameObjectId) -> Self
-    where
-        Self: Sized,
-    {
+impl NewComponent for Image {
+    fn new(parent: GameObjectId) -> Self {
         Image {
             parent,
 
@@ -79,7 +76,9 @@ impl Component for Image {
             dirty: false,
         }
     }
+}
 
+impl Component for Image {
     fn create_render_proxy(&mut self, _world: &World) -> Option<Box<dyn SceneProxy>> {
         Some(Box::new(ImageSceneProxy {
             material: self.material,
@@ -104,9 +103,5 @@ impl Component for Image {
             proxy.dirty = true;
         });
         self.dirty = false;
-    }
-
-    fn parent(&self) -> GameObjectId {
-        self.parent
     }
 }

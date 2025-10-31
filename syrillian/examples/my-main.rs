@@ -19,9 +19,8 @@ use syrillian::assets::{HMaterial, HSound, Sound, StoreType};
 use syrillian::assets::{Material, Shader};
 use syrillian::components::audio::AudioEmitter;
 use syrillian::components::{
-    CRef, Collider3D, Component, FirstPersonCameraController, PointLightComponent,
-    RigidBodyComponent, RopeComponent, RotateComponent, SpotLightComponent, SpringComponent,
-    Text2D, Text3D,
+    CRef, Collider3D, FirstPersonCameraController, PointLightComponent, RigidBodyComponent,
+    RopeComponent, RotateComponent, SpotLightComponent, SpringComponent, Text2D, Text3D,
 };
 use syrillian::core::{GameObjectExt, GameObjectId};
 use syrillian::prefabs::CubePrefab;

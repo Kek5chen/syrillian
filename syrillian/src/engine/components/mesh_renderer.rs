@@ -1,5 +1,5 @@
 use crate::assets::HMaterial;
-use crate::components::{Component, SkeletalComponent};
+use crate::components::{Component, NewComponent, SkeletalComponent};
 use crate::core::{Bone, GameObjectId, Vertex3D};
 use crate::engine::assets::HMesh;
 use crate::engine::rendering::CPUDrawCtx;
@@ -66,11 +66,8 @@ pub struct MeshRenderer {
     dirty_materials: bool,
 }
 
-impl Component for MeshRenderer {
-    fn new(parent: GameObjectId) -> Self
-    where
-        Self: Sized,
-    {
+impl NewComponent for MeshRenderer {
+    fn new(parent: GameObjectId) -> Self {
         // TODO: Null Asset Handles
         MeshRenderer {
             parent,
@@ -80,7 +77,9 @@ impl Component for MeshRenderer {
             dirty_materials: false,
         }
     }
+}
 
+impl Component for MeshRenderer {
     fn create_render_proxy(&mut self, _world: &World) -> Option<Box<dyn SceneProxy>> {
         Some(Box::new(MeshSceneProxy {
             mesh: self.mesh,
@@ -91,7 +90,7 @@ impl Component for MeshRenderer {
     }
 
     fn update_proxy(&mut self, _world: &World, mut ctx: CPUDrawCtx) {
-        if let Some(mut skel) = self.parent().get_component::<SkeletalComponent>()
+        if let Some(mut skel) = self.parent.get_component::<SkeletalComponent>()
             && skel.update_palette()
         {
             let palette = skel.palette().to_vec();
@@ -119,10 +118,6 @@ impl Component for MeshRenderer {
                 data.materials = materials;
             })
         }
-    }
-
-    fn parent(&self) -> GameObjectId {
-        self.parent
     }
 }
 

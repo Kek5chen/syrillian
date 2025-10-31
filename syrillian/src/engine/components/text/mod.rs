@@ -1,7 +1,6 @@
 use crate::World;
 use crate::assets::HFont;
 use crate::components::Component;
-use crate::core::GameObjectId;
 use crate::rendering::CPUDrawCtx;
 use crate::rendering::glyph::TextAlignment;
 use crate::rendering::proxies::SceneProxy;
@@ -14,7 +13,6 @@ pub type Text2D = Text<2, TwoD>;
 
 #[derive(Debug)]
 pub struct Text<const D: u8, DIM: TextDim<D>> {
-    parent: GameObjectId,
     proxy: TextProxy<D, DIM>,
 }
 
@@ -42,26 +40,20 @@ impl<const D: u8, DIM: TextDim<D>> Text<D, DIM> {
     }
 }
 
-impl<const D: u8, DIM: TextDim<D> + 'static> Component for Text<D, DIM> {
-    fn new(parent: GameObjectId) -> Self
-    where
-        Self: Sized,
-    {
+impl<const D: u8, DIM: TextDim<D> + 'static> Default for Text<D, DIM> {
+    fn default() -> Self {
         Self {
-            parent,
             proxy: TextProxy::new("".to_string(), HFont::DEFAULT, 100.0),
         }
     }
+}
 
+impl<const D: u8, DIM: TextDim<D> + 'static> Component for Text<D, DIM> {
     fn create_render_proxy(&mut self, _world: &World) -> Option<Box<dyn SceneProxy>> {
         Some(Box::new(self.proxy.clone()))
     }
 
     fn update_proxy(&mut self, _world: &World, ctx: CPUDrawCtx) {
         self.proxy.update_game_thread(ctx);
-    }
-
-    fn parent(&self) -> GameObjectId {
-        self.parent
     }
 }

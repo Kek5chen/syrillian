@@ -1,5 +1,7 @@
 use crate::World;
-use crate::components::{CRef, CWeak, Component, FirstPersonCameraController, RigidBodyComponent};
+use crate::components::{
+    CRef, CWeak, Component, FirstPersonCameraController, NewComponent, RigidBodyComponent,
+};
 use crate::core::GameObjectId;
 use gilrs::Axis;
 use log::warn;
@@ -19,11 +21,8 @@ pub struct FirstPersonMovementController {
     velocity_interp_t: f32,
 }
 
-impl Component for FirstPersonMovementController {
-    fn new(parent: GameObjectId) -> Self
-    where
-        Self: Sized,
-    {
+impl NewComponent for FirstPersonMovementController {
+    fn new(parent: GameObjectId) -> Self {
         FirstPersonMovementController {
             parent,
             move_speed: 5.0,
@@ -35,9 +34,11 @@ impl Component for FirstPersonMovementController {
             velocity_interp_t: 6.0,
         }
     }
+}
 
+impl Component for FirstPersonMovementController {
     fn init(&mut self, _world: &mut World) {
-        let mut rigid = self.parent().get_component::<RigidBodyComponent>();
+        let mut rigid = self.parent.get_component::<RigidBodyComponent>();
         if let Some(rigid) = &mut rigid
             && let Some(rigid) = rigid.get_body_mut()
         {
@@ -147,9 +148,5 @@ impl Component for FirstPersonMovementController {
         linvel.z = self.velocity.z;
 
         body.set_linvel(linvel, true);
-    }
-
-    fn parent(&self) -> GameObjectId {
-        self.parent
     }
 }

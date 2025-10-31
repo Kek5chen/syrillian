@@ -6,34 +6,32 @@
 //! To make a component:
 //! ```rust
 //! use nalgebra::Vector3;
-//! use syrillian::components::Component;
+//! use syrillian::components::{Component, NewComponent};
 //! use syrillian::core::GameObjectId;
 //! use syrillian::World;
 //!
 //! pub struct Gravity {
 //!     force: f32,
-//!     parent: GameObjectId, // the parent needs to be stored
+//!     parent: GameObjectId,
 //! }
 //!
-//! impl Component for Gravity {
+//! impl NewComponent for Gravity {
 //!     fn new(parent: GameObjectId) -> Self {
 //!         Gravity {
 //!             force: 8.91,
 //!             parent,
 //!         }
 //!     }
+//! }
 //!
+//! impl Component for Gravity {
 //!     fn update(&mut self, world: &mut World) {
 //!         let delta_time = world.delta_time().as_secs_f32();
 //!
 //!         let movement = Vector3::new(0.0, self.force * delta_time, 0.0);
 //!
-//!         let transform = &mut self.parent().transform;
+//!         let transform = &mut self.parent.transform;
 //!         transform.translate(movement);
-//!     }
-//!
-//!     fn parent(&self) -> GameObjectId {
-//!         self.parent
 //!     }
 //! }
 //! ```
@@ -93,30 +91,59 @@ use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
 use std::mem;
 use std::ops::{Deref, DerefMut};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 new_key_type! { pub struct ComponentId; }
 
-pub struct CRef<C: Component + ?Sized>(pub(crate) Option<Arc<C>>, pub(crate) TypedComponentId);
+pub struct ComponentContext {
+    pub(crate) tid: TypedComponentId,
+    pub(crate) parent: GameObjectId,
+}
+
+pub type AComponentContext = Arc<ComponentContext>;
+
+impl ComponentContext {
+    pub(crate) fn new(tid: TypedComponentId, parent: GameObjectId) -> Self {
+        Self { tid, parent }
+    }
+
+    pub(crate) fn null() -> Self {
+        ComponentContext {
+            tid: TypedComponentId::null::<dyn Component>(),
+            parent: GameObjectId::null(),
+        }
+    }
+
+    pub fn parent(&self) -> GameObjectId {
+        self.parent
+    }
+}
+
+pub struct CRef<C: Component + ?Sized> {
+    pub(crate) data: Option<Arc<C>>,
+    pub(crate) ctx: Arc<ComponentContext>,
+}
 
 impl<C: Component + ?Sized> Clone for CRef<C> {
     fn clone(&self) -> Self {
-        Self(self.0.clone(), self.1)
+        Self {
+            data: self.data.clone(),
+            ctx: self.ctx.clone(),
+        }
     }
 }
 
-impl<C: Component> Deref for CRef<C> {
+impl<C: Component + ?Sized> Deref for CRef<C> {
     type Target = C;
 
     fn deref(&self) -> &Self::Target {
-        unsafe { self.0.as_ref().unwrap_unchecked() }
+        unsafe { self.data.as_ref().unwrap_unchecked() }
     }
 }
 
-impl<C: Component> DerefMut for CRef<C> {
+impl<C: Component + ?Sized> DerefMut for CRef<C> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        unsafe { &mut *(Arc::as_ptr(self.0.as_ref().unwrap_unchecked()) as *mut _) }
-        // unsafe { &mut *(&raw const *self.0.assume_init_ref() as *mut _) }
+        unsafe { &mut *(&raw const **self.data.as_ref().unwrap_unchecked() as *mut _) }
     }
 }
 
@@ -126,8 +153,17 @@ impl<C: Component + ?Sized> Hash for CRef<C> {
     }
 }
 
+static NULL_CTX: OnceLock<Arc<ComponentContext>> = OnceLock::new();
+
 #[allow(unused)]
 impl<C: Component> CRef<C> {
+    pub(crate) fn new(comp: Arc<C>, tid: TypedComponentId, parent: GameObjectId) -> Self {
+        CRef {
+            data: Some(comp),
+            ctx: Arc::new(ComponentContext::new(tid, parent)),
+        }
+    }
+
     pub(crate) fn forget_lifetime(mut self) -> &'static mut C {
         unsafe { mem::transmute(self.deref_mut()) }
     }
@@ -138,10 +174,10 @@ impl<C: Component> CRef<C> {
 
     pub fn into_dyn(self) -> CRef<dyn Component> {
         unsafe {
-            CRef(
-                Some(self.0.as_ref().unwrap_unchecked().clone() as Arc<dyn Component>),
-                self.1,
-            )
+            CRef {
+                data: Some(self.data.as_ref().unwrap_unchecked().clone() as Arc<dyn Component>),
+                ctx: self.ctx.clone(),
+            }
         }
     }
 
@@ -154,17 +190,26 @@ impl<C: Component> CRef<C> {
     /// are also managed by a component so you can avoid Option. It's not recommended to
     /// use this.
     pub unsafe fn null() -> CRef<C> {
-        unsafe { CRef(None, TypedComponentId::null::<C>()) }
+        CRef {
+            data: None,
+            ctx: NULL_CTX
+                .get_or_init(|| Arc::new(ComponentContext::null()))
+                .clone(),
+        }
     }
 }
 
 impl<C: Component + ?Sized> CRef<C> {
     pub fn is_a<O: Component>(&self) -> bool {
-        self.1.0 == TypeId::of::<O>()
+        self.ctx.tid.0 == TypeId::of::<O>()
     }
 
     pub fn typed_id(&self) -> TypedComponentId {
-        self.1
+        self.ctx.tid
+    }
+
+    pub fn parent(&self) -> GameObjectId {
+        self.ctx.parent()
     }
 }
 
@@ -174,28 +219,17 @@ impl CRef<dyn Component> {
             return None;
         }
         let downcasted =
-            Arc::downcast::<C>(unsafe { self.0.as_ref().unwrap_unchecked() }.clone()).ok()?;
-        Some(CRef(Some(downcasted), self.1))
-    }
-}
-
-impl Deref for CRef<dyn Component> {
-    type Target = dyn Component;
-
-    fn deref(&self) -> &Self::Target {
-        unsafe { self.0.as_ref().unwrap_unchecked().as_ref() }
-    }
-}
-
-impl DerefMut for CRef<dyn Component> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        unsafe { &mut *(&raw const **self.0.as_ref().unwrap_unchecked() as *mut _) }
+            Arc::downcast::<C>(unsafe { self.data.as_ref().unwrap_unchecked() }.clone()).ok()?;
+        Some(CRef {
+            data: Some(downcasted),
+            ctx: self.ctx.clone(),
+        })
     }
 }
 
 impl<C: Component + ?Sized> From<CRef<C>> for CWeak<C> {
     fn from(value: CRef<C>) -> Self {
-        CWeak(value.1.1, PhantomData)
+        CWeak(value.ctx.tid.1, PhantomData)
     }
 }
 
@@ -215,13 +249,13 @@ impl<C: Component> Debug for CRef<C> {
 
 impl<C: Component + ?Sized> Borrow<TypedComponentId> for CRef<C> {
     fn borrow(&self) -> &TypedComponentId {
-        &self.1
+        &self.ctx.tid
     }
 }
 
 impl<C: Component + ?Sized> Borrow<TypedComponentId> for &CRef<C> {
     fn borrow(&self) -> &TypedComponentId {
-        &self.1
+        &self.ctx.tid
     }
 }
 
@@ -298,7 +332,7 @@ impl TypedComponentId {
         self.0
     }
 
-    pub(crate) fn null<C: Component>() -> TypedComponentId {
+    pub(crate) fn null<C: Component + ?Sized>() -> TypedComponentId {
         Self::from_typed::<C>(ComponentId::null())
     }
 
@@ -317,37 +351,29 @@ impl TypedComponentId {
 /// ```rust
 /// use nalgebra::Vector3;
 /// use syrillian::World;
-/// use syrillian::components::Component;
+/// use syrillian::components::{AComponentContext, Component, ComponentContext, NewComponent};
 /// use syrillian::core::GameObjectId;
 ///
 /// struct MyComponent {
 ///     parent: GameObjectId,
 /// }
 ///
-/// impl Component for MyComponent {
+/// impl NewComponent for MyComponent {
 ///     fn new(parent: GameObjectId) -> Self
-///     where
-///         Self: Sized,
 ///     {
 ///         Self { parent }
 ///     }
+/// }
 ///
+/// impl Component for MyComponent {
 ///     fn init(&mut self, _world: &mut World) {
 ///         // Sets trasnlate for parent GameObject on its init
 ///         self.parent.transform.translate(Vector3::new(1.0, 0.0, 0.0));
-///     }
-///
-///     fn parent(&self) -> GameObjectId {
-///         self.parent
 ///     }
 /// }
 ///```
 #[allow(unused)]
 pub trait Component: Any + Send + Sync {
-    fn new(parent: GameObjectId) -> Self
-    where
-        Self: Sized;
-
     // Gets called when the game object is created directly after new
     fn init(&mut self, world: &mut World) {}
 
@@ -374,13 +400,21 @@ pub trait Component: Any + Send + Sync {
         None
     }
 
-    fn update_proxy(&mut self, world: &World, ctx: CPUDrawCtx) {}
+    fn update_proxy(&mut self, world: &World, draw_ctx: CPUDrawCtx) {}
 
     // Gets called when the component is about to be deleted
     fn delete(&mut self, world: &mut World) {}
+}
 
-    #[allow(clippy::mut_from_ref)]
-    fn parent(&self) -> GameObjectId;
+/// Either you'll have to implement this, or Default
+pub trait NewComponent: Component {
+    fn new(parent: GameObjectId) -> Self;
+}
+
+impl<D: Default + Component> NewComponent for D {
+    fn new(_parent: GameObjectId) -> Self {
+        Self::default()
+    }
 }
 
 pub(crate) trait InternalComponentDeletion {

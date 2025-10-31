@@ -1,5 +1,5 @@
 use crate::components::{
-    Collider3D, Component, LightComponent, LightTypeTrait, RigidBodyComponent, RopeComponent,
+    Collider3D, LightComponent, LightTypeTrait, NewComponent, RigidBodyComponent, RopeComponent,
     RotateComponent,
 };
 use crate::core::{GameObject, GameObjectId};
@@ -16,7 +16,7 @@ pub trait GameObjectExt {
     fn non_uniform_scale(&mut self, x: f32, y: f32, z: f32) -> &mut Self;
 }
 
-pub trait GOComponentExt<'a>: Component {
+pub trait GOComponentExt<'a>: NewComponent {
     type Outer: Deref<Target = GameObject> + DerefMut;
 
     fn build_component(&'a mut self, obj: &'a mut GameObject) -> Self::Outer;

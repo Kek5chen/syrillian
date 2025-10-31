@@ -1,5 +1,4 @@
 use crate::components::Component;
-use crate::core::GameObjectId;
 use crate::rendering::CPUDrawCtx;
 use crate::rendering::proxies::SceneProxy;
 use crate::rendering::proxies::debug_proxy::{DebugLine, DebugSceneProxy};
@@ -28,8 +27,6 @@ impl From<&DebugRay> for DebugLine {
 }
 
 pub struct CameraDebug {
-    parent: GameObjectId,
-
     rays: Vec<DebugRay>,
     ray_times: Vec<Instant>,
     dirty: bool,
@@ -71,13 +68,9 @@ impl CameraDebug {
     }
 }
 
-impl Component for CameraDebug {
-    fn new(parent: GameObjectId) -> Self
-    where
-        Self: Sized,
-    {
+impl Default for CameraDebug {
+    fn default() -> Self {
         Self {
-            parent,
             rays: vec![],
             ray_times: vec![],
 
@@ -86,7 +79,9 @@ impl Component for CameraDebug {
             dirty: true,
         }
     }
+}
 
+impl Component for CameraDebug {
     fn create_render_proxy(&mut self, _world: &World) -> Option<Box<dyn SceneProxy>> {
         let lines = self.rays.iter().map_into().collect();
         Some(Box::new(DebugSceneProxy {
@@ -113,9 +108,5 @@ impl Component for CameraDebug {
 
             proxy.lines = lines;
         })
-    }
-
-    fn parent(&self) -> GameObjectId {
-        self.parent
     }
 }

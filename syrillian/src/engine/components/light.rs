@@ -1,5 +1,5 @@
 use crate::World;
-use crate::components::Component;
+use crate::components::{Component, NewComponent};
 use crate::core::GameObjectId;
 use crate::rendering::CPUDrawCtx;
 use crate::rendering::lights::{Light, LightProxy, LightType};
@@ -51,11 +51,8 @@ impl LightTypeTrait for Spot {
     }
 }
 
-impl<L: LightTypeTrait + 'static> Component for LightComponent<L> {
-    fn new(parent: GameObjectId) -> Self
-    where
-        Self: Sized,
-    {
+impl<L: LightTypeTrait + 'static> NewComponent for LightComponent<L> {
+    fn new(parent: GameObjectId) -> Self {
         const DEFAULT_INNER_ANGLE: f32 = 5.0f32.to_radians();
         const DEFAULT_OUTER_ANGLE: f32 = 30.0f32.to_radians();
 
@@ -90,7 +87,9 @@ impl<L: LightTypeTrait + 'static> Component for LightComponent<L> {
             light_type: PhantomData,
         }
     }
+}
 
+impl<L: LightTypeTrait + 'static> Component for LightComponent<L> {
     fn update(&mut self, world: &mut World) {
         if self.parent.transform.is_dirty() {
             self.local_proxy.position = self.parent.transform.position();
@@ -130,11 +129,6 @@ impl<L: LightTypeTrait + 'static> Component for LightComponent<L> {
         });
 
         self.dirty = false;
-    }
-
-    #[inline]
-    fn parent(&self) -> GameObjectId {
-        self.parent
     }
 }
 

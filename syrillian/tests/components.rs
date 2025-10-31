@@ -2,27 +2,22 @@ use nalgebra::Vector3;
 use serial_test::serial;
 use std::any::TypeId;
 use syrillian::World;
-use syrillian::components::Component;
+use syrillian::components::{Component, NewComponent};
 use syrillian::core::GameObjectId;
 
 struct MyComponent {
     parent: GameObjectId,
 }
 
-impl Component for MyComponent {
-    fn new(parent: GameObjectId) -> Self
-    where
-        Self: Sized,
-    {
+impl NewComponent for MyComponent {
+    fn new(parent: GameObjectId) -> Self {
         Self { parent }
     }
+}
 
+impl Component for MyComponent {
     fn init(&mut self, _world: &mut World) {
         self.parent.transform.translate(Vector3::new(1.0, 0.0, 0.0));
-    }
-
-    fn parent(&self) -> GameObjectId {
-        self.parent
     }
 }
 

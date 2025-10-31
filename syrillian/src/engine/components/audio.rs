@@ -1,6 +1,6 @@
 use crate::World;
 use crate::assets::HSound;
-use crate::components::Component;
+use crate::components::{Component, NewComponent};
 use crate::core::GameObjectId;
 use kira::Tween;
 use kira::sound::PlaybackState;
@@ -21,7 +21,7 @@ pub struct AudioEmitter {
     play_triggered: bool,
 }
 
-impl Component for AudioEmitter {
+impl NewComponent for AudioEmitter {
     fn new(parent: GameObjectId) -> Self {
         Self {
             parent,
@@ -32,7 +32,9 @@ impl Component for AudioEmitter {
             play_triggered: false,
         }
     }
+}
 
+impl Component for AudioEmitter {
     fn init(&mut self, world: &mut World) {
         trace!("Initializing new Spatial Track");
         self.track_handle = world
@@ -51,10 +53,6 @@ impl Component for AudioEmitter {
         if self.play_triggered || (self.looping && !self.is_playing()) {
             self._play(world);
         }
-    }
-
-    fn parent(&self) -> GameObjectId {
-        self.parent
     }
 }
 
@@ -144,19 +142,17 @@ impl AudioEmitter {
     }
 }
 
-impl Component for AudioReceiver {
+impl NewComponent for AudioReceiver {
     fn new(parent: GameObjectId) -> Self {
         Self { parent }
     }
+}
 
+impl Component for AudioReceiver {
     fn update(&mut self, world: &mut World) {
-        let transform = &self.parent().transform;
+        let transform = &self.parent.transform;
 
         world.audio.set_receiver_position(transform.position());
         world.audio.set_receiver_orientation(*transform.rotation());
-    }
-
-    fn parent(&self) -> GameObjectId {
-        self.parent
     }
 }

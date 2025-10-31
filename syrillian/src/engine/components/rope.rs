@@ -1,6 +1,6 @@
 use self::RopeComponentError::*;
 use crate::World;
-use crate::components::{Component, RigidBodyComponent};
+use crate::components::{Component, NewComponent, RigidBodyComponent};
 use crate::core::GameObjectId;
 use log::warn;
 use rapier3d::prelude::*;
@@ -24,11 +24,8 @@ pub struct RopeComponent {
     length: f32,
 }
 
-impl Component for RopeComponent {
-    fn new(parent: GameObjectId) -> Self
-    where
-        Self: Sized,
-    {
+impl NewComponent for RopeComponent {
+    fn new(parent: GameObjectId) -> Self {
         RopeComponent {
             parent,
             connected: None,
@@ -36,17 +33,15 @@ impl Component for RopeComponent {
             length: 10.0,
         }
     }
+}
 
+impl Component for RopeComponent {
     fn delete(&mut self, world: &mut World) {
         if let Some(joint) = self.handle {
             world.physics.impulse_joint_set.remove(joint, false);
             self.handle = None;
             self.connected = None;
         }
-    }
-
-    fn parent(&self) -> GameObjectId {
-        self.parent
     }
 }
 
