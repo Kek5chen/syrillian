@@ -47,7 +47,7 @@ impl Component for SkeletalComponent {
         };
 
         let n = mesh.bones.len();
-        self.bones_static = mesh.bones.clone();
+        self.bones_static.clone_from(&mesh.bones);
 
         let (t, r, s, sl): (Vec<_>, Vec<_>, Vec<_>, Vec<_>) = self
             .bones_static

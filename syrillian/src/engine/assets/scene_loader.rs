@@ -444,7 +444,7 @@ fn build_bones_from_skin(
     }
 
     let mesh_global = global_transform_of(mesh_node.index(), &node_map);
-    let mesh_global_inv = mesh_global.try_inverse().unwrap_or(Matrix4::identity());
+    let mesh_global_inv = mesh_global.try_inverse().unwrap_or_else(|| Matrix4::identity());
 
     let mut bind_global = vec![Matrix4::identity(); names.len()];
     for (i, joint_node) in skin.joints().enumerate() {
@@ -456,7 +456,7 @@ fn build_bones_from_skin(
     for i in 0..names.len() {
         bind_local[i] = match parents[i] {
             None => bind_global[i],
-            Some(p) => bind_global[p].try_inverse().unwrap_or(Matrix4::identity()) * bind_global[i],
+            Some(p) => bind_global[p].try_inverse().unwrap_or_else(|| Matrix4::identity()) * bind_global[i],
         };
     }
 
@@ -522,8 +522,8 @@ fn animations_from_scene(scene: &GltfScene) -> Vec<AnimationClip> {
             let node = target.node();
             let target_name = node
                 .name()
-                .unwrap_or(&format!("node{}", node.index()))
-                .to_string();
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| format!("node{}", node.index()));
 
             let reader = ch.reader(get_buf);
 
@@ -535,7 +535,7 @@ fn animations_from_scene(scene: &GltfScene) -> Vec<AnimationClip> {
                 match reader.read_outputs().expect("outputs") {
                     ReadOutputs::Translations(v) => {
                         let vals: Vec<[f32; 3]> = v.collect();
-                        keys.t_times = times.clone();
+                        keys.t_times.clone_from(&times);
                         keys.t_values = vals
                             .into_iter()
                             .map(|v| Vector3::new(v[0], v[1], v[2]))
@@ -543,7 +543,7 @@ fn animations_from_scene(scene: &GltfScene) -> Vec<AnimationClip> {
                     }
                     ReadOutputs::Rotations(v) => {
                         let vals: Vec<_> = v.into_f32().collect();
-                        keys.r_times = times.clone();
+                        keys.r_times.clone_from(&times);
                         keys.r_values = vals
                             .into_iter()
                             .map(|q| {
@@ -555,7 +555,7 @@ fn animations_from_scene(scene: &GltfScene) -> Vec<AnimationClip> {
                     }
                     ReadOutputs::Scales(v) => {
                         let vals: Vec<[f32; 3]> = v.collect();
-                        keys.s_times = times.clone();
+                        keys.s_times.clone_from(&times);
                         keys.s_values = vals
                             .into_iter()
                             .map(|v| Vector3::new(v[0], v[1], v[2]))
@@ -655,7 +655,7 @@ where
             data.push(255);
         }
     } else {
-        data = pixels.clone();
+        data.clone_from(&pixels);
     }
 
     debug_assert_eq!(
