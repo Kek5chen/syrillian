@@ -444,7 +444,7 @@ fn build_bones_from_skin(
     }
 
     let mesh_global = global_transform_of(mesh_node.index(), &node_map);
-    let mesh_global_inv = mesh_global.try_inverse().unwrap_or_else(|| Matrix4::identity());
+    let mesh_global_inv = mesh_global.try_inverse().unwrap_or_else(Matrix4::identity);
 
     let mut bind_global = vec![Matrix4::identity(); names.len()];
     for (i, joint_node) in skin.joints().enumerate() {
@@ -456,7 +456,12 @@ fn build_bones_from_skin(
     for i in 0..names.len() {
         bind_local[i] = match parents[i] {
             None => bind_global[i],
-            Some(p) => bind_global[p].try_inverse().unwrap_or_else(|| Matrix4::identity()) * bind_global[i],
+            Some(p) => {
+                bind_global[p]
+                    .try_inverse()
+                    .unwrap_or_else(Matrix4::identity)
+                    * bind_global[i]
+            }
         };
     }
 
@@ -655,7 +660,7 @@ where
             data.push(255);
         }
     } else {
-        data.clone_from(&pixels);
+        data.clone_from(pixels);
     }
 
     debug_assert_eq!(
