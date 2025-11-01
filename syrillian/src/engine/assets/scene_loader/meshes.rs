@@ -12,6 +12,32 @@ use std::collections::HashMap;
 /// Mesh and associated material indices for each sub-mesh range.
 pub type MeshData = Option<(Mesh, Vec<u32>)>;
 
+type SkinAttributes = (Vec<[u16; 4]>, Vec<[f32; 4]>);
+
+#[derive(Copy, Clone)]
+struct SkinSlices<'a> {
+    joints: &'a [[u16; 4]],
+    weights: &'a [[f32; 4]],
+}
+
+impl<'a> From<&'a SkinAttributes> for SkinSlices<'a> {
+    fn from(value: &'a SkinAttributes) -> Self {
+        Self {
+            joints: value.0.as_slice(),
+            weights: value.1.as_slice(),
+        }
+    }
+}
+
+struct VertexSources<'a> {
+    positions: &'a [[f32; 3]],
+    normals: Option<&'a Vec<[f32; 3]>>,
+    tangents: Option<&'a Vec<[f32; 4]>>,
+    tex_coords: Option<&'a Vec<[f32; 2]>>,
+    skin: Option<SkinSlices<'a>>,
+    joint_map: &'a HashMap<usize, usize>,
+}
+
 /// Loads the first mesh found in the scene graph.
 pub(super) fn load_first_from_scene(scene: &GltfScene) -> Option<(Mesh, Vec<u32>)> {
     let doc = &scene.doc;
@@ -118,20 +144,22 @@ fn extract_primitive_data(
     };
 
     let skin_attributes = read_skin_attributes(joints_raw, weights_raw);
+    let skin_slices = skin_attributes.as_ref().map(SkinSlices::from);
+    let sources = VertexSources {
+        positions: &positions,
+        normals: normals.as_ref(),
+        tangents: tangents.as_ref(),
+        tex_coords: tex_coords.as_ref(),
+        skin: skin_slices,
+        joint_map: joint_node_index_of,
+    };
+
     let material_index = prim.material().index().map(|i| i as u32).unwrap_or(0);
 
     let mut result = PrimitiveResult::new(material_index);
     for chunk in indices.chunks_exact(3) {
         for &index in chunk {
-            result.push_vertex(
-                index as usize,
-                &positions,
-                normals.as_ref(),
-                tangents.as_ref(),
-                tex_coords.as_ref(),
-                skin_attributes.as_ref(),
-                joint_node_index_of,
-            );
+            result.push_vertex(index as usize, &sources);
         }
     }
 
@@ -155,7 +183,7 @@ fn convert_tex_coords(iter: mesh::util::ReadTexCoords<'_>) -> Vec<[f32; 2]> {
 fn read_skin_attributes(
     joints: Option<mesh::util::ReadJoints<'_>>,
     weights: Option<mesh::util::ReadWeights<'_>>,
-) -> Option<(Vec<[u16; 4]>, Vec<[f32; 4]>)> {
+) -> Option<SkinAttributes> {
     match (joints, weights) {
         (Some(joints), Some(weights)) => {
             let joints = match joints {
@@ -350,21 +378,13 @@ impl PrimitiveResult {
     }
 
     /// Appends a vertex with all available attributes to the primitive result.
-    fn push_vertex(
-        &mut self,
-        index: usize,
-        positions: &[[f32; 3]],
-        normals: Option<&Vec<[f32; 3]>>,
-        tangents: Option<&Vec<[f32; 4]>>,
-        tex_coords: Option<&Vec<[f32; 2]>>,
-        skin: Option<&(Vec<[u16; 4]>, Vec<[f32; 4]>)>,
-        joint_node_index_of: &HashMap<usize, usize>,
-    ) {
-        let pos = positions[index];
+    fn push_vertex(&mut self, index: usize, sources: &VertexSources<'_>) {
+        let pos = sources.positions[index];
         let position = Vector3::new(pos[0], pos[1], pos[2]);
         self.positions.push(position);
 
-        let normal = normals
+        let normal = sources
+            .normals
             .map(|list| {
                 let n = list[index];
                 Vector3::new(n[0], n[1], n[2])
@@ -372,7 +392,8 @@ impl PrimitiveResult {
             .unwrap_or_else(Vector3::zeros);
         self.normals.push(normal);
 
-        let (tangent, bitangent) = tangents
+        let (tangent, bitangent) = sources
+            .tangents
             .map(|list| {
                 let t = list[index];
                 let tangent = Vector3::new(t[0], t[1], t[2]);
@@ -383,7 +404,8 @@ impl PrimitiveResult {
         self.tangents.push(tangent);
         self.bitangents.push(bitangent);
 
-        let uv = tex_coords
+        let uv = sources
+            .tex_coords
             .map(|list| {
                 let uv = list[index];
                 Vector2::new(uv[0], uv[1])
@@ -391,11 +413,11 @@ impl PrimitiveResult {
             .unwrap_or_else(Vector2::zeros);
         self.tex_coords.push(uv);
 
-        if let Some((joints, weights)) = skin {
-            let joint = joints[index];
-            let weight = weights[index];
+        if let Some(skin) = sources.skin {
+            let joint = skin.joints[index];
+            let weight = skin.weights[index];
             self.bone_indices
-                .push(map_joint_indices(&joint, joint_node_index_of));
+                .push(map_joint_indices(&joint, sources.joint_map));
             self.bone_weights.push(normalize_weights(weight));
         } else {
             self.bone_indices.push(Vec::new());
