@@ -3673,6 +3673,7 @@ dependencies = [
  "obj",
  "once_cell",
  "rapier3d",
+ "serde_json",
  "serial_test",
  "slotmap",
  "smallvec",

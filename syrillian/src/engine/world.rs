@@ -20,7 +20,7 @@ use crate::rendering::message::RenderMsg;
 use itertools::Itertools;
 use log::info;
 use slotmap::{HopSlotMap, Key};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::mem::swap;
 use std::sync::{Arc, mpsc};
 use web_time::{Duration, Instant};
@@ -169,6 +169,7 @@ impl World {
             parent: None,
             transform: Transform::new(GameObjectId::null()),
             components: HashSet::new(),
+            custom_properties: HashMap::new(),
         };
 
         // TODO: Consider adding the object to the world right away
@@ -379,26 +380,46 @@ impl World {
     ///
     /// This method recursively traverses the entire scene graph to find all components
     /// of the specified type.
-    pub fn get_all_components_of_type<C: Component + 'static>(&self) -> Vec<CRef<C>> {
+    pub fn find_all_components_of_type<C: Component + 'static>(&self) -> Vec<CRef<C>> {
         let mut collection = Vec::new();
 
         for child in &self.children {
-            Self::get_components_of_children(&mut collection, *child);
+            Self::find_components_of_children(&mut collection, *child);
         }
 
         collection
     }
 
     /// Helper method to recursively collect components of a specific type from a game object and its children
-    fn get_components_of_children<C: Component + 'static>(
+    fn find_components_of_children<C: Component + 'static>(
         collection: &mut Vec<CRef<C>>,
         obj: GameObjectId,
     ) {
         for child in &obj.children {
-            Self::get_components_of_children(collection, *child);
+            Self::find_components_of_children(collection, *child);
         }
 
         collection.extend(obj.get_components::<C>());
+    }
+
+    /// Find all objects that contain a property with the given key
+    pub fn find_objects_with_property(&self, key: &str) -> Vec<GameObjectId> {
+        self.objects
+            .iter()
+            .filter_map(|(id, o)| o.has_property(key).then_some(id))
+            .collect()
+    }
+
+    /// Find all objects that contain a property with the given key and value
+    pub fn find_objects_with_property_value(
+        &self,
+        key: &str,
+        value: &serde_json::Value,
+    ) -> Vec<GameObjectId> {
+        self.objects
+            .iter()
+            .filter_map(|(id, o)| (o.property(key)? == value).then_some(id))
+            .collect()
     }
 
     /// Prints information about all game objects in the world to the log

@@ -1,14 +1,13 @@
-use std::borrow::Borrow;
-use std::collections::HashSet;
-use std::fmt::Debug;
-use std::ops::{Deref, DerefMut};
-
 use crate::components::{CRef, Component, NewComponent, TypedComponentId};
 use crate::ensure_aligned;
 use crate::world::World;
 use itertools::Itertools;
 use nalgebra::{Matrix4, Translation3, Vector3};
 use slotmap::{Key, KeyData, new_key_type};
+use std::borrow::Borrow;
+use std::collections::{HashMap, HashSet};
+use std::fmt::Debug;
+use std::ops::{Deref, DerefMut};
 
 use crate::components::InternalComponentDeletion;
 use crate::core::Transform;
@@ -79,6 +78,8 @@ pub struct GameObject {
     pub transform: Transform,
     /// Components attached to this object.
     pub(crate) components: HashSet<CRef<dyn Component>>,
+    /// Custom Property Data (Keys & Values)
+    pub(crate) custom_properties: HashMap<String, serde_json::Value>,
 }
 
 impl GameObject {
@@ -150,6 +151,44 @@ impl GameObject {
             let mut comp = child.add_component::<C>();
             f(&mut comp);
         }
+    }
+
+    /// Add a custom property to this object
+    pub fn add_property(&mut self, key: impl Into<String>, value: serde_json::Value) {
+        self.custom_properties.insert(key.into(), value);
+    }
+
+    /// Add a collection of custom properties to this object
+    pub fn add_properties<T: IntoIterator<Item = (String, serde_json::Value)>>(
+        &mut self,
+        properties: T,
+    ) {
+        self.custom_properties.extend(properties);
+    }
+
+    /// Retrieve a custom property in this object by the given key
+    pub fn property(&self, key: &str) -> Option<&serde_json::Value> {
+        self.custom_properties.get(key)
+    }
+
+    /// Checks if the object has a property with the given key
+    pub fn has_property(&self, key: &str) -> bool {
+        self.custom_properties.contains_key(key)
+    }
+
+    /// Retrieve all custom properties of this object
+    pub fn properties(&self) -> &HashMap<String, serde_json::Value> {
+        &self.custom_properties
+    }
+
+    /// Remove property from this object by the given key
+    pub fn remove_property(&mut self, key: &str) -> Option<serde_json::Value> {
+        self.custom_properties.remove(key)
+    }
+
+    /// Remove property from this object by the given key
+    pub fn clear_properties(&mut self) {
+        self.custom_properties.clear();
     }
 
     /// Retrieves the first found [`Component`] of type `C` attached to this game object.

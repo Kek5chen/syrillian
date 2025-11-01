@@ -9,6 +9,7 @@ use crate::rendering::lights::Light;
 use crate::utils::animation::{AnimationClip, Channel, TransformKeys};
 use gltf::animation::util::ReadOutputs;
 use gltf::image::Format;
+use gltf::json::Value;
 use gltf::khr_lights_punctual::Kind;
 use gltf::{self, buffer::Data as BufferData, image::Data as ImageData};
 use gltf::{Document, Node, mesh};
@@ -129,6 +130,20 @@ impl SceneLoader {
         let name = node.name().unwrap_or("Unnamed").to_string();
         trace!("Starting to build scene object {name:?}");
         let mut obj = world.new_object(name);
+
+        if let Some(extras) = node.extras() {
+            if let Ok(value) = serde_json::de::from_str::<Value>(extras.get()) {
+                if let Value::Object(props) = value {
+                    obj.add_properties(props);
+                } else {
+                    trace!(
+                        "Ignored custom property that was not a map when loading node into an object"
+                    );
+                }
+            } else {
+                debug_panic!("Custom Property \"{extras}\" couldn't be read");
+            }
+        }
 
         if let Some((mesh, mats)) = load_mesh(scene, node.clone()) {
             Self::attach_mesh(world, materials, &mut obj, mesh, mats);
