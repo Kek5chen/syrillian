@@ -97,5 +97,5 @@ where
         width as usize * height as usize * format.block_copy_size(None).unwrap() as usize
     );
 
-    Some(Texture::load_pixels(data, width, height, TextureFormat::Rgba8UnormSrgb).store(world))
+    Some(Texture::load_pixels(data, width, height, format).store(world))
 }
