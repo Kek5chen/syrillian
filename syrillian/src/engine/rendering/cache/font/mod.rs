@@ -95,6 +95,12 @@ impl FontAtlas {
         self.atlas.read().unwrap().metrics()
     }
 
+    pub fn face_data(&self) -> (Arc<Vec<u8>>, f32) {
+        let atlas = self.atlas.read().unwrap();
+        let (bytes, units_per_em, _, _) = atlas.font_params();
+        (bytes, units_per_em)
+    }
+
     pub fn entry(&self, ch: char) -> Option<GlyphAtlasEntry> {
         self.atlas.read().unwrap().entry(ch)
     }

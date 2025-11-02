@@ -2,6 +2,7 @@ use crate::rendering::FontAtlas;
 use crate::rendering::msdf_atlas::{FontLineMetrics, GlyphAtlasEntry};
 use nalgebra::Vector2;
 use static_assertions::{const_assert, const_assert_eq};
+use ttf_parser::Face;
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
@@ -123,7 +124,10 @@ pub fn generate_glyph_geometry_stream(
 
     let metrics = atlas.metrics();
     let baseline_dy = baseline_step(metrics, line_height_mul);
-    let (mut quads, row_data) = layout_text_lines(text, atlas, baseline_dy);
+    let (face_bytes, units_per_em) = atlas.face_data();
+    let face = Face::parse(&face_bytes, 0).ok();
+    let (mut quads, row_data) =
+        layout_text_lines(text, atlas, baseline_dy, face.as_ref(), units_per_em);
     align_lines(&mut quads, alignment, &row_data);
 
     quads
@@ -137,12 +141,15 @@ fn layout_text_lines(
     text: &str,
     atlas: &FontAtlas,
     baseline_dy: f32,
+    face: Option<&Face<'_>>,
+    units_per_em: f32,
 ) -> (Vec<GlyphRenderData>, Vec<(usize, f32)>) {
     let mut quads = Vec::new();
     let mut row_data = Vec::<(usize, f32)>::new();
     let mut cursor = Vector2::new(0.0f32, 0.0f32);
     let mut row_glyphs = 0usize;
     let mut row_width_em = 0.0f32;
+    let mut prev_char: Option<char> = None;
 
     for ch in text.chars() {
         if ch == '\n' {
@@ -150,7 +157,15 @@ fn layout_text_lines(
             begin_new_line(&mut cursor, baseline_dy);
             row_glyphs = 0;
             row_width_em = 0.0;
+            prev_char = None;
             continue;
+        }
+
+        if let (Some(prev), Some(face_ref)) = (prev_char, face) {
+            let kern = kerning_adjustment(face_ref, prev, ch, units_per_em);
+            if kern.abs() > f32::EPSILON {
+                cursor.x += kern;
+            }
         }
 
         if let Some(entry) = glyph_entry(atlas, ch) {
@@ -158,7 +173,14 @@ fn layout_text_lines(
             cursor.x += entry.advance_em;
             row_width_em = row_width_em.max(cursor.x);
             row_glyphs += 1;
+        } else if let Some(face_ref) = face
+            && let Some(advance) = advance_from_face(face_ref, ch, units_per_em)
+        {
+            cursor.x += advance;
+            row_width_em = row_width_em.max(cursor.x);
         }
+
+        prev_char = Some(ch);
     }
 
     push_row(&mut row_data, row_glyphs, row_width_em);
@@ -176,4 +198,39 @@ fn begin_new_line(cursor: &mut Vector2<f32>, baseline_dy: f32) {
 
 fn glyph_entry(atlas: &FontAtlas, ch: char) -> Option<GlyphAtlasEntry> {
     atlas.entry(ch).or_else(|| atlas.entry(' '))
+}
+
+fn kerning_adjustment(face: &Face<'_>, left: char, right: char, units_per_em: f32) -> f32 {
+    let Some(kern_table) = face.tables().kern else {
+        return 0.0;
+    };
+
+    let Some(left_id) = face.glyph_index(left) else {
+        return 0.0;
+    };
+    let Some(right_id) = face.glyph_index(right) else {
+        return 0.0;
+    };
+
+    let mut adjustment_units = 0i32;
+    for subtable in kern_table.subtables.into_iter() {
+        if !subtable.horizontal || subtable.has_cross_stream || subtable.has_state_machine {
+            continue;
+        }
+        if let Some(value) = subtable.glyphs_kerning(left_id, right_id) {
+            adjustment_units += i32::from(value);
+        }
+    }
+
+    adjustment_units as f32 / units_per_em
+}
+
+fn advance_from_face(face: &Face<'_>, ch: char, units_per_em: f32) -> Option<f32> {
+    glyph_advance(face, ch, units_per_em).or_else(|| glyph_advance(face, ' ', units_per_em))
+}
+
+fn glyph_advance(face: &Face<'_>, ch: char, units_per_em: f32) -> Option<f32> {
+    let glyph = face.glyph_index(ch)?;
+    let advance = face.glyph_hor_advance(glyph)? as f32;
+    Some(advance / units_per_em)
 }
