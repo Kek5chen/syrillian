@@ -59,3 +59,4 @@ jobs:
         with:
           files: ./cov.json
           disable_search: true
+          token: ${{ secrets.CODECOV_TOKEN }}
