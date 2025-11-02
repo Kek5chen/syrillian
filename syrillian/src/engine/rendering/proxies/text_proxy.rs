@@ -62,6 +62,7 @@ pub struct TextProxy<const D: u8, DIM: TextDim<D>> {
     text_dirty: bool,
 
     font: HFont,
+    letter_spacing_em: f32,
 
     pc: TextPushConstants,
     rainbow_mode: bool,
@@ -81,6 +82,7 @@ impl<const D: u8, DIM: TextDim<D>> TextProxy<D, DIM> {
             text_dirty: false,
 
             font,
+            letter_spacing_em: 0.0,
 
             pc: TextPushConstants {
                 em_scale,
@@ -240,8 +242,13 @@ impl<const D: u8, DIM: TextDim<D>> TextProxy<D, DIM> {
 
         hot_font.request_glyphs(self.text.chars());
 
-        self.glyph_data =
-            generate_glyph_geometry_stream(&self.text, &hot_font, self.alignment, 1.0);
+        self.glyph_data = generate_glyph_geometry_stream(
+            &self.text,
+            &hot_font,
+            self.alignment,
+            1.0,
+            self.letter_spacing_em,
+        );
     }
 
     pub fn set_text(&mut self, text: impl Into<String>) {
@@ -251,6 +258,11 @@ impl<const D: u8, DIM: TextDim<D>> TextProxy<D, DIM> {
 
     pub fn set_font(&mut self, font: HFont) {
         self.font = font;
+        self.text_dirty = true;
+    }
+
+    pub fn set_letter_spacing(&mut self, spacing_em: f32) {
+        self.letter_spacing_em = spacing_em.max(0.0);
         self.text_dirty = true;
     }
 

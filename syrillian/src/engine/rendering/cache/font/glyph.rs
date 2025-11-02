@@ -117,6 +117,7 @@ pub fn generate_glyph_geometry_stream(
     atlas: &FontAtlas,
     alignment: TextAlignment,
     line_height_mul: f32,
+    letter_spacing_em: f32,
 ) -> Vec<GlyphRenderData> {
     if text.is_empty() {
         return vec![];
@@ -126,8 +127,14 @@ pub fn generate_glyph_geometry_stream(
     let baseline_dy = baseline_step(metrics, line_height_mul);
     let (face_bytes, units_per_em) = atlas.face_data();
     let face = Face::parse(&face_bytes, 0).ok();
-    let (mut quads, row_data) =
-        layout_text_lines(text, atlas, baseline_dy, face.as_ref(), units_per_em);
+    let (mut quads, row_data) = layout_text_lines(
+        text,
+        atlas,
+        baseline_dy,
+        face.as_ref(),
+        units_per_em,
+        letter_spacing_em,
+    );
     align_lines(&mut quads, alignment, &row_data);
 
     quads
@@ -143,6 +150,7 @@ fn layout_text_lines(
     baseline_dy: f32,
     face: Option<&Face<'_>>,
     units_per_em: f32,
+    letter_spacing_em: f32,
 ) -> (Vec<GlyphRenderData>, Vec<(usize, f32)>) {
     let mut quads = Vec::new();
     let mut row_data = Vec::<(usize, f32)>::new();
@@ -159,6 +167,10 @@ fn layout_text_lines(
             row_width_em = 0.0;
             prev_char = None;
             continue;
+        }
+
+        if prev_char.is_some() {
+            cursor.x += letter_spacing_em.max(0.0);
         }
 
         if let (Some(prev), Some(face_ref)) = (prev_char, face) {

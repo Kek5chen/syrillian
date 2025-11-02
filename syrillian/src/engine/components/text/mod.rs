@@ -30,6 +30,7 @@ impl<const D: u8, DIM: TextDim<D>> Text<D, DIM> {
             pub fn set_text(&mut self, text: impl Into<String>);
             pub fn set_alignment(&mut self, alignment: TextAlignment);
             pub fn set_font(&mut self, font: HFont);
+            pub fn set_letter_spacing(&mut self, spacing_em: f32);
             pub const fn set_position(&mut self, x: f32, y: f32);
             pub const fn set_position_vec(&mut self, pos: Vector2<f32>);
             pub const fn set_color(&mut self, r: f32, g: f32, b: f32);
