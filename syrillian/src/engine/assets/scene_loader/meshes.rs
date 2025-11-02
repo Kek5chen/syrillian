@@ -383,34 +383,28 @@ impl PrimitiveResult {
         let position = Vector3::new(pos[0], pos[1], pos[2]);
         self.positions.push(position);
 
-        let normal = sources
-            .normals
-            .map(|list| {
-                let n = list[index];
-                Vector3::new(n[0], n[1], n[2])
-            })
-            .unwrap_or_else(Vector3::zeros);
+        let normal = sources.normals.map_or_else(Vector3::zeros, |list| {
+            let n = list[index];
+            Vector3::new(n[0], n[1], n[2])
+        });
         self.normals.push(normal);
 
-        let (tangent, bitangent) = sources
-            .tangents
-            .map(|list| {
+        let (tangent, bitangent) = sources.tangents.map_or_else(
+            || (Vector3::zeros(), Vector3::zeros()),
+            |list| {
                 let t = list[index];
                 let tangent = Vector3::new(t[0], t[1], t[2]);
                 let bitangent = compute_bitangent(&normal, &tangent, t[3]);
                 (tangent, bitangent)
-            })
-            .unwrap_or_else(|| (Vector3::zeros(), Vector3::zeros()));
+            },
+        );
         self.tangents.push(tangent);
         self.bitangents.push(bitangent);
 
-        let uv = sources
-            .tex_coords
-            .map(|list| {
-                let uv = list[index];
-                Vector2::new(uv[0], uv[1])
-            })
-            .unwrap_or_else(Vector2::zeros);
+        let uv = sources.tex_coords.map_or_else(Vector2::zeros, |list| {
+            let uv = list[index];
+            Vector2::new(uv[0], uv[1])
+        });
         self.tex_coords.push(uv);
 
         if let Some(skin) = sources.skin {
