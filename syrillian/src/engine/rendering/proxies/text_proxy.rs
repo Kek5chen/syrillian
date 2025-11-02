@@ -144,7 +144,7 @@ impl<const D: u8, DIM: TextDim<D>> TextProxy<D, DIM> {
             self.text_dirty = true;
         }
 
-        let expected_glyphs = self.text.chars().filter(|&c| !c.is_whitespace()).count();
+        let expected_glyphs = self.text.matches(|c: char| !c.is_whitespace()).count();
         if self.glyph_data.len() < expected_glyphs {
             self.text_dirty = true;
         }

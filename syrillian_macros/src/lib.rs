@@ -111,7 +111,7 @@ pub fn syrillian_app(input: TokenStream) -> TokenStream {
 //     let func = syn::parse_macro_input!(input as ImplItemFn);
 //     match &func.sig.output {
 //         ReturnType::Default => wrap_update_render(func),
-//         ReturnType::Type(_, _) => wrap_setup_render(func),
+//         ReturnType::Type(..) => wrap_setup_render(func),
 //     }.into()
 // }
 //

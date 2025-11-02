@@ -97,7 +97,7 @@ impl FontAtlas {
 
     pub fn face_data(&self) -> (Arc<Vec<u8>>, f32) {
         let atlas = self.atlas.read().unwrap();
-        let (bytes, units_per_em, _, _) = atlas.font_params();
+        let (bytes, units_per_em, ..) = atlas.font_params();
         (bytes, units_per_em)
     }
 
