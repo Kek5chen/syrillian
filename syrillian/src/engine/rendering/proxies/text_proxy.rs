@@ -115,11 +115,15 @@ impl<const D: u8, DIM: TextDim<D>> TextProxy<D, DIM> {
         if self.text_dirty {
             let text = self.text.clone();
             let font = self.font;
+            let alignment = self.alignment;
+            let spacing = self.letter_spacing_em;
             ctx.send_proxy_update(move |proxy| {
                 let proxy: &mut Self = proxy_data_mut!(proxy);
 
                 proxy.text = text;
                 proxy.font = font;
+                proxy.alignment = alignment;
+                proxy.letter_spacing_em = spacing;
                 proxy.text_dirty = true;
             });
 
@@ -137,6 +141,11 @@ impl<const D: u8, DIM: TextDim<D>> TextProxy<D, DIM> {
         let glyphs_ready = hot_font.pump(&renderer.cache, &renderer.state.queue, 10);
 
         if glyphs_ready {
+            self.text_dirty = true;
+        }
+
+        let expected_glyphs = self.text.chars().filter(|&c| !c.is_whitespace()).count();
+        if self.glyph_data.len() < expected_glyphs {
             self.text_dirty = true;
         }
 
