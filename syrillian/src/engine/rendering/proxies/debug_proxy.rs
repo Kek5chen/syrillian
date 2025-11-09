@@ -114,7 +114,7 @@ impl DebugSceneProxy {
         &self,
         cache: &AssetCache,
         device: &Device,
-        local_to_world: &Matrix4<f32>,
+        model_mat: &Matrix4<f32>,
     ) -> Option<RuntimeMeshData> {
         if self.meshes.is_empty() {
             return None;
@@ -122,7 +122,7 @@ impl DebugSceneProxy {
 
         let bgl = cache.bgl_model();
         let mesh_data = ModelUniform {
-            model_mat: *local_to_world,
+            model_mat: *model_mat,
         };
         let uniform = ShaderUniform::builder(&bgl)
             .with_buffer_data(&mesh_data)
@@ -138,16 +138,16 @@ impl DebugSceneProxy {
         cache: &AssetCache,
         device: &Device,
         queue: &Queue,
-        local_to_world: &Matrix4<f32>,
+        model_mat: &Matrix4<f32>,
     ) {
         if self.meshes.is_empty() {
             return;
         }
 
         let model_uniform = match data.model_uniform.take() {
-            None => self.new_mesh_buffer(cache, device, local_to_world),
+            None => self.new_mesh_buffer(cache, device, model_mat),
             Some(mut model_uniform) => {
-                model_uniform.mesh_data.model_mat = *local_to_world;
+                model_uniform.mesh_data.model_mat = *model_mat;
                 let mesh_buffer = model_uniform.uniform.buffer(MeshUniformIndex::MeshData);
                 queue.write_buffer(mesh_buffer, 0, bytemuck::bytes_of(&model_uniform.mesh_data));
                 Some(model_uniform)
