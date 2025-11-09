@@ -34,13 +34,15 @@ pub struct DebugSceneProxy {
     pub lines: Vec<DebugLine>,
     pub meshes: Vec<HMesh>,
     pub color: Vector4<f32>,
+    pub override_transform: Option<Matrix4<f32>>,
 }
 
 impl SceneProxy for DebugSceneProxy {
-    fn setup_render(&mut self, renderer: &Renderer, local_to_world: &Matrix4<f32>) -> Box<dyn Any> {
+    fn setup_render(&mut self, renderer: &Renderer, model_mat: &Matrix4<f32>) -> Box<dyn Any> {
         let line_data = self.new_line_buffer(&renderer.state.device);
+        let transform = self.override_transform.unwrap_or(*model_mat);
         let model_uniform =
-            self.new_mesh_buffer(&renderer.cache, &renderer.state.device, local_to_world);
+            self.new_mesh_buffer(&renderer.cache, &renderer.state.device, &transform);
 
         Box::new(GPUDebugProxyData {
             line_data,
@@ -60,12 +62,13 @@ impl SceneProxy for DebugSceneProxy {
         // TODO: Reuse or Resize buffer
         data.line_data = self.new_line_buffer(&renderer.state.device);
 
+        let transform = self.override_transform.unwrap_or(*local_to_world);
         self.update_mesh_buffer(
             data,
             &renderer.cache,
             &renderer.state.device,
             &renderer.state.queue,
-            local_to_world,
+            &transform,
         );
     }
 
@@ -93,6 +96,7 @@ impl Default for DebugSceneProxy {
             lines: vec![],
             meshes: vec![],
             color: Vector4::new(1.0, 1.0, 1.0, 1.0),
+            override_transform: None,
         }
     }
 }
@@ -161,6 +165,10 @@ impl DebugSceneProxy {
         let mut proxy = Self::default();
         proxy.meshes.push(mesh);
         proxy
+    }
+
+    pub fn set_override_transform(&mut self, transform: Matrix4<f32>) {
+        self.override_transform = Some(transform);
     }
 
     fn render_lines(&self, data: &GPUDebugProxyData, cache: &AssetCache, ctx: &GPUDrawCtx) {
