@@ -73,7 +73,7 @@ impl<'a> GOComponentExt<'a> for Collider3D {
 
     #[inline]
     fn build_component(&'a mut self, obj: &'a mut GameObject) -> Self::Outer {
-        let collider = self.get_collider_mut().expect("Collider should be created");
+        let collider = self.collider_mut().expect("Collider should be created");
         GOColliderExt(collider, obj)
     }
 

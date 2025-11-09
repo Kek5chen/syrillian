@@ -4,18 +4,18 @@ use crate::components::ColliderError::{
 };
 use crate::components::{Component, MeshRenderer, NewComponent, RigidBodyComponent};
 use crate::core::GameObjectId;
-use crate::engine::assets::Mesh;
+use crate::engine::assets::{HMesh, Mesh};
 use log::{trace, warn};
-use nalgebra::{Point3, Vector3};
+use nalgebra::{Matrix4, Point3, Vector3};
 use rapier3d::prelude::*;
 use snafu::Snafu;
 
 #[cfg(debug_assertions)]
-use crate::assets::HMesh;
-#[cfg(debug_assertions)]
 use crate::assets::StoreType;
 #[cfg(debug_assertions)]
 use crate::core::Vertex3D;
+#[cfg(debug_assertions)]
+use crate::proxy_data_mut;
 #[cfg(debug_assertions)]
 use crate::rendering::proxies::DebugSceneProxy;
 #[cfg(debug_assertions)]
@@ -31,6 +31,8 @@ pub struct Collider3D {
     pub phys_handle: ColliderHandle,
     linked_to_body: Option<RigidBodyHandle>,
     parent: GameObjectId,
+    shape_kind: ColliderShapeKind,
+    last_scale: Vector3<f32>,
 
     #[cfg(debug_assertions)]
     enable_debug_render: bool, // TODO: Sync with GPU
@@ -38,6 +40,12 @@ pub struct Collider3D {
     debug_collider_mesh: Option<HMesh>,
     #[cfg(debug_assertions)]
     was_debug_enabled: bool,
+}
+
+#[derive(Debug, Clone)]
+enum ColliderShapeKind {
+    Cuboid,
+    Mesh(HMesh),
 }
 
 #[derive(Debug, Snafu)]
@@ -60,18 +68,19 @@ pub enum ColliderError {
 
 impl NewComponent for Collider3D {
     fn new(parent: GameObjectId) -> Self {
-        let scale = parent.transform.scale();
-        let shape = SharedShape::cuboid(scale.x / 2., scale.y / 2., scale.z / 2.);
-        let collider = Self::default_collider(parent, shape);
-        let phys_handle = World::instance()
-            .physics
-            .collider_set
-            .insert(collider.clone());
+        let world = World::instance();
 
-        Collider3D {
+        let scale = Collider3D::sanitize_scale(parent.transform.scale());
+        let shape = Self::build_cuboid_shape(scale);
+        let collider = Self::default_collider(parent, shape);
+        let phys_handle = world.physics.collider_set.insert(collider.clone());
+
+        let mut component = Collider3D {
             phys_handle,
             linked_to_body: None,
             parent,
+            shape_kind: ColliderShapeKind::Cuboid,
+            last_scale: scale,
 
             #[cfg(debug_assertions)]
             enable_debug_render: true,
@@ -79,42 +88,36 @@ impl NewComponent for Collider3D {
             debug_collider_mesh: None,
             #[cfg(debug_assertions)]
             was_debug_enabled: true,
-        }
+        };
+
+        component.sync_with_transform_world(world, true);
+
+        component
     }
 }
 
 impl Component for Collider3D {
     #[cfg(debug_assertions)]
     fn update(&mut self, world: &mut World) {
-        match self.debug_collider_mesh {
-            Some(mesh) => mesh,
-            None => {
-                let mesh = self.generate_collider_mesh(world);
-                self.debug_collider_mesh = Some(mesh);
-                mesh
-            }
-        };
+        if self.debug_collider_mesh.is_none() {
+            trace!("[Collider] Regenerating debug mesh");
+            let mesh = self.generate_collider_mesh(world);
+            self.debug_collider_mesh = Some(mesh);
+        }
     }
 
-    fn fixed_update(&mut self, _world: &mut World) {
-        let body_comp = (*self.parent).get_component::<RigidBodyComponent>();
-        if let Some(body_comp) = body_comp {
-            if self.linked_to_body.is_none() {
-                self.link_to_rigid_body(Some(body_comp.body_handle));
-                let coll = self.get_collider_mut().unwrap();
-                coll.set_translation(Vector3::identity());
-                coll.set_rotation(Rotation::identity());
-                // TODO: Sync Scale to coll
-            } // the linked rigid body will control the collider or
-        } else {
-            // the collider just takes on the parent transformations
-            let translation = self.parent.transform.position();
-            let rotation = self.parent.transform.rotation();
-            let coll = self.get_collider_mut().unwrap();
-            coll.set_translation(translation);
-            coll.set_rotation(rotation);
-            // TODO: Sync Scale to coll
+    fn fixed_update(&mut self, world: &mut World) {
+        if let Some(body_comp) = (*self.parent).get_component::<RigidBodyComponent>()
+            && self.linked_to_body.is_none()
+        {
+            self.link_to_rigid_body(world, Some(body_comp.body_handle));
+            if let Some(collider) = world.physics.collider_set.get_mut(self.phys_handle) {
+                collider.set_translation(Vector3::identity());
+                collider.set_rotation(Rotation::identity());
+            }
         }
+
+        self.sync_with_transform_world(world, false);
     }
 
     #[cfg(debug_assertions)]
@@ -126,8 +129,10 @@ impl Component for Collider3D {
 
         const COLOR: Vector4<f32> = Vector4::new(0.0, 1.0, 0.2, 1.0);
 
+        let transform = self.collider_debug_transform();
         let mut proxy = Box::new(DebugSceneProxy::single_mesh(mesh));
         proxy.color = COLOR;
+        proxy.set_override_transform(transform);
         Some(proxy)
     }
 
@@ -139,6 +144,14 @@ impl Component for Collider3D {
         } else if DebugRenderer::collider_mesh() && !self.was_debug_enabled {
             ctx.enable_proxy();
             self.was_debug_enabled = true;
+        }
+
+        if DebugRenderer::collider_mesh() {
+            let transform = self.collider_debug_transform();
+            ctx.send_proxy_update(move |proxy| {
+                let proxy: &mut DebugSceneProxy = proxy_data_mut!(proxy);
+                proxy.set_override_transform(transform);
+            });
         }
     }
 
@@ -153,11 +166,63 @@ impl Component for Collider3D {
 }
 
 impl Collider3D {
-    pub fn get_collider(&self) -> Option<&Collider> {
+    fn sanitize_scale(scale: Vector3<f32>) -> Vector3<f32> {
+        Vector3::new(
+            scale.x.abs().max(f32::EPSILON),
+            scale.y.abs().max(f32::EPSILON),
+            scale.z.abs().max(f32::EPSILON),
+        )
+    }
+
+    fn build_cuboid_shape(scale: Vector3<f32>) -> SharedShape {
+        SharedShape::cuboid(scale.x * 0.5, scale.y * 0.5, scale.z * 0.5)
+    }
+
+    fn build_shape_for_scale_world(
+        &self,
+        world: &World,
+        scale: Vector3<f32>,
+    ) -> Option<SharedShape> {
+        match &self.shape_kind {
+            ColliderShapeKind::Cuboid => Some(Self::build_cuboid_shape(scale)),
+            ColliderShapeKind::Mesh(handle) => {
+                let mesh = world.assets.meshes.try_get(*handle)?;
+                SharedShape::mesh_with_scale(&mesh, scale)
+            }
+        }
+    }
+
+    fn sync_with_transform_world(&mut self, world: &mut World, force_pose: bool) {
+        let scale = self.parent.transform.scale();
+        let new_shape = ((scale - self.last_scale).norm() > f32::EPSILON)
+            .then(|| self.build_shape_for_scale_world(world, scale));
+
+        let Some(collider) = self.collider_mut() else {
+            debug_panic!("[Collider] No collider found when trying to sync with world transform");
+            return;
+        };
+        if let Some(new_shape) = new_shape {
+            let Some(shape) = new_shape else {
+                debug_panic!("[Collider] Couldn't make shape");
+                return;
+            };
+
+            collider.set_shape(shape);
+        }
+
+        if force_pose || self.linked_to_body.is_none() {
+            collider.set_translation(self.parent.transform.position());
+            collider.set_rotation(self.parent.transform.rotation());
+        }
+
+        self.last_scale = scale;
+    }
+
+    pub fn collider(&self) -> Option<&Collider> {
         World::instance().physics.collider_set.get(self.phys_handle)
     }
 
-    pub fn get_collider_mut(&mut self) -> Option<&mut Collider> {
+    pub fn collider_mut(&self) -> Option<&mut Collider> {
         World::instance()
             .physics
             .collider_set
@@ -172,9 +237,7 @@ impl Collider3D {
             .build()
     }
 
-    pub fn link_to_rigid_body(&mut self, h_body: Option<RigidBodyHandle>) {
-        let world = World::instance();
-
+    pub fn link_to_rigid_body(&mut self, world: &mut World, h_body: Option<RigidBodyHandle>) {
         world.physics.collider_set.set_parent(
             self.phys_handle,
             h_body,
@@ -182,6 +245,9 @@ impl Collider3D {
         );
 
         self.linked_to_body = h_body;
+
+        let force_pose = self.linked_to_body.is_none();
+        self.sync_with_transform_world(world, force_pose);
     }
 
     pub fn use_mesh(&mut self) {
@@ -196,25 +262,36 @@ impl Collider3D {
     }
 
     pub fn try_use_mesh(&mut self) -> Result<(), ColliderError> {
+        let world = World::instance();
+
         let mesh_renderer = self
             .parent
             .get_component::<MeshRenderer>()
             .ok_or(NoMeshRenderer)?;
 
         let handle = mesh_renderer.mesh();
-        let mesh = World::instance()
-            .assets
-            .meshes
-            .try_get(handle)
-            .ok_or(InvalidMeshRef)?;
+        let scale = Self::sanitize_scale(self.parent.transform.scale());
+        let shape = {
+            let mesh = world.assets.meshes.try_get(handle).ok_or(InvalidMeshRef)?;
+            SharedShape::mesh_with_scale(&mesh, scale).ok_or(InvalidMesh)?
+        };
 
-        let scale = self.parent.transform.local_scale();
-        let collider_shape = SharedShape::mesh(&mesh).ok_or(InvalidMesh)?;
-        let shape = collider_shape.scale_dyn(scale, 1).ok_or(InvalidMesh)?;
-
-        self.get_collider_mut()
+        world
+            .physics
+            .collider_set
+            .get_mut(self.phys_handle)
             .ok_or(DesyncedCollider)?
-            .set_shape(SharedShape(shape.into()));
+            .set_shape(shape);
+
+        self.shape_kind = ColliderShapeKind::Mesh(handle);
+        self.last_scale = scale;
+
+        #[cfg(debug_assertions)]
+        {
+            self.debug_collider_mesh = None;
+        }
+
+        self.sync_with_transform_world(world, self.linked_to_body.is_none());
 
         Ok(())
     }
@@ -231,7 +308,7 @@ impl Collider3D {
 
     #[cfg(debug_assertions)]
     fn generate_collider_mesh(&mut self, world: &mut World) -> HMesh {
-        let Some(collider) = self.get_collider() else {
+        let Some(collider) = self.collider() else {
             debug_panic!("No collider attached to Collider 3D component");
             return HMesh::UNIT_CUBE;
         };
@@ -247,10 +324,30 @@ impl Collider3D {
             .build()
             .store(world)
     }
+
+    #[cfg(debug_assertions)]
+    fn collider_debug_transform(&self) -> Matrix4<f32> {
+        if let Some(collider) = self.collider() {
+            let iso = collider.position();
+            let mut mat = Matrix4::identity();
+            let rot = iso.rotation.to_rotation_matrix().into_inner();
+            mat.fixed_view_mut::<3, 3>(0, 0).copy_from(&rot);
+            mat[(0, 3)] = iso.translation.vector.x;
+            mat[(1, 3)] = iso.translation.vector.y;
+            mat[(2, 3)] = iso.translation.vector.z;
+            mat
+        } else {
+            self.parent
+                .transform
+                .get_global_transform_matrix()
+                .to_homogeneous()
+        }
+    }
 }
 
 pub trait MeshShapeExtra<T> {
     fn mesh(mesh: &Mesh) -> Option<T>;
+    fn mesh_with_scale(mesh: &Mesh, scale: Vector3<f32>) -> Option<T>;
     fn mesh_convex_hull(mesh: &Mesh) -> Option<SharedShape>;
     fn local_aabb_mesh(&self) -> (Vec<Point3<f32>>, Vec<[u32; 3]>);
     fn to_trimesh(&self) -> (Vec<Point3<f32>>, Vec<[u32; 3]>);
@@ -262,12 +359,43 @@ impl MeshShapeExtra<SharedShape> for SharedShape {
             "Loading collider mesh with {} vertices",
             mesh.data.vertices.len()
         );
+
+        if mesh.triangle_count() == 0 {
+            return None;
+        }
+
         let vertices = mesh.data.make_point_cloud();
         let indices = mesh.data.make_triangle_indices();
         match SharedShape::trimesh(vertices, indices) {
             Ok(shape) => Some(shape),
             Err(e) => {
                 warn!("Mesh could not be processed as a trimesh: {e}");
+                None
+            }
+        }
+    }
+
+    fn mesh_with_scale(mesh: &Mesh, scale: Vector3<f32>) -> Option<SharedShape> {
+        trace!(
+            "Loading scaled collider mesh with {} vertices",
+            mesh.data.vertices.len()
+        );
+
+        if mesh.triangle_count() == 0 {
+            return None;
+        }
+
+        let mut vertices = mesh.data.make_point_cloud();
+        for v in &mut vertices {
+            v.coords.x *= scale.x;
+            v.coords.y *= scale.y;
+            v.coords.z *= scale.z;
+        }
+        let indices = mesh.data.make_triangle_indices();
+        match SharedShape::trimesh(vertices, indices) {
+            Ok(shape) => Some(shape),
+            Err(e) => {
+                warn!("Scaled mesh could not be processed as a trimesh: {e}");
                 None
             }
         }

@@ -88,6 +88,7 @@ impl Component for CameraDebug {
             lines,
             meshes: vec![],
             color: Vector4::new(1.0, 1.0, 1.0, 1.0),
+            override_transform: None,
         }))
     }
 

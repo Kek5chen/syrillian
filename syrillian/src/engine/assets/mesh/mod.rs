@@ -59,6 +59,15 @@ impl Mesh {
     }
 
     #[inline]
+    pub fn triangle_count(&self) -> usize {
+        if self.has_indices() {
+            self.indices_count() / 3
+        } else {
+            self.vertex_count() / 3
+        }
+    }
+
+    #[inline]
     pub fn vertices(&self) -> &[Vertex3D] {
         &self.data.vertices
     }

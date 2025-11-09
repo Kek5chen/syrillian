@@ -29,7 +29,7 @@ impl Prefab for FirstPersonPlayerPrefab {
 
         char_controller
             .add_component::<Collider3D>()
-            .get_collider_mut()
+            .collider_mut()
             .unwrap()
             .set_shape(SharedShape::capsule_y(1.0, 0.25));
 
