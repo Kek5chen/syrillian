@@ -2,6 +2,12 @@ const PI: f32 = 3.14159265359;
 const AMBIENT_STRENGTH: f32 = 0.1;
 const EPS: f32 = 1e-7;
 
+struct CubeFaceAxes {
+    forward: vec3<f32>,
+    up: vec3<f32>,
+    face: u32,
+}
+
 fn saturate3(v: vec3<f32>) -> vec3<f32> { return clamp(v, vec3<f32>(0.0), vec3<f32>(1.0)); }
 fn safe_rsqrt(x: f32) -> f32 { return inverseSqrt(max(x, 1e-8)); }
 fn safe_normalize(v: vec3<f32>) -> vec3<f32> { return v * safe_rsqrt(dot(v, v)); }
@@ -155,6 +161,153 @@ fn shadow_visibility_spot(in_pos: vec3<f32>, N: vec3<f32>, L: vec3<f32>, light: 
     return pcf_3x3(shadow_maps, shadow_sampler, vec4<f32>(uvz.xy, uvz.z - bias, layer));
 }
 
+fn point_face_axes(dir: vec3<f32>) -> CubeFaceAxes {
+    let abs_dir = abs(dir);
+    var forward: vec3<f32> = vec3<f32>(0.0);
+    var up: vec3<f32> = vec3<f32>(0.0);
+    var face: u32 = 0u;
+
+    if (abs_dir.x >= abs_dir.y && abs_dir.x >= abs_dir.z) {
+        if (dir.x > 0.0) {
+            forward = vec3<f32>(1.0, 0.0, 0.0);
+            up = vec3<f32>(0.0, -1.0, 0.0);
+            face = 0u;
+        } else {
+            forward = vec3<f32>(-1.0, 0.0, 0.0);
+            up = vec3<f32>(0.0, -1.0, 0.0);
+            face = 1u;
+        }
+    } else if (abs_dir.y >= abs_dir.x && abs_dir.y >= abs_dir.z) {
+        if (dir.y > 0.0) {
+            forward = vec3<f32>(0.0, 1.0, 0.0);
+            up = vec3<f32>(0.0, 0.0, 1.0);
+            face = 2u;
+        } else {
+            forward = vec3<f32>(0.0, -1.0, 0.0);
+            up = vec3<f32>(0.0, 0.0, -1.0);
+            face = 3u;
+        }
+    } else {
+        if (dir.z > 0.0) {
+            forward = vec3<f32>(0.0, 0.0, 1.0);
+            up = vec3<f32>(0.0, -1.0, 0.0);
+            face = 4u;
+        } else {
+            forward = vec3<f32>(0.0, 0.0, -1.0);
+            up = vec3<f32>(0.0, -1.0, 0.0);
+            face = 5u;
+        }
+    }
+
+    return CubeFaceAxes(forward, up, face);
+}
+
+fn cube_face_axes_from_index(face: u32) -> CubeFaceAxes {
+    switch (face) {
+        case 0u: { return CubeFaceAxes(vec3<f32>( 1.0,  0.0,  0.0), vec3<f32>( 0.0, -1.0,  0.0), 0u); }
+        case 1u: { return CubeFaceAxes(vec3<f32>(-1.0,  0.0,  0.0), vec3<f32>( 0.0, -1.0,  0.0), 1u); }
+        case 2u: { return CubeFaceAxes(vec3<f32>( 0.0,  1.0,  0.0), vec3<f32>( 0.0,  0.0,  1.0), 2u); }
+        case 3u: { return CubeFaceAxes(vec3<f32>( 0.0, -1.0,  0.0), vec3<f32>( 0.0,  0.0, -1.0), 3u); }
+        case 4u: { return CubeFaceAxes(vec3<f32>( 0.0,  0.0,  1.0), vec3<f32>( 0.0, -1.0,  0.0), 4u); }
+        default: { return CubeFaceAxes(vec3<f32>( 0.0,  0.0, -1.0), vec3<f32>( 0.0, -1.0,  0.0), 5u); }
+    }
+}
+
+fn point_shadow_uvz_axes(light: Light, axes: CubeFaceAxes, world_pos: vec3<f32>) -> vec4<f32> {
+    let view = view_look_at_rh(light.position, light.position + axes.forward, axes.up);
+    let near = 0.05;
+    let far = max(near + 0.01, light.range);
+    let proj = proj_perspective(PI * 0.5, near, far);
+
+    let clip = proj * view * vec4<f32>(world_pos, 1.0);
+    let ndc  = clip.xyz / max(1e-6, clip.w);
+
+    var uv = ndc.xy * 0.5 + 0.5;
+    uv.y = 1.0 - uv.y;
+
+    return vec4<f32>(uv, ndc.z, f32(axes.face));
+}
+
+fn point_shadow_uvz(light: Light, dir_unbiased: vec3<f32>, world_pos: vec3<f32>) -> vec4<f32> {
+    let axes = point_face_axes(dir_unbiased);
+    return point_shadow_uvz_axes(light, axes, world_pos);
+}
+
+fn axis_face_index(axis: u32, positive: bool) -> u32 {
+    if (axis == 0u) {
+        if (positive) { return 0u; }
+        return 1u;
+    }
+    if (axis == 1u) {
+        if (positive) { return 2u; }
+        return 3u;
+    }
+    if (positive) { return 4u; }
+    return 5u;
+}
+
+fn sample_point_face(
+    light: Light,
+    face: u32,
+    world_pos_bias: vec3<f32>,
+    base_layer: f32,
+    bias: f32
+) -> vec2<f32> {
+    let uvz = point_shadow_uvz_axes(light, cube_face_axes_from_index(face), world_pos_bias);
+    let in_bounds = all(uvz.xy >= vec2<f32>(-0.001)) && all(uvz.xy <= vec2<f32>(1.001));
+    if (!in_bounds) {
+        return vec2<f32>(0.0);
+    }
+
+    let layer = base_layer + f32(face);
+    let samp = pcf_3x3(shadow_maps, shadow_sampler, vec4<f32>(uvz.xy, uvz.z - bias, layer));
+    return vec2<f32>(samp, 1.0);
+}
+
+fn axis_shadow_contrib(
+    axis: u32,
+    dir_component: f32,
+    weight: f32,
+    light: Light,
+    world_pos_bias: vec3<f32>,
+    base_layer: f32,
+    bias: f32
+) -> vec2<f32> {
+    if (weight <= 1e-4) {
+        return vec2<f32>(0.0);
+    }
+
+    let face = axis_face_index(axis, dir_component >= 0.0);
+    let samp = sample_point_face(light, face, world_pos_bias, base_layer, bias);
+    return vec2<f32>(samp.x, samp.y) * weight;
+}
+
+fn shadow_visibility_point(in_pos: vec3<f32>, N: vec3<f32>, L: vec3<f32>, light: Light) -> f32 {
+    if (material.cast_shadows == 0u || light.shadow_map_id == 0xffffffffu) { return 1.0; }
+
+    let dir_unbiased = in_pos - light.position;
+    let dist_sq = dot(dir_unbiased, dir_unbiased);
+    if (dist_sq <= 1e-8) { return 1.0; }
+
+    let ndir = dir_unbiased * inverseSqrt(dist_sq);
+    let abs_dir = abs(ndir);
+    let world_pos_bias = in_pos + N * 0.002;
+    let slope = 1.0 - max(dot(N, L), 0.0);
+    let bias  = 0.0003 * slope;
+    let base_layer = f32(light.shadow_map_id);
+
+    let contrib_x = axis_shadow_contrib(0u, ndir.x, abs_dir.x, light, world_pos_bias, base_layer, bias);
+    let contrib_y = axis_shadow_contrib(1u, ndir.y, abs_dir.y, light, world_pos_bias, base_layer, bias);
+    let contrib_z = axis_shadow_contrib(2u, ndir.z, abs_dir.z, light, world_pos_bias, base_layer, bias);
+
+    let total_weight = contrib_x.y + contrib_y.y + contrib_z.y;
+    if (total_weight <= 1e-5) {
+        return 1.0;
+    }
+    let visibility = (contrib_x.x + contrib_y.x + contrib_z.x) / total_weight;
+    return visibility;
+}
+
 fn eval_spot(
     in_pos: vec3<f32>, N: vec3<f32>, V: vec3<f32>,
     base: vec3<f32>, metallic: f32, roughness: f32, light: Light
@@ -198,8 +351,9 @@ fn eval_point(
     let radius = light.radius;
     let geom_att = attenuation_point(dist, light.range, radius);
 
+    let vis = shadow_visibility_point(in_pos, N, L, light);
     let brdf = brdf_term(N, V, L, base, metallic, roughness);
-    let radiance = light.color * (light.intensity * geom_att);
+    let radiance = light.color * (light.intensity * geom_att) * vis;
 
     return brdf * radiance;
 }
@@ -330,12 +484,15 @@ fn pcf_3x3(depthTex: texture_depth_2d_array,
     let layer = u32(uvzLayer.w + 0.5);
     let dims  = vec2<f32>(textureDimensions(depthTex, 0));
     let texel = 1.0 / dims;
+    let guard = texel * 0.5;
+    let guard_max = vec2<f32>(1.0) - guard;
 
     var sum = 0.0;
     for (var dy = -1; dy <= 1; dy++) {
         for (var dx = -1; dx <= 1; dx++) {
             let ofs = vec2<f32>(f32(dx), f32(dy)) * texel;
-            sum += textureSampleCompare(depthTex, cmpSampler, uvzLayer.xy + ofs, layer, uvzLayer.z);
+            let sample_uv = clamp(uvzLayer.xy + ofs, guard, guard_max);
+            sum += textureSampleCompare(depthTex, cmpSampler, sample_uv, layer, uvzLayer.z);
         }
     }
     return sum / 9.0;

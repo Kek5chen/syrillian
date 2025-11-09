@@ -1,27 +1,26 @@
 use crate::assets::{HTexture, Ref, Store, StoreType, Texture};
 use crate::components::TypedComponentId;
 use crate::rendering::AssetCache;
-use crate::rendering::lights::{LightProxy, LightUniformIndex, ShadowUniformIndex};
+use crate::rendering::lights::{LightProxy, LightType, LightUniformIndex, ShadowUniformIndex};
 use crate::rendering::message::LightProxyCommand;
 use crate::rendering::uniform::ShaderUniform;
 use itertools::Itertools;
 use log::warn;
+use std::convert::TryFrom;
 use syrillian_utils::debug_panic;
 use wgpu::{
-    AddressMode, Device, FilterMode, Queue, Sampler, SamplerBorderColor, SamplerDescriptor,
-    TextureUsages, TextureView, TextureViewDescriptor,
+    AddressMode, Device, FilterMode, Queue, Sampler, SamplerDescriptor, TextureUsages, TextureView,
+    TextureViewDescriptor,
 };
 
 #[cfg(debug_assertions)]
 use crate::rendering::Renderer;
-#[cfg(debug_assertions)]
-use crate::rendering::lights::LightType;
-
 const DUMMY_POINT_LIGHT: LightProxy = LightProxy::dummy();
 
 pub struct LightManager {
     proxy_owners: Vec<TypedComponentId>,
     proxies: Vec<LightProxy>,
+    shadow_assignments: Vec<ShadowAssignment>,
 
     uniform: ShaderUniform<LightUniformIndex>,
     shadow_uniform: ShaderUniform<ShadowUniformIndex>,
@@ -29,24 +28,62 @@ pub struct LightManager {
     pub(crate) _shadow_sampler: Sampler,
 }
 
+#[derive(Debug, Copy, Clone)]
+pub struct ShadowAssignment {
+    pub layer: u32,
+    pub light_index: usize,
+    pub face: u8,
+}
+
 impl LightManager {
     pub fn update_shadow_map_ids(&mut self, layers: u32) -> u32 {
-        if self.proxies.len() > layers as usize {
-            debug_panic!("Too many lights for shadow map array");
-            return 0;
-        }
+        self.shadow_assignments.clear();
 
-        let mut id = 0;
-        for light in &mut self.proxies {
-            if id >= layers {
+        let mut next_layer = 0;
+        for (idx, light) in self.proxies.iter_mut().enumerate() {
+            let light_type = LightType::try_from(light.type_id).unwrap_or(LightType::Point);
+            let required_layers = match light_type {
+                LightType::Point => 6,
+                LightType::Spot => 1,
+                LightType::Sun => 0,
+            };
+
+            if required_layers == 0 {
                 light.shadow_map_id = u32::MAX;
-            } else {
-                light.shadow_map_id = id;
-                id += 1;
+                continue;
             }
+
+            if next_layer + required_layers > layers {
+                light.shadow_map_id = u32::MAX;
+                continue;
+            }
+
+            light.shadow_map_id = next_layer;
+
+            match light_type {
+                LightType::Point => {
+                    for face in 0..6 {
+                        self.shadow_assignments.push(ShadowAssignment {
+                            layer: next_layer + face,
+                            light_index: idx,
+                            face: face as u8,
+                        });
+                    }
+                }
+                LightType::Spot => {
+                    self.shadow_assignments.push(ShadowAssignment {
+                        layer: next_layer,
+                        light_index: idx,
+                        face: 0,
+                    });
+                }
+                LightType::Sun => {}
+            }
+
+            next_layer += required_layers;
         }
 
-        id
+        next_layer
     }
 
     pub fn add_proxy(&mut self, owner: TypedComponentId, proxy: LightProxy) {
@@ -112,15 +149,19 @@ impl LightManager {
         &self.shadow_uniform
     }
 
-    pub fn light_for_layer(&self, layer: u32) -> Option<&LightProxy> {
-        self.proxies.iter().find(|l| l.shadow_map_id == layer)
+    pub fn shadow_assignments(&self) -> &[ShadowAssignment] {
+        &self.shadow_assignments
+    }
+
+    pub fn light(&self, index: usize) -> Option<&LightProxy> {
+        self.proxies.get(index)
     }
 
     pub fn new(cache: &AssetCache, device: &Device) -> Self {
         const DUMMY_POINT_LIGHT: LightProxy = LightProxy::dummy();
 
         let shadow_texture =
-            Texture::new_2d_shadow_map_array(8, 1024, 1024).store(&cache.textures.store());
+            Texture::new_2d_shadow_map_array(48, 1024, 1024).store(&cache.textures.store());
         let texture = cache.textures.try_get(shadow_texture, cache).unwrap();
 
         let bgl = cache.bgl_light();
@@ -132,9 +173,9 @@ impl LightManager {
 
         let shadow_sampler = device.create_sampler(&SamplerDescriptor {
             label: None,
-            address_mode_u: AddressMode::ClampToBorder,
-            address_mode_v: AddressMode::ClampToBorder,
-            address_mode_w: AddressMode::ClampToBorder,
+            address_mode_u: AddressMode::ClampToEdge,
+            address_mode_v: AddressMode::ClampToEdge,
+            address_mode_w: AddressMode::ClampToEdge,
             mag_filter: FilterMode::Linear,
             min_filter: FilterMode::Linear,
             mipmap_filter: FilterMode::Linear,
@@ -142,7 +183,7 @@ impl LightManager {
             lod_max_clamp: 0.0,
             compare: Some(wgpu::CompareFunction::LessEqual),
             anisotropy_clamp: 1,
-            border_color: Some(SamplerBorderColor::OpaqueWhite),
+            border_color: None,
         });
 
         let bgl = cache.bgl_shadow();
@@ -154,6 +195,7 @@ impl LightManager {
         Self {
             proxy_owners: vec![],
             proxies: vec![],
+            shadow_assignments: Vec::new(),
             uniform,
             shadow_uniform,
             shadow_texture,

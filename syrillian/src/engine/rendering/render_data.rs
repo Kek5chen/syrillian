@@ -3,7 +3,8 @@ use crate::ensure_aligned;
 use crate::rendering::lights::LightProxy;
 use crate::rendering::uniform::ShaderUniform;
 use crate::utils::{MATRIX4_ID, VECTOR3_ID};
-use nalgebra::{Matrix4, Perspective3, Vector2, Vector3};
+use nalgebra::{Isometry3, Matrix4, Perspective3, Point3, Vector2, Vector3};
+use std::f32::consts::FRAC_PI_2;
 use syrillian_macros::UniformIndex;
 use wgpu::{BindGroupLayout, Device, Queue};
 
@@ -128,6 +129,41 @@ impl RenderUniformData {
 
         self.camera_data
             .update(&proj, &light.position, &light.view_mat);
+        self.upload_camera_data(queue);
+    }
+
+    pub fn update_shadow_camera_for_point(&mut self, light: &LightProxy, face: u8, queue: &Queue) {
+        const DIRECTIONS: [Vector3<f32>; 6] = [
+            Vector3::new(1.0, 0.0, 0.0),
+            Vector3::new(-1.0, 0.0, 0.0),
+            Vector3::new(0.0, 1.0, 0.0),
+            Vector3::new(0.0, -1.0, 0.0),
+            Vector3::new(0.0, 0.0, 1.0),
+            Vector3::new(0.0, 0.0, -1.0),
+        ];
+        const UPS: [Vector3<f32>; 6] = [
+            Vector3::new(0.0, -1.0, 0.0),
+            Vector3::new(0.0, -1.0, 0.0),
+            Vector3::new(0.0, 0.0, 1.0),
+            Vector3::new(0.0, 0.0, -1.0),
+            Vector3::new(0.0, -1.0, 0.0),
+            Vector3::new(0.0, -1.0, 0.0),
+        ];
+
+        let idx = face.min(5) as usize;
+        let dir = DIRECTIONS[idx];
+        let up = UPS[idx];
+
+        let eye = Point3::new(light.position.x, light.position.y, light.position.z);
+        let target_vec = light.position + dir;
+        let target = Point3::new(target_vec.x, target_vec.y, target_vec.z);
+        let view = Isometry3::look_at_rh(&eye, &target, &up).to_homogeneous();
+
+        let near = 0.05_f32;
+        let far = light.range.max(near + 0.01);
+        let proj = Perspective3::new(1.0, FRAC_PI_2, near, far);
+
+        self.camera_data.update(&proj, &light.position, &view);
         self.upload_camera_data(queue);
     }
 

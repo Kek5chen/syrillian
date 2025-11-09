@@ -22,6 +22,7 @@ use log::{error, trace};
 use nalgebra::Vector2;
 use snafu::ResultExt;
 use std::collections::HashMap;
+use std::convert::TryFrom;
 use std::mem::swap;
 use std::sync::{Arc, RwLock, mpsc};
 use syrillian_utils::debug_panic;
@@ -260,18 +261,42 @@ impl Renderer {
             .array_layers;
         let light_count = self.lights.update_shadow_map_ids(shadow_layers);
 
-        for layer in 0..light_count {
-            let Some(light) = self.lights.light_for_layer(layer) else {
-                debug_panic!("Invalid light layer");
+        let assignments: Vec<_> = self
+            .lights
+            .shadow_assignments()
+            .iter()
+            .copied()
+            .take(light_count as usize)
+            .collect();
+
+        for assignment in assignments {
+            let Some(light) = self.lights.light(assignment.light_index).copied() else {
+                debug_panic!("Invalid light index");
                 continue;
             };
 
-            if light.type_id == LightType::Spot as u32 {
-                self.shadow_render_data
-                    .update_shadow_camera_for_spot(light, &self.state.queue);
-                self.prepare_shadow_map(ctx, layer);
-            } else {
-                // TODO: Other Light Type Shadow Maps
+            let Ok(light_type) = LightType::try_from(light.type_id) else {
+                debug_panic!("Invalid Light Type Id was stored");
+                continue;
+            };
+
+            match light_type {
+                LightType::Spot => {
+                    if assignment.face == 0 {
+                        self.shadow_render_data
+                            .update_shadow_camera_for_spot(&light, &self.state.queue);
+                        self.prepare_shadow_map(ctx, assignment.layer);
+                    }
+                }
+                LightType::Point => {
+                    self.shadow_render_data.update_shadow_camera_for_point(
+                        &light,
+                        assignment.face,
+                        &self.state.queue,
+                    );
+                    self.prepare_shadow_map(ctx, assignment.layer);
+                }
+                LightType::Sun => {}
             }
         }
     }
