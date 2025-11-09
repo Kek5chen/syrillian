@@ -1,7 +1,7 @@
 use crate::engine::assets::key::AssetKey;
 use crate::engine::assets::{H, HShader};
 use dashmap::DashMap;
-use dashmap::iter::Iter;
+use dashmap::iter::{Iter, IterMut};
 use dashmap::mapref::one::Ref as MapRef;
 use dashmap::mapref::one::RefMut as MapRefMut;
 use log::{trace, warn};
@@ -155,6 +155,10 @@ impl<T: StoreType> Store<T> {
 
     pub fn items(&self) -> Iter<'_, AssetKey, T> {
         self.data.iter()
+    }
+
+    pub fn items_mut(&self) -> IterMut<'_, AssetKey, T> {
+        self.data.iter_mut()
     }
 }
 
