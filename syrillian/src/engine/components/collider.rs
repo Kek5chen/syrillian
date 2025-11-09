@@ -6,7 +6,7 @@ use crate::components::{Component, MeshRenderer, NewComponent, RigidBodyComponen
 use crate::core::GameObjectId;
 use crate::engine::assets::{HMesh, Mesh};
 use log::{trace, warn};
-use nalgebra::{Matrix4, Point3, Vector3};
+use nalgebra::{Point3, Vector3};
 use rapier3d::prelude::*;
 use snafu::Snafu;
 
@@ -23,8 +23,7 @@ use crate::rendering::proxies::SceneProxy;
 #[cfg(debug_assertions)]
 use crate::rendering::{CPUDrawCtx, DebugRenderer};
 #[cfg(debug_assertions)]
-use nalgebra::Vector4;
-#[cfg(debug_assertions)]
+use nalgebra::{Matrix4, Vector4};
 use syrillian_utils::debug_panic;
 
 pub struct Collider3D {
