@@ -269,6 +269,11 @@ impl Renderer {
             .take(light_count as usize)
             .collect();
 
+        // Shadow map ids and assignments may change when capacity is constrained, so upload the
+        // updated proxy data again before the main pass consumes it.
+        self.lights
+            .update(&self.cache, &self.state.queue, &self.state.device);
+
         for assignment in assignments {
             let Some(light) = self.lights.light(assignment.light_index).copied() else {
                 debug_panic!("Invalid light index");
