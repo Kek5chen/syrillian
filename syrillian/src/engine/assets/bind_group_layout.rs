@@ -180,7 +180,7 @@ const SHADOW_ENTRIES: [BindGroupLayoutEntry; 2] = [
     },
 ];
 
-const PP_ENTRIES: [BindGroupLayoutEntry; 2] = [
+const PP_ENTRIES: [BindGroupLayoutEntry; 3] = [
     BindGroupLayoutEntry {
         binding: 0,
         visibility: ShaderStages::FRAGMENT,
@@ -195,6 +195,16 @@ const PP_ENTRIES: [BindGroupLayoutEntry; 2] = [
         binding: 1,
         visibility: ShaderStages::FRAGMENT,
         ty: BindingType::Sampler(SamplerBindingType::Filtering),
+        count: None,
+    },
+    BindGroupLayoutEntry {
+        binding: 2,
+        visibility: ShaderStages::FRAGMENT,
+        ty: BindingType::Texture {
+            sample_type: TextureSampleType::Depth,
+            view_dimension: TextureViewDimension::D2,
+            multisampled: false,
+        },
         count: None,
     },
 ];

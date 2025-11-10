@@ -79,8 +79,16 @@ impl Renderer {
         let render_data = RenderUniformData::empty(&state.device, &render_bgl);
         let shadow_render_data = RenderUniformData::empty(&state.device, &render_bgl);
 
-        let post_process_data =
-            PostProcessData::new(&state.device, &pp_bgl, offscreen_surface.view());
+        let depth_view = state
+            .depth_texture
+            .create_view(&TextureViewDescriptor::default());
+
+        let post_process_data = PostProcessData::new(
+            &state.device,
+            &pp_bgl,
+            offscreen_surface.view(),
+            &depth_view,
+        );
 
         let lights = LightManager::new(&cache, &state.device);
 
@@ -208,8 +216,16 @@ impl Renderer {
 
         self.offscreen_surface
             .recreate(&self.state.device, &self.state.config);
-        self.post_process_data =
-            PostProcessData::new(&self.state.device, &pp_bgl, self.offscreen_surface.view());
+        let depth_view = self
+            .state
+            .depth_texture
+            .create_view(&TextureViewDescriptor::default());
+        self.post_process_data = PostProcessData::new(
+            &self.state.device,
+            &pp_bgl,
+            self.offscreen_surface.view(),
+            &depth_view,
+        );
     }
 
     fn begin_render(&mut self) -> Result<FrameCtx> {
@@ -511,7 +527,7 @@ impl Renderer {
                 view: &ctx.depth_view,
                 depth_ops: Some(Operations {
                     load: LoadOp::Clear(1.0),
-                    store: StoreOp::Discard,
+                    store: StoreOp::Store,
                 }),
                 stencil_ops: None,
             }),

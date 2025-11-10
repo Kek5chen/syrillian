@@ -79,7 +79,7 @@ fn generate_default(code: &ShaderCode, custom: bool) -> String {
 }
 
 fn generate_post_process(code: &ShaderCode) -> String {
-    let mut generated = format!("{POST_PROCESS_HEADER}\n");
+    let mut generated = format!("{BASE_GROUP}\n{POST_PROCESS_HEADER}\n");
     let fragment_only = code.is_only_fragment_shader();
 
     if fragment_only {

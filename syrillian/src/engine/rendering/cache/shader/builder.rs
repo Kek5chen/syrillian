@@ -15,7 +15,7 @@ pub const DEFAULT_VBL_STEP_INSTANCE: [VertexBufferLayout; 1] = {
     [continuous]
 };
 
-const DEFAULT_COLOR_TARGET_STATE: [Option<ColorTargetState>; 1] = [Some(ColorTargetState {
+const DEFAULT_COLOR_TARGET: [Option<ColorTargetState>; 1] = [Some(ColorTargetState {
     format: TextureFormat::Bgra8UnormSrgb,
     blend: Some(BlendState::ALPHA_BLENDING),
     write_mask: ColorWrites::all(),
@@ -108,7 +108,7 @@ impl<'a> RenderPipelineBuilder<'a> {
                 module: self.module,
                 entry_point: None,
                 compilation_options: PipelineCompilationOptions::default(),
-                targets: &DEFAULT_COLOR_TARGET_STATE,
+                targets: &DEFAULT_COLOR_TARGET,
             }),
             multiview: None,
             cache: None,

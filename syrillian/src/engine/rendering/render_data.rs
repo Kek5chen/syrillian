@@ -17,9 +17,19 @@ pub struct CameraUniform {
     pub(crate) view_mat: Matrix4<f32>,
     pub(crate) projection_mat: Perspective3<f32>,
     pub proj_view_mat: Matrix4<f32>,
+    pub inv_proj_view_mat: Matrix4<f32>,
 }
 
-ensure_aligned!(CameraUniform { pos, view_mat, projection_mat, proj_view_mat }, align <= 16 * 13 => size);
+ensure_aligned!(
+    CameraUniform {
+        pos,
+        view_mat,
+        projection_mat,
+        proj_view_mat,
+        inv_proj_view_mat
+    },
+    align <= 16 * 17 => size
+);
 
 #[repr(C)]
 #[derive(Default, Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
@@ -54,6 +64,7 @@ impl Default for CameraUniform {
             view_mat: MATRIX4_ID,
             projection_mat,
             proj_view_mat,
+            inv_proj_view_mat: MATRIX4_ID,
         }
     }
 }
@@ -66,6 +77,7 @@ impl CameraUniform {
             view_mat: MATRIX4_ID,
             projection_mat: Perspective3::from_matrix_unchecked(MATRIX4_ID), // This is 100% wrong but nalgebra forces this for const. It's ""fine"" though.
             proj_view_mat: MATRIX4_ID,
+            inv_proj_view_mat: MATRIX4_ID,
         }
     }
 
@@ -91,7 +103,13 @@ impl CameraUniform {
         self.pos = *pos;
         self.view_mat = *view_matrix;
         self.projection_mat = *proj_matrix;
-        self.proj_view_mat = self.projection_mat.as_matrix() * self.view_mat;
+
+        let proj_mat = self.projection_mat.as_matrix();
+        self.proj_view_mat = proj_mat * self.view_mat;
+        self.inv_proj_view_mat = self
+            .proj_view_mat
+            .try_inverse()
+            .unwrap_or_else(Matrix4::identity);
     }
 }
 

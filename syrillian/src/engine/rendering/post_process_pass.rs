@@ -5,8 +5,9 @@ use wgpu::{AddressMode, BindGroupLayout, Device, FilterMode, SamplerDescriptor, 
 #[repr(u8)]
 #[derive(Debug, Copy, Clone, UniformIndex)]
 pub enum PostProcessUniformIndex {
-    View = 0,
+    Color = 0,
     Sampler = 1,
+    Depth = 2,
 }
 
 pub struct PostProcessData {
@@ -17,22 +18,24 @@ impl PostProcessData {
     pub(crate) fn new(
         device: &Device,
         layout: &BindGroupLayout,
-        offscreen_view: &TextureView,
+        color_view: &TextureView,
+        depth_view: &TextureView,
     ) -> Self {
         let sampler = device.create_sampler(&SamplerDescriptor {
             label: Some("PostProcess Sampler"),
             address_mode_u: AddressMode::ClampToEdge,
             address_mode_v: AddressMode::ClampToEdge,
             address_mode_w: AddressMode::ClampToEdge,
-            mag_filter: FilterMode::Linear,
-            min_filter: FilterMode::Linear,
-            mipmap_filter: FilterMode::Linear,
+            mag_filter: FilterMode::Nearest,
+            min_filter: FilterMode::Nearest,
+            mipmap_filter: FilterMode::Nearest,
             ..SamplerDescriptor::default()
         });
 
         let uniform = ShaderUniform::<PostProcessUniformIndex>::builder(layout)
-            .with_texture(offscreen_view)
+            .with_texture(color_view)
             .with_sampler(&sampler)
+            .with_texture(depth_view)
             .build(device);
 
         Self { uniform }

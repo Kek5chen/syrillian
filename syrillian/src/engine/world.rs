@@ -19,6 +19,7 @@ use crate::rendering::CPUDrawCtx;
 use crate::rendering::message::RenderMsg;
 use itertools::Itertools;
 use log::info;
+use nalgebra::Matrix4;
 use slotmap::{HopSlotMap, Key};
 use std::collections::{HashMap, HashSet};
 use std::mem::swap;
@@ -291,9 +292,13 @@ impl World {
                 let pos = obj.transform.position();
                 let view_mat = obj.transform.view_matrix_rigid().to_matrix();
                 let view_proj_mat = active_camera.projection.as_matrix() * view_mat;
+                let inv_view_proj = view_proj_mat
+                    .try_inverse()
+                    .unwrap_or_else(Matrix4::identity);
                 frame_proxy_batch.push(RenderMsg::UpdateActiveCamera(Box::new(move |cam| {
                     cam.view_mat = view_mat;
                     cam.proj_view_mat = view_proj_mat;
+                    cam.inv_proj_view_mat = inv_view_proj;
                     cam.pos = pos;
                 })));
             }
@@ -301,8 +306,12 @@ impl World {
             if active_camera.is_projection_dirty() {
                 let proj_mat = active_camera.projection;
                 frame_proxy_batch.push(RenderMsg::UpdateActiveCamera(Box::new(move |cam| {
-                    cam.proj_view_mat = proj_mat.as_matrix() * cam.view_mat;
                     cam.projection_mat = proj_mat;
+                    let view_proj_mat = cam.projection_mat.as_matrix() * cam.view_mat;
+                    cam.proj_view_mat = view_proj_mat;
+                    cam.inv_proj_view_mat = view_proj_mat
+                        .try_inverse()
+                        .unwrap_or_else(Matrix4::identity);
                 })));
                 active_camera.clear_projection_dirty();
             }
