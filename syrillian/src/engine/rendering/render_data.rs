@@ -87,9 +87,7 @@ impl CameraUniform {
         cam_transform: &Transform,
     ) {
         let pos = cam_transform.position();
-        let view_mat = cam_transform
-            .get_global_transform_matrix_ext(true)
-            .inverse();
+        let view_mat = cam_transform.global_transform_matrix_ext(true).inverse();
 
         self.update(proj_matrix, &pos, view_mat.matrix());
     }

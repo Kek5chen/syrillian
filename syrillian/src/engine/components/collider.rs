@@ -338,7 +338,7 @@ impl Collider3D {
         } else {
             self.parent
                 .transform
-                .get_global_transform_matrix()
+                .global_transform_matrix()
                 .to_homogeneous()
         }
     }

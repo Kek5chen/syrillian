@@ -109,7 +109,7 @@ impl InputManager {
         }
     }
 
-    pub fn get_key_state(&self, key_code: KeyCode) -> KeyState {
+    pub fn key_state(&self, key_code: KeyCode) -> KeyState {
         *self
             .key_states
             .get(&key_code)
@@ -118,27 +118,25 @@ impl InputManager {
 
     // Only is true if the key was JUST pressed
     pub fn is_key_down(&self, key_code: KeyCode) -> bool {
-        self.get_key_state(key_code) == KeyState::Pressed
-            && self.key_just_updated.contains(&key_code)
+        self.key_state(key_code) == KeyState::Pressed && self.key_just_updated.contains(&key_code)
     }
 
     // true if the key was JUST pressed or is being held
     pub fn is_key_pressed(&self, key_code: KeyCode) -> bool {
-        self.get_key_state(key_code) == KeyState::Pressed
+        self.key_state(key_code) == KeyState::Pressed
     }
 
     // true if the key was JUST released or is unpressed
     pub fn is_key_released(&self, key_code: KeyCode) -> bool {
-        self.get_key_state(key_code) == KeyState::Released
-            && self.key_just_updated.contains(&key_code)
+        self.key_state(key_code) == KeyState::Released && self.key_just_updated.contains(&key_code)
     }
 
     // Only is true if the key was JUST released
     pub fn is_key_up(&self, key_code: KeyCode) -> bool {
-        self.get_key_state(key_code) == KeyState::Released
+        self.key_state(key_code) == KeyState::Released
     }
 
-    pub fn get_button_state(&self, button: MouseButton) -> ElementState {
+    pub fn button_state(&self, button: MouseButton) -> ElementState {
         *self
             .button_states
             .get(&button)
@@ -146,16 +144,16 @@ impl InputManager {
     }
 
     pub fn is_button_down(&self, button: MouseButton) -> bool {
-        self.get_button_state(button) == ElementState::Pressed
+        self.button_state(button) == ElementState::Pressed
             && self.button_just_updated.contains(&button)
     }
 
     pub fn is_button_pressed(&self, button: MouseButton) -> bool {
-        self.get_button_state(button) == ElementState::Pressed
+        self.button_state(button) == ElementState::Pressed
     }
 
     pub fn is_button_released(&self, button: MouseButton) -> bool {
-        self.get_button_state(button) == ElementState::Released
+        self.button_state(button) == ElementState::Released
             && self.button_just_updated.contains(&button)
     }
 

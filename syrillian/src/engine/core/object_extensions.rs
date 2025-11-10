@@ -118,7 +118,7 @@ impl<'a> GOComponentExt<'a> for RigidBodyComponent {
 
     #[inline]
     fn build_component(&'a mut self, obj: &'a mut GameObject) -> Self::Outer {
-        let rb = self.get_body_mut().expect("Rigid Body should be created");
+        let rb = self.body_mut().expect("Rigid Body should be created");
         GORigidBodyExt(rb, obj)
     }
 

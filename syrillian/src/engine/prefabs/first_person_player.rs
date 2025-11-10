@@ -35,7 +35,7 @@ impl Prefab for FirstPersonPlayerPrefab {
 
         if let Some(rigid_body) = char_controller
             .add_component::<RigidBodyComponent>()
-            .get_body_mut()
+            .body_mut()
         {
             rigid_body.set_additional_mass(5., false);
         } else {

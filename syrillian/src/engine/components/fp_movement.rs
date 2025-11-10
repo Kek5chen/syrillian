@@ -40,7 +40,7 @@ impl Component for FirstPersonMovementController {
     fn init(&mut self, _world: &mut World) {
         let mut rigid = self.parent.get_component::<RigidBodyComponent>();
         if let Some(rigid) = &mut rigid
-            && let Some(rigid) = rigid.get_body_mut()
+            && let Some(rigid) = rigid.body_mut()
         {
             rigid.set_locked_axes(LockedAxes::ROTATION_LOCKED, false);
             rigid.enable_ccd(true);
@@ -63,7 +63,7 @@ impl Component for FirstPersonMovementController {
             Some(rigid) => rigid,
         };
 
-        let body = match rigid.get_body_mut() {
+        let body = match rigid.body_mut() {
             None => {
                 warn!("Rigid body not in set");
                 return;

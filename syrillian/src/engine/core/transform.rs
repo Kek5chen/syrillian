@@ -78,19 +78,19 @@ impl Transform {
 
     /// Sets the global position using a vector.
     pub fn set_position_vec(&mut self, pos: Vector3<f32>) {
-        let mat = self.get_global_transform_matrix_ext(false);
+        let mat = self.global_transform_matrix_ext(false);
         self.set_local_position_vec(mat.inverse_transform_vector(&pos)); // FIXME: transform point?
     }
 
     /// Returns the global position of the transform.
     pub fn position(&self) -> Vector3<f32> {
-        self.get_global_transform_matrix()
+        self.global_transform_matrix()
             .transform_point(&Point::default())
             .coords
     }
 
     /// Collects the list of parents up to the root.
-    fn get_parent_list(&self) -> Vec<GameObjectId> {
+    fn parent_list(&self) -> Vec<GameObjectId> {
         let mut parents = vec![];
         let mut parent_opt = Some(self.owner);
 
@@ -103,9 +103,9 @@ impl Transform {
         parents
     }
 
-    pub fn get_global_transform_matrix_ext(&self, include_self: bool) -> Affine3<f32> {
+    pub fn global_transform_matrix_ext(&self, include_self: bool) -> Affine3<f32> {
         let mut mat = Affine3::identity();
-        let mut parents = self.get_parent_list();
+        let mut parents = self.parent_list();
 
         if !include_self {
             parents.pop();
@@ -130,14 +130,14 @@ impl Transform {
     }
 
     /// Returns the global model matrix for this transform.
-    pub fn get_global_transform_matrix(&self) -> Affine3<f32> {
-        self.get_global_transform_matrix_ext(true)
+    pub fn global_transform_matrix(&self) -> Affine3<f32> {
+        self.global_transform_matrix_ext(true)
     }
 
     /// Calculates the global rotation, optionally excluding this transform.
-    pub fn get_global_rotation_ext(&self, include_self: bool) -> UnitQuaternion<f32> {
+    pub fn global_rotation_ext(&self, include_self: bool) -> UnitQuaternion<f32> {
         let mut global_rotation = UnitQuaternion::identity();
-        let mut parents = self.get_parent_list();
+        let mut parents = self.parent_list();
 
         if !include_self {
             parents.pop();
@@ -150,9 +150,9 @@ impl Transform {
     }
 
     /// Calculates the global scale matrix, optionally excluding this transform.
-    pub fn get_global_scale_matrix_ext(&self, include_self: bool) -> Scale3<f32> {
+    pub fn global_scale_matrix_ext(&self, include_self: bool) -> Scale3<f32> {
         let mut mat = Scale3::identity();
-        let mut parents = self.get_parent_list();
+        let mut parents = self.parent_list();
 
         if !include_self {
             parents.pop();
@@ -165,8 +165,8 @@ impl Transform {
     }
 
     /// Returns the global scale matrix for this transform.
-    pub fn get_global_scale_matrix(&self) -> Scale3<f32> {
-        self.get_global_scale_matrix_ext(true)
+    pub fn global_scale_matrix(&self) -> Scale3<f32> {
+        self.global_scale_matrix_ext(true)
     }
 
     /// Sets the local position of the transform.
@@ -232,7 +232,7 @@ impl Transform {
         pitch: impl AsPrimitive<f32>,
         yaw: impl AsPrimitive<f32>,
     ) {
-        let parent_global_rotation = self.get_global_rotation_ext(false);
+        let parent_global_rotation = self.global_rotation_ext(false);
         let target = UnitQuaternion::from_euler_angles(roll.as_(), pitch.as_(), yaw.as_());
 
         let local_rotation_change = parent_global_rotation.rotation_to(&target);
@@ -249,7 +249,7 @@ impl Transform {
 
     /// Sets the global rotation of the transform.
     pub fn set_rotation(&mut self, rotation: UnitQuaternion<f32>) {
-        let parent_global_rotation = self.get_global_rotation_ext(false);
+        let parent_global_rotation = self.global_rotation_ext(false);
         let local_rotation_change = parent_global_rotation.rotation_to(&rotation);
 
         self.set_local_rotation(local_rotation_change);
@@ -257,12 +257,12 @@ impl Transform {
 
     /// Returns the global rotation quaternion.
     pub fn rotation(&self) -> UnitQuaternion<f32> {
-        self.get_global_rotation_ext(true)
+        self.global_rotation_ext(true)
     }
 
     /// Returns the global rotation euler angles
     pub fn euler_rotation(&self) -> Vector3<f32> {
-        let (x, y, z) = self.get_global_rotation_ext(true).euler_angles();
+        let (x, y, z) = self.global_rotation_ext(true).euler_angles();
         Vector3::new(x, y, z)
     }
 
@@ -316,7 +316,7 @@ impl Transform {
 
     /// Returns the global scale factors.
     pub fn scale(&self) -> Vector3<f32> {
-        let global_scale = self.get_global_scale_matrix();
+        let global_scale = self.global_scale_matrix();
         global_scale.vector
     }
 

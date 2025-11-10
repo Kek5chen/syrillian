@@ -274,7 +274,7 @@ impl World {
             for comp in obj.components.iter() {
                 frame_proxy_batch.push(RenderMsg::UpdateTransform(
                     comp.typed_id(),
-                    obj.transform.get_global_transform_matrix(),
+                    obj.transform.global_transform_matrix(),
                 ));
             }
         }
@@ -349,7 +349,7 @@ impl World {
                 continue;
             };
 
-            let local_to_world = comp.parent().transform.get_global_transform_matrix();
+            let local_to_world = comp.parent().transform.global_transform_matrix();
             if let Some(proxy) = comp.create_render_proxy(World::instance()) {
                 self.render_tx
                     .send(RenderMsg::RegisterProxy(cid, proxy, local_to_world))

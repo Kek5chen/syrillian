@@ -83,14 +83,14 @@ impl Component for RigidBodyComponent {
 }
 
 impl RigidBodyComponent {
-    pub fn get_body(&self) -> Option<&RigidBody> {
+    pub fn body(&self) -> Option<&RigidBody> {
         World::instance()
             .physics
             .rigid_body_set
             .get(self.body_handle)
     }
 
-    pub fn get_body_mut(&mut self) -> Option<&mut RigidBody> {
+    pub fn body_mut(&mut self) -> Option<&mut RigidBody> {
         World::instance()
             .physics
             .rigid_body_set
@@ -98,7 +98,7 @@ impl RigidBodyComponent {
     }
 
     pub fn set_kinematic(&mut self, kinematic: bool) {
-        let rb = self.get_body_mut().expect("Rigid body de-synced");
+        let rb = self.body_mut().expect("Rigid body de-synced");
         if kinematic {
             rb.set_body_type(RigidBodyType::KinematicPositionBased, false);
         } else {
