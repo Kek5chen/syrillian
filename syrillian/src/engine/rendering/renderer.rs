@@ -385,15 +385,24 @@ impl Renderer {
 
     fn resort_proxies(&mut self) {
         self.sorted_proxies.clear();
-        self.sorted_proxies.extend(
-            self.proxies
-                .iter()
-                .filter(|(_, p)| p.enabled)
-                .sorted_by_key(|(_, proxy)| proxy.proxy.priority(self.cache.store()))
-                .map(|(tid, _)| *tid),
-        );
+        self.sorted_proxies
+            .extend(sorted_enabled_proxy_ids(&self.proxies, self.cache.store()));
     }
+}
 
+fn sorted_enabled_proxy_ids(
+    proxies: &HashMap<TypedComponentId, SceneProxyBinding>,
+    store: &AssetStore,
+) -> Vec<TypedComponentId> {
+    proxies
+        .iter()
+        .filter(|(_, binding)| binding.enabled)
+        .sorted_by_key(|(_, proxy)| proxy.proxy.priority(store))
+        .map(|(tid, _)| *tid)
+        .collect()
+}
+
+impl Renderer {
     fn render_proxies(&self, ctx: &GPUDrawCtx) {
         for proxy in self
             .sorted_proxies
@@ -558,5 +567,86 @@ impl Renderer {
     /// Returns the total time elapsed since the world was created
     pub fn time(&self) -> Duration {
         self.start_time.elapsed()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::components::ComponentId;
+    use crate::rendering::proxies::SceneProxy;
+    use nalgebra::{Affine3, Matrix4};
+    use slotmap::Key;
+    use std::any::{Any, TypeId};
+    use std::collections::HashMap;
+    use winit::window::Window;
+
+    #[derive(Debug)]
+    struct TestProxy {
+        priority: u32,
+    }
+
+    impl SceneProxy for TestProxy {
+        fn setup_render(&mut self, _: &Renderer, _: &Matrix4<f32>) -> Box<dyn Any> {
+            Box::new(())
+        }
+
+        fn update_render(&mut self, _: &Renderer, _: &mut dyn Any, _: &Window, _: &Matrix4<f32>) {}
+
+        fn render(&self, _: &Renderer, _: &dyn Any, _: &GPUDrawCtx, _: &Matrix4<f32>) {}
+
+        fn priority(&self, _: &AssetStore) -> u32 {
+            self.priority
+        }
+    }
+
+    #[test]
+    fn resort_proxies_orders_by_priority() {
+        struct MarkerLow;
+        struct MarkerMid;
+        struct MarkerHigh;
+
+        let store = AssetStore::new();
+        let mut proxies = HashMap::new();
+
+        let id_high = insert_proxy::<MarkerHigh>(&mut proxies, 900, true);
+        let id_low = insert_proxy::<MarkerLow>(&mut proxies, 10, true);
+        let id_mid = insert_proxy::<MarkerMid>(&mut proxies, 50, true);
+
+        let sorted = sorted_enabled_proxy_ids(&proxies, &store);
+        assert_eq!(sorted, vec![id_low, id_mid, id_high]);
+    }
+
+    #[test]
+    fn resort_proxies_ignores_disabled_bindings() {
+        struct MarkerEnabled;
+        struct MarkerDisabled;
+
+        let store = AssetStore::new();
+        let mut proxies = HashMap::new();
+
+        let id_enabled = insert_proxy::<MarkerEnabled>(&mut proxies, 5, true);
+        let id_disabled = insert_proxy::<MarkerDisabled>(&mut proxies, 1, false);
+
+        let sorted = sorted_enabled_proxy_ids(&proxies, &store);
+        assert_eq!(sorted, vec![id_enabled]);
+        assert!(!sorted.contains(&id_disabled));
+    }
+
+    fn insert_proxy<T: 'static>(
+        proxies: &mut HashMap<TypedComponentId, SceneProxyBinding>,
+        priority: u32,
+        enabled: bool,
+    ) -> TypedComponentId {
+        let tid = TypedComponentId(TypeId::of::<T>(), ComponentId::null());
+        let mut binding = SceneProxyBinding::new(
+            tid,
+            Affine3::identity(),
+            Box::new(()),
+            Box::new(TestProxy { priority }),
+        );
+        binding.enabled = enabled;
+        proxies.insert(tid, binding);
+        tid
     }
 }
