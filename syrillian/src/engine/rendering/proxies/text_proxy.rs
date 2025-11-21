@@ -7,6 +7,7 @@ use crate::rendering::uniform::ShaderUniform;
 use crate::rendering::{AssetCache, CPUDrawCtx, GPUDrawCtx, RenderPassType, Renderer};
 use crate::utils::hsv_to_rgb;
 use crate::{ensure_aligned, must_pipeline, proxy_data, proxy_data_mut};
+use etagere::euclid::approxeq::ApproxEq;
 use log::trace;
 use nalgebra::{Matrix4, Vector2, Vector3};
 use std::any::Any;
@@ -261,17 +262,31 @@ impl<const D: u8, DIM: TextDim<D>> TextProxy<D, DIM> {
     }
 
     pub fn set_text(&mut self, text: impl Into<String>) {
-        self.text = text.into();
+        let new_text = text.into();
+        if self.text == new_text {
+            return;
+        }
+
+        self.text = new_text;
         self.text_dirty = true;
     }
 
     pub fn set_font(&mut self, font: HFont) {
+        if self.font == font {
+            return;
+        }
+
         self.font = font;
         self.text_dirty = true;
     }
 
     pub fn set_letter_spacing(&mut self, spacing_em: f32) {
-        self.letter_spacing_em = spacing_em.max(0.0);
+        let new_spacing = spacing_em.max(0.0);
+        if self.letter_spacing_em.approx_eq(&new_spacing) {
+            return;
+        }
+
+        self.letter_spacing_em = new_spacing;
         self.text_dirty = true;
     }
 
@@ -280,6 +295,10 @@ impl<const D: u8, DIM: TextDim<D>> TextProxy<D, DIM> {
     }
 
     pub fn set_alignment(&mut self, alignment: TextAlignment) {
+        if self.alignment == alignment {
+            return;
+        }
+
         self.alignment = alignment;
         self.text_dirty = true;
     }
