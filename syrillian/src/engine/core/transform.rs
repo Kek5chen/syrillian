@@ -1,7 +1,6 @@
 use crate::core::GameObjectId;
 use nalgebra::{Affine3, Isometry3, Point, Scale3, Translation3, UnitQuaternion, Vector3};
 use num_traits::AsPrimitive;
-use slotmap::Key;
 
 /// Stores the translation, rotation and scale of a [`GameObject`](crate::core::GameObject).
 ///
@@ -21,25 +20,6 @@ pub struct Transform {
     compound_pos_first: bool,
 
     is_dirty: bool,
-}
-
-impl Clone for Transform {
-    fn clone(&self) -> Self {
-        Transform {
-            owner: GameObjectId::null(),
-
-            pos: self.pos,
-            rot: self.rot,
-            scale: self.scale,
-            pos_mat: self.pos_mat,
-            scale_mat: self.scale_mat,
-            compound_mat: self.compound_mat,
-            invert_position: self.invert_position,
-            compound_pos_first: self.compound_pos_first,
-
-            is_dirty: self.is_dirty,
-        }
-    }
 }
 
 #[allow(dead_code)]
@@ -62,6 +42,23 @@ impl Transform {
             compound_pos_first: true,
 
             is_dirty: true,
+        }
+    }
+
+    pub(crate) fn clone(&self, owner: GameObjectId) -> Self {
+        Transform {
+            owner,
+
+            pos: self.pos,
+            rot: self.rot,
+            scale: self.scale,
+            pos_mat: self.pos_mat,
+            scale_mat: self.scale_mat,
+            compound_mat: self.compound_mat,
+            invert_position: self.invert_position,
+            compound_pos_first: self.compound_pos_first,
+
+            is_dirty: self.is_dirty,
         }
     }
 
@@ -89,14 +86,18 @@ impl Transform {
             .coords
     }
 
+    fn owner(&self) -> GameObjectId {
+        self.owner
+    }
+
     /// Collects the list of parents up to the root.
     fn parent_list(&self) -> Vec<GameObjectId> {
         let mut parents = vec![];
-        let mut parent_opt = Some(self.owner);
+        let mut parent_opt = Some(self.owner());
 
         while let Some(parent) = parent_opt {
             parents.push(parent);
-            parent_opt = parent.parent;
+            parent_opt = *parent.parent();
         }
         parents.reverse();
 

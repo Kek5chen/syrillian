@@ -107,7 +107,7 @@ impl ComponentContext {
         Self { tid, parent }
     }
 
-    pub(crate) fn null() -> Self {
+    pub(crate) unsafe fn null() -> Self {
         ComponentContext {
             tid: TypedComponentId::null::<dyn Component>(),
             parent: GameObjectId::null(),
@@ -193,7 +193,7 @@ impl<C: Component> CRef<C> {
         CRef {
             data: None,
             ctx: NULL_CTX
-                .get_or_init(|| Arc::new(ComponentContext::null()))
+                .get_or_init(|| Arc::new(unsafe { ComponentContext::null() }))
                 .clone(),
         }
     }

@@ -72,7 +72,9 @@ impl SpringComponent {
             .body_handle;
 
         let joint = SpringJoint::new(self.rest_length, self.stiffness, self.damping);
-        let handle = World::instance()
+        let handle = self
+            .parent
+            .world()
             .physics
             .impulse_joint_set
             .insert(self_rb, other_rb, joint, true);
@@ -88,7 +90,9 @@ impl SpringComponent {
     }
 
     pub fn spring(&self) -> Option<&SpringJoint> {
-        let spring = &World::instance()
+        let spring = &self
+            .parent
+            .world()
             .physics
             .impulse_joint_set
             .get(self.handle?)?

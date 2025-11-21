@@ -137,7 +137,6 @@ impl World {
         (world, rx1, rx2)
     }
 
-    // TODO: make this an option later when it's too late
     /// Returns a mutable reference to the global [`World`] instance.
     ///
     /// # Panics
@@ -168,6 +167,7 @@ impl World {
             name: name.into(),
             children: vec![],
             parent: None,
+            owning_world: self,
             transform: Transform::new(GameObjectId::null()),
             components: HashSet::new(),
             custom_properties: HashMap::new(),
@@ -350,12 +350,12 @@ impl World {
             };
 
             let local_to_world = comp.parent().transform.global_transform_matrix();
-            if let Some(proxy) = comp.create_render_proxy(World::instance()) {
+            if let Some(proxy) = comp.create_render_proxy(self) {
                 self.render_tx
                     .send(RenderMsg::RegisterProxy(cid, proxy, local_to_world))
                     .unwrap();
             }
-            if let Some(proxy) = comp.create_light_proxy(World::instance()) {
+            if let Some(proxy) = comp.create_light_proxy(self) {
                 self.render_tx
                     .send(RenderMsg::RegisterLightProxy(cid, proxy))
                     .unwrap();

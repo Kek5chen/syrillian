@@ -33,7 +33,7 @@ const_assert_eq!(
 );
 const_assert!(size_of::<GlyphRenderData>().is_multiple_of(16));
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum TextAlignment {
     Left,
     Right,

@@ -74,6 +74,8 @@ pub struct GameObject {
     /// Parent game object.
     /// If `None`, this object is a root-level game object.
     pub(crate) parent: Option<GameObjectId>,
+    /// The world this object belongs to
+    pub(crate) owning_world: *mut World,
     /// The transformation applied to the object.
     pub transform: Transform,
     /// Components attached to this object.
@@ -95,11 +97,11 @@ impl GameObject {
                 parent.children.remove(pos);
             }
         } else {
-            let world = World::instance();
+            let world = self.world();
             if let Some(pos) = world
                 .children
                 .iter()
-                .find_position(|other| self.id == **other)
+                .find_position(|other| self.id == other.id)
             {
                 world.children.remove(pos.0);
             }
@@ -121,7 +123,7 @@ impl GameObject {
     where
         C: NewComponent + 'static,
     {
-        let world = World::instance();
+        let world = self.world();
         let mut comp: C = C::new(self.id);
         comp.init(world);
 
@@ -239,7 +241,7 @@ impl GameObject {
             child.delete();
         }
 
-        let world = World::instance();
+        let world = self.world();
         for mut comp in self.components.drain() {
             comp.delete_internal(world);
             world.components.remove(&comp);
@@ -248,6 +250,10 @@ impl GameObject {
         self.children.clear();
 
         world.unlink_internal(self.id);
+    }
+
+    pub fn world(&self) -> &'static mut World {
+        unsafe { &mut *self.owning_world }
     }
 }
 

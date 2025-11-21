@@ -41,6 +41,12 @@ const SHADER1: &str = include_str!("dynamic_shader/shader.wgsl");
 const SHADER2: &str = include_str!("dynamic_shader/shader2.wgsl");
 const SHADER3: &str = include_str!("dynamic_shader/shader3.wgsl");
 
+struct DynamicMaterials {
+    primary: HMaterial,
+    accent: HMaterial,
+    glass: HMaterial,
+}
+
 #[derive(Debug, SyrillianApp)]
 struct MyMain {
     frame_counter: FrameCounter,
@@ -76,48 +82,96 @@ impl Default for MyMain {
 
 impl AppState for MyMain {
     fn init(&mut self, world: &mut World) -> Result<(), Box<dyn Error>> {
-        world.input.set_auto_cursor_lock(true);
-        world.input.set_quit_on_escape(true);
-
+        Self::configure_input(world);
         world.spawn(&City);
 
-        self.player = world.spawn(&FirstPersonPlayerPrefab);
-        self.player_rb = self.player.get_component::<RigidBodyComponent>().unwrap();
+        let (player, player_rb) = Self::spawn_player(world);
+        self.player = player;
+        self.player_rb = player_rb;
 
-        // or freecam if you want
-        // self.player = world.new_camera();
-        // self.player.add_component::<FreecamController>();
+        let materials = Self::build_dynamic_materials(world);
+        Self::spawn_dynamic_cubes(world, &materials);
 
-        self.player.at(0.0, 20.0, 0.0);
+        self.setup_audio_demo(world, materials.primary)?;
+        Self::spawn_2d_text(world);
+        self.text3d = Self::spawn_3d_text(world);
+        Self::spawn_spring_demo(world);
+        // Self::cleanup_color_pads(world);
 
-        let shader = Shader::new_fragment("Funky Shader", SHADER1).store(world);
-        let shader2 = Shader::new_fragment("Funky Shader 2", SHADER2).store(world);
-        let shader3 = Shader::new_fragment("Funky Shader 3", SHADER3).store(world);
+        let (light1, light2) = Self::spawn_spotlights(world);
+        self.light1 = light1;
+        self.light2 = light2;
 
-        let shader_mat_1 = Material::builder()
-            .name("Cube Material 1")
-            .shader(shader)
-            .store(&world);
-        let shader_mat_2 = Material::builder()
-            .name("Cube Material 2")
-            .shader(shader2)
-            .store(&world);
-        let shader_mat_3 = Material::builder()
-            .name("Cube Material 3")
-            .shader(shader3)
-            .store(&world);
+        world.print_objects();
 
-        let cube_prefab1 = CubePrefab::new(shader_mat_1);
-        let cube_prefab2 = CubePrefab::new(shader_mat_2);
-        let cube_prefab3 = CubePrefab::new(shader_mat_3);
+        Ok(())
+    }
 
-        let mut big_cube_left = world.spawn(&cube_prefab1);
-        let mut big_cube_right = world.spawn(&cube_prefab3);
-        let mut cube = world.spawn(&cube_prefab2);
-        let mut cube2 = world.spawn(&cube_prefab2);
-        let mut cube3 = world.spawn(&cube_prefab2);
+    fn update(&mut self, world: &mut World) -> Result<(), Box<dyn Error>> {
+        self.frame_counter.new_frame_from_world(world);
+        world.set_window_title(self.format_title());
 
-        cube.at(20., 3.9, -20.)
+        self.update_camera_zoom(world);
+        self.update_world_text(world);
+        self.handle_player_toggle(world);
+        self.update_pickup_interaction(world);
+        self.update_audio_controls(world);
+        self.spawn_on_demand_cubes(world);
+        self.handle_debug_overlays(world);
+
+        Ok(())
+    }
+}
+
+impl MyMain {
+    fn configure_input(world: &mut World) {
+        world.input.set_auto_cursor_lock(true);
+        world.input.set_quit_on_escape(true);
+    }
+
+    fn spawn_player(world: &mut World) -> (GameObjectId, CRef<RigidBodyComponent>) {
+        let mut player = world.spawn(&FirstPersonPlayerPrefab);
+        let player_rb = player
+            .get_component::<RigidBodyComponent>()
+            .expect("player prefab should include a rigid body");
+        player.at(0.0, 20.0, 0.0);
+        (player, player_rb)
+    }
+
+    fn build_dynamic_materials(world: &World) -> DynamicMaterials {
+        let funky = Shader::new_fragment("Funky Shader", SHADER1).store(world);
+        let funky_alt = Shader::new_fragment("Funky Shader 2", SHADER2).store(world);
+        let funky_glass = Shader::new_fragment("Funky Shader 3", SHADER3).store(world);
+
+        DynamicMaterials {
+            primary: Material::builder()
+                .name("Cube Material 1")
+                .shader(funky)
+                .store(world),
+            accent: Material::builder()
+                .name("Cube Material 2")
+                .shader(funky_alt)
+                .store(world),
+            glass: Material::builder()
+                .name("Cube Material 3")
+                .shader(funky_glass)
+                .store(world),
+        }
+    }
+
+    fn spawn_dynamic_cubes(world: &mut World, mats: &DynamicMaterials) {
+        let cube_primary = CubePrefab::new(mats.primary);
+        let cube_accent = CubePrefab::new(mats.accent);
+        let cube_glass = CubePrefab::new(mats.glass);
+
+        let mut rotating_cube = world.spawn(&cube_accent);
+        let mut floating_cube = world.spawn(&cube_accent);
+        let mut rope_cube = world.spawn(&cube_accent);
+        let mut big_cube_left = world.spawn(&cube_primary);
+        let mut big_cube_right = world.spawn(&cube_glass);
+
+        rotating_cube
+            .at(20., 3.9, -20.)
             .build_component::<PointLightComponent>()
             .build_component::<Collider3D>()
             .mass(1.0)
@@ -125,7 +179,7 @@ impl AppState for MyMain {
             .build_component::<RotateComponent>()
             .scaling(1.);
 
-        cube2
+        floating_cube
             .at(5.0, 6.9, -20.0)
             .build_component::<PointLightComponent>()
             .build_component::<Collider3D>()
@@ -137,41 +191,43 @@ impl AppState for MyMain {
             .angular_damping(0.5)
             .linear_damping(0.5);
 
-        cube3
+        rope_cube
             .at(5.0, 3.9, -20.0)
             .build_component::<PointLightComponent>()
             .build_component::<Collider3D>()
             .build_component::<RigidBodyComponent>()
             .enable_ccd()
             .build_component::<RopeComponent>()
-            .connect_to(cube2);
+            .connect_to(floating_cube);
 
         big_cube_left.at(100.0, 10.0, 200.0).scale(100.);
-
         big_cube_right.at(-100.0, 10.0, 200.0).scale(100.);
+    }
 
+    fn setup_audio_demo(
+        &mut self,
+        world: &mut World,
+        material: HMaterial,
+    ) -> Result<(), Box<dyn Error>> {
         let pop_sound_data = include_bytes!("../examples/assets/pop.wav");
         let mut pop_sound = Sound::load_sound_data(pop_sound_data.to_vec())?;
         pop_sound.set_start_position(0.2);
-
         let pop_sound = pop_sound.store(world);
         self.pop_sound = Some(pop_sound);
 
-        let sound_cube_prefab = CubePrefab::new(shader_mat_1);
+        let sound_cube_prefab = CubePrefab::new(material);
 
-        let mut sound_cube = world.spawn(&sound_cube_prefab);
-        let mut sound_cube2 = world.spawn(&sound_cube_prefab);
-
-        sound_cube
+        let mut dry_cube = world.spawn(&sound_cube_prefab);
+        dry_cube
             .at(10.0, 150.0, 10.0)
             .build_component::<Collider3D>()
             .build_component::<RigidBodyComponent>()
             .enable_ccd();
-
-        self.sound_cube_emitter = sound_cube.add_component::<AudioEmitter>();
+        self.sound_cube_emitter = dry_cube.add_component::<AudioEmitter>();
         self.sound_cube_emitter.set_sound(pop_sound);
 
-        sound_cube2
+        let mut wet_cube = world.spawn(&sound_cube_prefab);
+        wet_cube
             .at(10.0, 150.0, 10.0)
             .build_component::<Collider3D>()
             .build_component::<RigidBodyComponent>()
@@ -179,99 +235,95 @@ impl AppState for MyMain {
 
         let mut reverb_track = SpatialTrackBuilder::new();
         reverb_track.add_effect(ReverbBuilder::new());
-        self.sound_cube2_emitter = sound_cube2.add_component::<AudioEmitter>();
+        self.sound_cube2_emitter = wet_cube.add_component::<AudioEmitter>();
         self.sound_cube2_emitter
             .set_track(world, reverb_track)
             .set_sound(pop_sound);
 
-        {
-            let mut text = world.new_object("Text 3D");
-            let mut text3d = text.add_component::<Text3D>();
+        Ok(())
+    }
 
-            text3d.set_size(1.0);
-            text3d.set_alignment(TextAlignment::Center);
-            text.transform.set_position(-15., 2., 2.);
-            text.transform.set_euler_rotation_deg(0., 90., 0.);
-            text3d.set_rainbow_mode(true);
+    fn spawn_3d_text(world: &mut World) -> GameObjectId {
+        let mut text = world.new_object("Text 3D");
+        let mut text3d = text.add_component::<Text3D>();
 
-            world.add_child(text);
-            self.text3d = text;
-        }
+        text3d.set_size(1.0);
+        text3d.set_alignment(TextAlignment::Center);
+        text.transform.set_position(-15., 2., 2.);
+        text.transform.set_euler_rotation_deg(0., 90., 0.);
+        text3d.set_rainbow_mode(true);
 
-        for mut object in &world.objects {
-            if object.1.name.starts_with("Plane") {
-                object.0.delete();
-            }
-        }
+        world.add_child(text);
+        text
+    }
 
-        // fixme: render order matters because this is transparent and 2d
-        {
-            let mut text = world.new_object("Text");
-            let mut text2d = text.add_component::<Text2D>();
+    fn spawn_2d_text(world: &mut World) {
+        let mut text = world.new_object("Text");
+        let mut text2d = text.add_component::<Text2D>();
+        text2d.set_text("Meow");
+        text2d.set_size(50.);
+        text2d.set_position(0., 50.);
+        text2d.set_rainbow_mode(true);
+        world.add_child(text);
+    }
 
-            text2d.set_text("Meow");
-            text2d.set_size(50.);
-            text2d.set_position(0., 50.);
-            text2d.set_rainbow_mode(true);
+    fn spawn_spring_demo(world: &mut World) {
+        let mut spring_bottom = world
+            .spawn(&CubePrefab::new(HMaterial::DEFAULT))
+            .at(-5., 10., -20.)
+            .build_component::<Collider3D>()
+            .mass(1.0)
+            .build_component::<RigidBodyComponent>()
+            .enable_ccd()
+            .id;
+        let spring_top = world
+            .spawn(&CubePrefab::new(HMaterial::DEFAULT))
+            .at(-5., 20., -20.)
+            .build_component::<Collider3D>()
+            .mass(1.0)
+            .build_component::<RigidBodyComponent>()
+            .enable_ccd()
+            .id;
 
-            world.add_child(text);
-        }
+        let mut spring = spring_bottom.add_component::<SpringComponent>();
+        spring.connect_to(spring_top);
+        spring.set_rest_length(10.);
+    }
 
-        {
-            let mut spring_bottom = world
-                .spawn(&CubePrefab::new(HMaterial::DEFAULT))
-                .at(-5., 10., -20.)
-                .build_component::<Collider3D>()
-                .mass(1.0)
-                .build_component::<RigidBodyComponent>()
-                .enable_ccd()
-                .id; // FIXME: Workaround. Should have a .finish()
-            let spring_top = world
-                .spawn(&CubePrefab::new(HMaterial::DEFAULT))
-                .at(-5., 20., -20.)
-                .build_component::<Collider3D>()
-                .mass(1.0)
-                .build_component::<RigidBodyComponent>()
-                .enable_ccd()
-                .id; // FIXME: Workaround. Should have a .finish()
+    // fn cleanup_color_pads(world: &mut World) {
+    //     for mut object in &world.objects {
+    //         if object.1.name.starts_with("Plane") {
+    //             object.0.delete();
+    //         }
+    //     }
+    // }
 
-            let mut spring = spring_bottom.add_component::<SpringComponent>();
-            spring.connect_to(spring_top);
-            spring.set_rest_length(10.);
-        }
-
-        // world.spawn(&SunPrefab);
+    fn spawn_spotlights(world: &mut World) -> (CRef<SpotLightComponent>, CRef<SpotLightComponent>) {
         let mut spot = world.new_object("Spot");
         spot.at(5., 5., -5.)
             .transform
             .set_euler_rotation_deg(0., 80., 0.);
+        let mut light1 = spot.add_component::<SpotLightComponent>();
+        light1.set_color(1.0, 0.2, 0.2);
+        light1.set_intensity(10000.);
+        light1.set_inner_angle(20.);
+        light1.set_outer_angle(30.);
 
-        self.light1 = spot.add_component::<SpotLightComponent>();
-        self.light1.set_color(1.0, 0.2, 0.2);
-        self.light1.set_intensity(10000.);
-        self.light1.set_inner_angle(20.);
-        self.light1.set_outer_angle(30.);
-
-        let mut spot = world.new_object("Spot 2");
-        spot.at(5., 5., -10.)
+        let mut spot2 = world.new_object("Spot 2");
+        spot2
+            .at(5., 5., -10.)
             .transform
             .set_euler_rotation_deg(0., 100., 0.);
+        let mut light2 = spot2.add_component::<SpotLightComponent>();
+        light2.set_color(0.2, 0.2, 1.0);
+        light2.set_intensity(10000.);
+        light2.set_inner_angle(20.);
+        light2.set_outer_angle(30.);
 
-        self.light2 = spot.add_component::<SpotLightComponent>();
-        self.light2.set_color(0.2, 0.2, 1.0);
-        self.light2.set_intensity(10000.);
-        self.light2.set_inner_angle(20.);
-        self.light2.set_outer_angle(30.);
-
-        world.print_objects();
-
-        Ok(())
+        (light1, light2)
     }
 
-    fn update(&mut self, world: &mut World) -> Result<(), Box<dyn Error>> {
-        self.frame_counter.new_frame_from_world(world);
-        world.set_window_title(self.format_title());
-
+    fn update_camera_zoom(&self, world: &mut World) {
         let mut zoom_down = world.input.gamepad.button(Button::LeftTrigger2);
         if world.input.is_button_pressed(MouseButton::Right) {
             zoom_down = 1.0;
@@ -284,62 +336,24 @@ impl AppState for MyMain {
         {
             camera.set_zoom(zoom_down);
         }
+    }
 
-        let mut text3d = self.text3d.get_component::<Text3D>().unwrap();
-        text3d.set_text(format!(
-            "There are {} Objects in the World",
-            world.objects.len(),
-        ));
+    fn update_world_text(&self, world: &mut World) {
+        if let Some(mut text3d) = self.text3d.get_component::<Text3D>() {
+            text3d.set_text(format!(
+                "There are {} Objects in the World",
+                world.objects.len(),
+            ));
+        }
+    }
 
+    fn handle_player_toggle(&mut self, world: &World) {
         if world.input.is_key_down(KeyCode::KeyF) {
             let is_kinematic = self.player_rb.is_kinematic();
             self.player_rb.set_kinematic(!is_kinematic);
         }
-
-        self.do_raycast_test(world);
-
-        if world.input.is_key_down(KeyCode::KeyU) {
-            self.sound_cube_emitter.toggle_looping();
-        }
-        if world.input.is_key_down(KeyCode::KeyI) {
-            self.sound_cube2_emitter.toggle_looping();
-        }
-        if world.input.is_key_down(KeyCode::KeyP) {
-            if world.input.is_key_pressed(KeyCode::ShiftLeft) {
-                self.sound_cube_emitter.stop();
-            } else {
-                self.sound_cube_emitter.play();
-            }
-        }
-        if world.input.is_key_down(KeyCode::KeyO) {
-            if world.input.is_key_pressed(KeyCode::ShiftLeft) {
-                self.sound_cube2_emitter.stop();
-            } else {
-                self.sound_cube2_emitter.play();
-            }
-        }
-
-        #[cfg(debug_assertions)]
-        if world.input.is_key_down(KeyCode::KeyL) {
-            let mode = DebugRenderer::next_mode();
-
-            let Some(mut collider) = self.player.get_component::<Collider3D>() else {
-                return Ok(());
-            };
-            if collider.is_local_debug_render_enabled() {
-                collider.set_local_debug_render_enabled(false);
-            } else if mode == 0 {
-                collider.set_local_debug_render_enabled(true);
-            }
-        }
-
-        // sleep(Duration::from_millis(100));
-
-        Ok(())
     }
-}
 
-impl MyMain {
     fn format_title(&self) -> String {
         let debug_or_release = if cfg!(debug_assertions) {
             "[DEBUG]"
@@ -355,8 +369,10 @@ impl MyMain {
         )
     }
 
-    fn do_raycast_test(&mut self, world: &mut World) -> Option<()> {
-        let camera = world.active_camera().upgrade(world)?;
+    fn update_pickup_interaction(&mut self, world: &mut World) {
+        let Some(camera) = world.active_camera().upgrade(world) else {
+            return;
+        };
         let camera_obj = camera.parent();
 
         let pick_up = world.input.gamepad.is_button_down(Button::RightTrigger)
@@ -365,11 +381,14 @@ impl MyMain {
             || world.input.is_button_released(MouseButton::Left);
 
         if pick_up {
+            let Some(collider) = self.player.get_component::<Collider3D>() else {
+                return;
+            };
+            let player_collider = collider.phys_handle;
             let ray = Ray::new(
                 camera_obj.transform.position().into(),
                 camera_obj.transform.forward(),
             );
-            let player_collider = self.player.get_component::<Collider3D>()?.phys_handle;
             let intersect = world.physics.cast_ray(
                 &ray,
                 5.,
@@ -392,8 +411,9 @@ impl MyMain {
             }
         } else if drop {
             if let Some(obj) = self.picked_up {
-                let mut rb = obj.get_component::<RigidBodyComponent>()?;
-                rb.set_kinematic(false);
+                if let Some(mut rb) = obj.get_component::<RigidBodyComponent>() {
+                    rb.set_kinematic(false);
+                }
             }
             self.picked_up = None;
         }
@@ -414,32 +434,83 @@ impl MyMain {
             obj.transform
                 .set_position_vec(position.lerp(&target_position, 10.03 * delta));
             obj.transform.set_rotation(unit_quat);
-            let mut rb = obj.get_component::<RigidBodyComponent>()?;
-            rb.set_kinematic(true);
+            if let Some(mut rb) = obj.get_component::<RigidBodyComponent>() {
+                rb.set_kinematic(true);
+            }
         }
+    }
 
-        if world.input.is_key_down(KeyCode::KeyC)
-            || world.input.gamepad.is_button_down(Button::West)
+    fn update_audio_controls(&mut self, world: &World) {
+        if world.input.is_key_down(KeyCode::KeyU) {
+            self.sound_cube_emitter.toggle_looping();
+        }
+        if world.input.is_key_down(KeyCode::KeyI) {
+            self.sound_cube2_emitter.toggle_looping();
+        }
+        if world.input.is_key_down(KeyCode::KeyP) {
+            if world.input.is_key_pressed(KeyCode::ShiftLeft) {
+                self.sound_cube_emitter.stop();
+            } else {
+                self.sound_cube_emitter.play();
+            }
+        }
+        if world.input.is_key_down(KeyCode::KeyO) {
+            if world.input.is_key_pressed(KeyCode::ShiftLeft) {
+                self.sound_cube2_emitter.stop();
+            } else {
+                self.sound_cube2_emitter.play();
+            }
+        }
+    }
+
+    fn spawn_on_demand_cubes(&mut self, world: &mut World) {
+        let Some(camera) = world.active_camera().upgrade(world) else {
+            return;
+        };
+        let camera_obj = camera.parent();
+        self.spawn_on_demand_cubes_with_camera(world, &camera_obj);
+    }
+
+    fn spawn_on_demand_cubes_with_camera(&self, world: &mut World, camera_obj: &GameObjectId) {
+        if !world.input.is_key_down(KeyCode::KeyC)
+            && !world.input.gamepad.is_button_down(Button::West)
         {
-            let pos = camera_obj.transform.position() + camera_obj.transform.forward() * 3.;
-            world
-                .spawn(&CubePrefab {
-                    material: HMaterial::DEFAULT,
-                })
-                .at_vec(pos)
-                .build_component::<Collider3D>()
-                .build_component::<RigidBodyComponent>();
-
-            let sleeping_bodies = world
-                .physics
-                .rigid_body_set
-                .iter()
-                .filter(|c| c.1.is_sleeping())
-                .count();
-            println!("{sleeping_bodies} Bodies are currently sleeping");
+            return;
         }
 
-        None
+        let pos = camera_obj.transform.position() + camera_obj.transform.forward() * 3.;
+        world
+            .spawn(&CubePrefab {
+                material: HMaterial::DEFAULT,
+            })
+            .at_vec(pos)
+            .build_component::<Collider3D>()
+            .build_component::<RigidBodyComponent>();
+
+        let sleeping_bodies = world
+            .physics
+            .rigid_body_set
+            .iter()
+            .filter(|c| c.1.is_sleeping())
+            .count();
+        println!("{sleeping_bodies} Bodies are currently sleeping");
+    }
+
+    fn handle_debug_overlays(&mut self, world: &mut World) {
+        #[cfg(debug_assertions)]
+        if world.input.is_key_down(KeyCode::KeyL) {
+            let mode = DebugRenderer::next_mode();
+            if let Some(mut collider) = self.player.get_component::<Collider3D>() {
+                if collider.is_local_debug_render_enabled() {
+                    collider.set_local_debug_render_enabled(false);
+                } else if mode == 0 {
+                    collider.set_local_debug_render_enabled(true);
+                }
+            }
+        }
+
+        #[cfg(not(debug_assertions))]
+        let _ = world;
     }
 }
 
