@@ -181,7 +181,7 @@ impl<C: Component> CRef<C> {
         }
     }
 
-    /// # SAFETY
+    /// # Safety
     ///
     /// This is uninitialized territory. If you use this, you'll need to make sure to
     /// overwrite it before using it. Accessing this in any way is UB.

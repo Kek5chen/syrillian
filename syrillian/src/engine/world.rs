@@ -6,9 +6,9 @@
 
 use crate::assets::{BGL, Material, Mesh, Shader, Sound, Store, Texture};
 use crate::audio::AudioScene;
-use crate::components::{CRef, CWeak, CameraComponent, Component};
+use crate::components::{CRef, CWeak, CameraComponent, Component, InternalComponentDeletion};
 use crate::core::component_storage::ComponentStorage;
-use crate::core::{GameObject, GameObjectId, Transform};
+use crate::core::{GameObject, GameObjectId, GameObjectRef, Transform};
 use crate::engine::assets::AssetStore;
 use crate::engine::prefabs::prefab::Prefab;
 use crate::game_thread::GameAppEvent;
@@ -17,10 +17,10 @@ use crate::physics::PhysicsManager;
 use crate::prefabs::CameraPrefab;
 use crate::rendering::CPUDrawCtx;
 use crate::rendering::message::RenderMsg;
-use itertools::Itertools;
 use log::info;
 use nalgebra::Matrix4;
 use slotmap::{HopSlotMap, Key};
+use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
 use std::mem::swap;
 use std::sync::{Arc, mpsc};
@@ -36,11 +36,15 @@ static mut G_WORLD: *mut World = std::ptr::null_mut();
 /// [`World::instance`].
 pub struct World {
     /// Collection of all game objects indexed by their unique ID
-    pub objects: HopSlotMap<GameObjectId, GameObject>,
+    pub objects: HopSlotMap<GameObjectId, Box<GameObject>>,
     /// Collection of all components indexed by their unique ID
     pub components: ComponentStorage,
     /// Root-level game objects that have no parent
     pub children: Vec<GameObjectId>,
+    /// Strong references keeping objects alive
+    object_ref_counts: HashMap<GameObjectId, usize>,
+    /// Objects that are awaiting final removal once all references drop
+    pending_deletions: HashSet<GameObjectId>,
     /// The currently active camera used for rendering
     active_camera: CWeak<CameraComponent>,
     /// Physics simulation system
@@ -83,6 +87,8 @@ impl World {
             objects: HopSlotMap::with_key(),
             components: ComponentStorage::default(),
             children: vec![],
+            object_ref_counts: HashMap::new(),
+            pending_deletions: HashSet::new(),
             active_camera: CWeak::null(),
             physics: PhysicsManager::default(),
             input: InputManager::new(game_event_tx.clone()),
@@ -152,12 +158,91 @@ impl World {
 
     /// Retrieves a reference to a game object by its ID
     pub fn get_object(&self, obj: GameObjectId) -> Option<&GameObject> {
-        self.objects.get(obj)
+        self.objects
+            .get(obj)
+            .and_then(|o| o.is_alive().then_some(o.as_ref()))
     }
 
     /// Retrieves a mutable reference to a game object by its ID
     pub fn get_object_mut(&mut self, obj: GameObjectId) -> Option<&mut GameObject> {
-        self.objects.get_mut(obj)
+        if !self.objects.get(obj).is_some_and(|o| o.is_alive()) {
+            return None;
+        }
+        self.objects.get_mut(obj).map(|o| o.as_mut())
+    }
+
+    /// Retrieves a strong reference to a game object by its ID, keeping it alive while the reference exists.
+    pub fn get_object_ref(&mut self, obj: GameObjectId) -> Option<GameObjectRef> {
+        GameObjectRef::new_in_world(self, obj)
+    }
+
+    /// Internal: retain a strong reference to keep a game object alive.
+    pub(crate) fn retain_object(&mut self, obj: GameObjectId) -> bool {
+        let Some(entry) = self.objects.get(obj) else {
+            return false;
+        };
+        let has_refs = self.object_ref_counts.get(&obj).copied().unwrap_or(0) > 0;
+        if !entry.is_alive() && !has_refs {
+            return false;
+        }
+
+        *self.object_ref_counts.entry(obj).or_insert(0) += 1;
+        true
+    }
+
+    pub(crate) fn has_object_refs(&self, obj: GameObjectId) -> bool {
+        self.object_ref_counts.get(&obj).copied().unwrap_or(0) > 0
+    }
+
+    /// Internal: release a strong reference and destroy the object if needed.
+    pub(crate) fn release_object(&mut self, obj: GameObjectId) {
+        let Some(count) = self.object_ref_counts.get_mut(&obj) else {
+            return;
+        };
+
+        *count = count.saturating_sub(1);
+        if *count != 0 {
+            return;
+        }
+
+        self.object_ref_counts.remove(&obj);
+        if self.pending_deletions.remove(&obj) {
+            self.finalize_object_removal(obj);
+        }
+    }
+
+    fn finalize_object_removal(&mut self, obj: GameObjectId) {
+        self.pending_deletions.remove(&obj);
+        self.object_ref_counts.remove(&obj);
+        self.detach_relationships(obj);
+        self.objects.remove(obj);
+    }
+
+    pub(crate) fn schedule_object_removal(&mut self, obj: GameObjectId) {
+        if !self.objects.contains_key(obj) {
+            return;
+        }
+
+        if !self.pending_deletions.insert(obj) {
+            return;
+        }
+
+        if self.object_ref_counts.get(&obj).copied().unwrap_or(0) == 0 {
+            self.finalize_object_removal(obj);
+        }
+    }
+
+    fn detach_relationships(&mut self, obj: GameObjectId) {
+        let parent = self.objects.get(obj).and_then(|o| o.parent);
+        if let Some(parent_id) = parent {
+            if let Some(parent_obj) = self.objects.get_mut(parent_id)
+                && let Some(pos) = parent_obj.children.iter().position(|c| *c == obj)
+            {
+                parent_obj.children.remove(pos);
+            }
+        } else if let Some(pos) = self.children.iter().position(|c| *c == obj) {
+            self.children.remove(pos);
+        }
     }
 
     /// Creates a new game object with the given name
@@ -165,6 +250,7 @@ impl World {
         let obj = GameObject {
             id: GameObjectId::null(),
             name: name.into(),
+            alive: Cell::new(true),
             children: vec![],
             parent: None,
             owning_world: self,
@@ -173,11 +259,14 @@ impl World {
             custom_properties: HashMap::new(),
         };
 
-        // TODO: Consider adding the object to the world right away
-        let mut id = self.objects.insert(obj);
+        let id = self.objects.insert(Box::new(obj));
 
-        id.id = id;
-        id.transform.owner = id;
+        let entry = self
+            .objects
+            .get_mut(id)
+            .expect("object was just inserted and must exist");
+        entry.id = id;
+        entry.transform.owner = id;
 
         id
     }
@@ -211,7 +300,8 @@ impl World {
     /// Adds a game object as a child of the world (root level)
     ///
     /// This removes any existing parent relationship the object might have.
-    pub fn add_child(&mut self, mut obj: GameObjectId) {
+    pub fn add_child(&mut self, obj: impl AsRef<GameObjectId>) {
+        let mut obj = *obj.as_ref();
         self.children.push(obj);
         obj.parent = None;
     }
@@ -268,7 +358,7 @@ impl World {
         self.sync_removed_components();
 
         for (_, obj) in self.objects.iter() {
-            if !obj.transform.is_dirty() {
+            if !obj.is_alive() || !obj.transform.is_dirty() {
                 continue;
             }
             for comp in obj.components.iter() {
@@ -369,7 +459,9 @@ impl World {
     /// if you are trying to use a detached world context.
     pub fn next_frame(&mut self) {
         for child in self.objects.values_mut() {
-            child.transform.clear_dirty();
+            if child.is_alive() {
+                child.transform.clear_dirty();
+            }
         }
         self.input.next_frame();
         self.tick_delta_time();
@@ -381,7 +473,7 @@ impl World {
     pub fn find_object_by_name(&self, name: &str) -> Option<GameObjectId> {
         self.objects
             .iter()
-            .find(|(_, o)| o.name == name)
+            .find(|(_, o)| o.is_alive() && o.name == name)
             .map(|o| o.0)
     }
 
@@ -404,6 +496,10 @@ impl World {
         collection: &mut Vec<CRef<C>>,
         obj: GameObjectId,
     ) {
+        if !obj.exists() {
+            return;
+        }
+
         for child in &obj.children {
             Self::find_components_of_children(collection, *child);
         }
@@ -415,7 +511,7 @@ impl World {
     pub fn find_objects_with_property(&self, key: &str) -> Vec<GameObjectId> {
         self.objects
             .iter()
-            .filter_map(|(id, o)| o.has_property(key).then_some(id))
+            .filter_map(|(id, o)| (o.is_alive() && o.has_property(key)).then_some(id))
             .collect()
     }
 
@@ -427,7 +523,7 @@ impl World {
     ) -> Vec<GameObjectId> {
         self.objects
             .iter()
-            .filter_map(|(id, o)| (o.property(key)? == value).then_some(id))
+            .filter_map(|(id, o)| (o.is_alive() && o.property(key)? == value).then_some(id))
             .collect()
     }
 
@@ -436,7 +532,8 @@ impl World {
     /// This method will print out the scene graph to the console and add some information about
     /// components and drawables attached to the objects.
     pub fn print_objects(&self) {
-        info!("{} game objects in world.", self.objects.len());
+        let alive = self.objects.values().filter(|o| o.is_alive()).count();
+        info!("{alive} game objects in world.");
         print_objects_rec(&self.children, 0)
     }
 
@@ -463,8 +560,12 @@ impl World {
 
     /// Marks a game object for deletion. This will immediately run the object internal destruction routine
     /// and also clean up any component-specific data.
-    pub fn delete_object(&mut self, mut object: GameObjectId) {
-        object.delete();
+    pub fn delete_object(&mut self, object: GameObjectId) {
+        if let Some(obj) = self.objects.get_mut(object)
+            && obj.is_alive()
+        {
+            obj.delete();
+        }
     }
 
     /// Internal method to unlink and remove a game object from the world
@@ -475,13 +576,12 @@ impl World {
     /// This is an internal method as it's used in form of a callback from the object,
     /// signaling that its internal destruction routine has been done, which includes its components and
     /// can now be safely unlinked.
-    pub(crate) fn unlink_internal(&mut self, mut caller: GameObjectId) {
-        if let Some((id, _)) = self.children.iter().find_position(|c| **c == caller) {
-            self.children.remove(id);
+    #[allow(dead_code)]
+    pub(crate) fn unlink_internal(&mut self, caller: GameObjectId) {
+        if let Some(obj) = self.objects.get_mut(caller) {
+            obj.mark_dead();
         }
-
-        caller.unlink();
-        self.objects.remove(caller);
+        self.schedule_object_removal(caller);
     }
 
     pub fn set_window_title(&mut self, title: String) {
@@ -494,12 +594,44 @@ impl World {
     ///
     /// The world might not shut down immediately as cleanup will be started after this.
     pub fn shutdown(&mut self) {
+        if self.requested_shutdown {
+            return;
+        }
         self.requested_shutdown = true;
+        self.teardown();
+        let _ = self.game_event_tx.send(GameAppEvent::Shutdown);
     }
 
     /// `true` if a shutdown has been requested, `false` otherwise
     pub fn is_shutting_down(&self) -> bool {
         self.requested_shutdown
+    }
+
+    /// Cleanly tears down all world data. Intended to be used during shutdown.
+    pub fn teardown(&mut self) {
+        // mark everything dead and remove components so render proxies get torn down
+        let ids: Vec<_> = self.objects.keys().collect();
+        for id in ids {
+            if let Some(obj) = self.objects.get_mut(id) {
+                obj.mark_dead();
+                let comps: Vec<_> = obj.components.drain().collect();
+                obj.children.clear();
+                obj.parent = None;
+
+                for mut comp in comps {
+                    comp.delete_internal(self);
+                    self.components.remove(&comp);
+                }
+            }
+            self.pending_deletions.insert(id);
+        }
+
+        self.sync_removed_components();
+        self.object_ref_counts.clear();
+        self.children.clear();
+        self.objects.clear();
+        self.components = ComponentStorage::default();
+        self.pending_deletions.clear();
     }
 }
 
@@ -541,6 +673,9 @@ impl AsRef<Store<Sound>> for World {
 
 fn print_objects_rec(children: &Vec<GameObjectId>, i: i32) {
     for child in children {
+        if !child.exists() {
+            continue;
+        }
         info!("{}- {}", "  ".repeat(i as usize), &child.name);
         info!(
             "{}-> Components: {}",

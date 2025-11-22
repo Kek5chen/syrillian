@@ -25,6 +25,7 @@ pub enum RenderAppEvent {
 pub enum GameAppEvent {
     UpdateWindowTitle(String),
     SetCursorMode(bool, bool),
+    Shutdown,
 }
 
 impl GameAppEvent {
@@ -218,7 +219,7 @@ impl<S: AppState> GameThreadInner<S> {
     pub fn run(mut self) {
         loop {
             if !self.pump_events() {
-                return;
+                break;
             }
         }
     }
@@ -297,6 +298,7 @@ impl<S: AppState> GameThreadInner<S> {
     pub fn update(&mut self) -> bool {
         let world = self.world.as_mut();
         if world.is_shutting_down() {
+            world.teardown();
             return false;
         }
 

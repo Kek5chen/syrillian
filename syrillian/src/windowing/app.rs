@@ -126,7 +126,7 @@ impl<S: AppState> App<S> {
         self.renderer = Some(renderer);
     }
 
-    fn handle_events(game_thread: &GameThread<S>, renderer: &mut Renderer) {
+    fn handle_events(game_thread: &GameThread<S>, renderer: &mut Renderer) -> bool {
         for event in game_thread.receive_events() {
             match event {
                 GameAppEvent::UpdateWindowTitle(title) => renderer.window_mut().set_title(&title),
@@ -156,8 +156,10 @@ impl<S: AppState> App<S> {
                         trace!("RT: Hid cursor");
                     }
                 }
+                GameAppEvent::Shutdown => return false,
             }
         }
+        true
     }
 }
 
@@ -189,9 +191,13 @@ impl<S: AppState> ApplicationHandler for App<S> {
         let game_thread = self.game_thread.as_ref().unwrap();
         let renderer = self.renderer.as_mut().unwrap();
 
+        if !Self::handle_events(game_thread, renderer) {
+            event_loop.exit();
+            return;
+        }
+
         match event {
             WindowEvent::RedrawRequested => {
-                Self::handle_events(game_thread, renderer);
                 renderer.tick_delta_time();
                 renderer.handle_events();
                 renderer.update();
