@@ -11,7 +11,6 @@ use log::info;
 use nalgebra::UnitQuaternion;
 use rapier3d::parry::query::Ray;
 use rapier3d::prelude::QueryFilter;
-use slotmap::Key;
 use std::error::Error;
 use syrillian::SyrillianApp;
 use syrillian::assets::scene_loader::SceneLoader;
@@ -22,7 +21,7 @@ use syrillian::components::{
     CRef, Collider3D, FirstPersonCameraController, PointLightComponent, RigidBodyComponent,
     RopeComponent, RotateComponent, SpotLightComponent, SpringComponent, Text2D, Text3D,
 };
-use syrillian::core::{GameObjectExt, GameObjectId};
+use syrillian::core::{GameObjectExt, GameObjectId, GameObjectRef};
 use syrillian::prefabs::CubePrefab;
 use syrillian::prefabs::first_person_player::FirstPersonPlayerPrefab;
 use syrillian::prefabs::prefab::Prefab;
@@ -50,10 +49,10 @@ struct DynamicMaterials {
 #[derive(Debug, SyrillianApp)]
 struct MyMain {
     frame_counter: FrameCounter,
-    player: GameObjectId,
+    player: GameObjectRef,
     player_rb: CRef<RigidBodyComponent>,
-    picked_up: Option<GameObjectId>,
-    text3d: GameObjectId,
+    picked_up: Option<GameObjectRef>,
+    text3d: GameObjectRef,
     light1: CRef<SpotLightComponent>,
     light2: CRef<SpotLightComponent>,
     pop_sound: Option<HSound>,
@@ -66,10 +65,10 @@ impl Default for MyMain {
         unsafe {
             Self {
                 frame_counter: FrameCounter::default(),
-                player: GameObjectId::null(),
+                player: GameObjectRef::null(),
                 player_rb: CRef::null(),
                 picked_up: None,
-                text3d: GameObjectId::null(),
+                text3d: GameObjectRef::null(),
                 light1: CRef::null(),
                 light2: CRef::null(),
                 pop_sound: None,
@@ -129,8 +128,11 @@ impl MyMain {
         world.input.set_quit_on_escape(true);
     }
 
-    fn spawn_player(world: &mut World) -> (GameObjectId, CRef<RigidBodyComponent>) {
-        let mut player = world.spawn(&FirstPersonPlayerPrefab);
+    fn spawn_player(world: &mut World) -> (GameObjectRef, CRef<RigidBodyComponent>) {
+        let id = world.spawn(&FirstPersonPlayerPrefab);
+        let mut player = world
+            .get_object_ref(id)
+            .expect("player prefab should return a valid object");
         let player_rb = player
             .get_component::<RigidBodyComponent>()
             .expect("player prefab should include a rigid body");
@@ -243,8 +245,11 @@ impl MyMain {
         Ok(())
     }
 
-    fn spawn_3d_text(world: &mut World) -> GameObjectId {
-        let mut text = world.new_object("Text 3D");
+    fn spawn_3d_text(world: &mut World) -> GameObjectRef {
+        let id = world.new_object("Text 3D");
+        let mut text = world
+            .get_object_ref(id)
+            .expect("newly created text object should exist");
         let mut text3d = text.add_component::<Text3D>();
 
         text3d.set_size(1.0);
@@ -253,7 +258,7 @@ impl MyMain {
         text.transform.set_euler_rotation_deg(0., 90., 0.);
         text3d.set_rainbow_mode(true);
 
-        world.add_child(text);
+        world.add_child(&text);
         text
     }
 
@@ -373,7 +378,9 @@ impl MyMain {
         let Some(camera) = world.active_camera().upgrade(world) else {
             return;
         };
-        let camera_obj = camera.parent();
+        let Some(camera_obj) = world.get_object_ref(camera.parent()) else {
+            return;
+        };
 
         let pick_up = world.input.gamepad.is_button_down(Button::RightTrigger)
             || world.input.is_button_down(MouseButton::Left);
@@ -405,20 +412,22 @@ impl MyMain {
             match intersect {
                 None => info!("No ray intersection"),
                 Some((dt, obj)) => {
-                    info!("Intersection after {dt}s, against: {}", obj.name);
-                    self.picked_up = Some(obj);
+                    if let Some(obj_ref) = world.get_object_ref(obj) {
+                        info!("Intersection after {dt}s, against: {}", obj_ref.name);
+                        self.picked_up = Some(obj_ref);
+                    }
                 }
             }
         } else if drop {
-            if let Some(obj) = self.picked_up {
-                if let Some(mut rb) = obj.get_component::<RigidBodyComponent>() {
-                    rb.set_kinematic(false);
-                }
+            if let Some(obj) = self.picked_up.as_mut()
+                && let Some(mut rb) = obj.get_component::<RigidBodyComponent>()
+            {
+                rb.set_kinematic(false);
             }
             self.picked_up = None;
         }
 
-        if let Some(mut obj) = self.picked_up {
+        if let Some(obj) = self.picked_up.as_mut() {
             let delta = world.delta_time().as_secs_f32();
             let scale = obj.transform.scale();
             let target_position = camera_obj.transform.position()
@@ -467,11 +476,13 @@ impl MyMain {
         let Some(camera) = world.active_camera().upgrade(world) else {
             return;
         };
-        let camera_obj = camera.parent();
+        let Some(camera_obj) = world.get_object_ref(camera.parent()) else {
+            return;
+        };
         self.spawn_on_demand_cubes_with_camera(world, &camera_obj);
     }
 
-    fn spawn_on_demand_cubes_with_camera(&self, world: &mut World, camera_obj: &GameObjectId) {
+    fn spawn_on_demand_cubes_with_camera(&self, world: &mut World, camera_obj: &GameObjectRef) {
         if !world.input.is_key_down(KeyCode::KeyC)
             && !world.input.gamepad.is_button_down(Button::West)
         {

@@ -5,9 +5,12 @@ use itertools::Itertools;
 use nalgebra::{Matrix4, Translation3, Vector3};
 use slotmap::{Key, KeyData, new_key_type};
 use std::borrow::Borrow;
+use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
+use std::hash::{Hash, Hasher};
 use std::ops::{Deref, DerefMut};
+use std::ptr::null_mut;
 
 use crate::components::InternalComponentDeletion;
 use crate::core::Transform;
@@ -17,12 +20,66 @@ new_key_type! {
     pub struct GameObjectId;
 }
 
+impl AsRef<GameObjectId> for GameObjectId {
+    fn as_ref(&self) -> &GameObjectId {
+        self
+    }
+}
+
+/// Strong reference to a game object that keeps it alive until all references are dropped.
+/// Prefer this over storing raw [`GameObjectId`] when you need to hold onto an object across frames.
+///
+/// ```
+/// # use syrillian::World;
+/// # use syrillian::core::GameObjectRef;
+/// # fn demo(world: &mut World) {
+/// let obj = world.new_object("Handle Demo");
+/// let mut handle = world.get_object_ref(obj).unwrap();
+/// handle.transform.translate([1.0, 0.0, 0.0].into());
+/// let weak = handle.downgrade();
+/// drop(handle);
+/// assert!(weak.upgrade().is_none() || weak.upgrade().unwrap().is_alive());
+/// # }
+/// ```
+#[derive(Debug)]
+pub struct GameObjectRef {
+    id: GameObjectId,
+    ptr: *mut GameObject,
+}
+
+impl AsRef<GameObjectId> for GameObjectRef {
+    fn as_ref(&self) -> &GameObjectId {
+        &self.id
+    }
+}
+
+unsafe impl Send for GameObjectRef {}
+
+/// Weak reference to a game object that can be upgraded to a [`GameObjectRef`].
+#[derive(Copy, Clone, Default, Debug, PartialEq, Eq, Hash)]
+pub struct GameObjectWeak(GameObjectId);
+
+impl AsRef<GameObjectId> for GameObjectWeak {
+    fn as_ref(&self) -> &GameObjectId {
+        &self.0
+    }
+}
+
 #[allow(dead_code)]
 impl GameObjectId {
     const INVALID_VALUE: u64 = 0x0000_0001_ffff_ffff;
     /// Returns `true` if `self` is non-null and is contained within the [`World`] instance.
     pub fn exists(&self) -> bool {
-        !self.is_null() && World::instance().objects.contains_key(*self)
+        if self.is_null() {
+            return false;
+        }
+
+        let world = World::instance();
+        let Some(obj) = world.objects.get(*self) else {
+            return false;
+        };
+
+        obj.is_alive()
     }
 
     /// Chaining method that applies the function `f` to `self`.
@@ -31,6 +88,16 @@ impl GameObjectId {
             f(self.deref_mut())
         }
         self
+    }
+
+    /// Creates a strong reference to this object, keeping it alive until the reference is dropped.
+    pub fn upgrade(&self) -> Option<GameObjectRef> {
+        GameObjectRef::new(*self)
+    }
+
+    /// Creates a weak reference to this object that can later be upgraded to a strong reference.
+    pub fn downgrade(&self) -> GameObjectWeak {
+        GameObjectWeak(*self)
     }
 
     pub(crate) fn as_ffi(&self) -> u64 {
@@ -43,7 +110,8 @@ impl GameObjectId {
 }
 
 // USING and STORING a GameObjectId is like a contract. It defines that you will recheck the
-//  existence of this game object every time you re-use it. Otherwise, you will crash.
+//  existence of this game object every time you re-use it. Otherwise, you will crash. Prefer
+//  using GameObjectRef / GameObjectWeak when you need to hold onto an object across frames.
 impl Deref for GameObjectId {
     type Target = GameObject;
 
@@ -58,17 +126,138 @@ impl DerefMut for GameObjectId {
     }
 }
 
+impl GameObjectRef {
+    pub(crate) fn new(id: GameObjectId) -> Option<Self> {
+        let world = World::instance();
+        Self::new_in_world(world, id)
+    }
+
+    pub(crate) fn new_in_world(world: &mut World, id: GameObjectId) -> Option<Self> {
+        let ptr = {
+            let entry = world.objects.get(id)?;
+            if !entry.is_alive() && !world.has_object_refs(id) {
+                return None;
+            }
+            entry.as_ref() as *const _ as *mut _
+        };
+        if !world.retain_object(id) {
+            return None;
+        }
+
+        Some(GameObjectRef { id, ptr })
+    }
+
+    pub fn id(&self) -> GameObjectId {
+        self.id
+    }
+
+    pub fn downgrade(&self) -> GameObjectWeak {
+        GameObjectWeak(self.id)
+    }
+
+    pub fn is_alive(&self) -> bool {
+        unsafe { self.ptr.as_ref().is_some_and(|g| g.is_alive()) }
+    }
+
+    /// # Safety
+    ///
+    /// This is uninitialized territory. If you use this, you'll need to make sure to
+    /// overwrite it before using it. Accessing this in any way is UB.
+    ///
+    /// The only reason this exists is that you can avoid Option for References where objects
+    /// are initialized right away but not on struct creation. It's not recommended to use this.
+    pub unsafe fn null() -> GameObjectRef {
+        GameObjectRef {
+            id: GameObjectId::null(),
+            ptr: null_mut(),
+        }
+    }
+}
+
+impl Clone for GameObjectRef {
+    fn clone(&self) -> Self {
+        let world = World::instance();
+        if !world.retain_object(self.id) {
+            panic!("Tried to clone GameObjectRef for deleted object");
+        }
+
+        GameObjectRef {
+            id: self.id,
+            ptr: self.ptr,
+        }
+    }
+}
+
+impl Drop for GameObjectRef {
+    fn drop(&mut self) {
+        let world = World::instance();
+        world.release_object(self.id);
+    }
+}
+
+impl Deref for GameObjectRef {
+    type Target = GameObject;
+
+    fn deref(&self) -> &Self::Target {
+        unsafe { self.ptr.as_ref().unwrap() }
+    }
+}
+
+impl DerefMut for GameObjectRef {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        unsafe { self.ptr.as_mut().unwrap() }
+    }
+}
+
+impl PartialEq for GameObjectRef {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+
+impl Eq for GameObjectRef {}
+
+impl Hash for GameObjectRef {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.id.hash(state);
+    }
+}
+
+impl GameObjectWeak {
+    pub fn upgrade(&self) -> Option<GameObjectRef> {
+        GameObjectRef::new(self.0)
+    }
+
+    pub fn id(&self) -> GameObjectId {
+        self.0
+    }
+
+    pub fn is_null(&self) -> bool {
+        self.0.is_null()
+    }
+
+    pub fn exists(&self) -> bool {
+        self.0.exists()
+    }
+
+    pub fn null() -> GameObjectWeak {
+        GameObjectWeak(GameObjectId::null())
+    }
+}
+
 /// Structure representing an object tree within the world.
 ///
 /// A game object has a unique identifier and a non-unique name.
 /// It keeps track of its parent-child relationships, applied
 /// transformation, and attached components. If a game object has
-/// no parent it is a root-level game object within the world.
+/// no parent, it is a root-level game object within the world.
 pub struct GameObject {
     /// A unique identifier for this object within the world.
     pub id: GameObjectId,
     /// The name of the object (not required to be unique).
     pub name: String,
+    /// Whether the object is still alive inside the world.
+    pub(crate) alive: Cell<bool>,
     /// Game objects that are direct children of this object.
     pub(crate) children: Vec<GameObjectId>,
     /// Parent game object.
@@ -85,6 +274,28 @@ pub struct GameObject {
 }
 
 impl GameObject {
+    /// Returns whether this object is still alive inside the world.
+    pub fn is_alive(&self) -> bool {
+        self.alive.get()
+    }
+
+    pub(crate) fn mark_dead(&self) {
+        self.alive.set(false);
+    }
+
+    /// Returns the parent as a strong reference if it is still alive.
+    pub fn parent_ref(&self) -> Option<GameObjectRef> {
+        self.parent.and_then(|p| p.upgrade())
+    }
+
+    /// Returns all children as strong references, filtering out already deleted objects.
+    pub fn child_refs(&self) -> Vec<GameObjectRef> {
+        self.children
+            .iter()
+            .filter_map(GameObjectId::upgrade)
+            .collect()
+    }
+
     /// Unlinks this game object from its parent or the world (root level).
     pub fn unlink(&mut self) {
         if let Some(mut parent) = self.parent.take() {
@@ -110,6 +321,9 @@ impl GameObject {
 
     /// Adds another game object as a child of this one, replacing the child's previous parent relationship.
     pub fn add_child(&mut self, mut child: GameObjectId) {
+        if !self.is_alive() || !child.exists() {
+            return;
+        }
         // unlink from previous parent or world
         child.unlink();
 
@@ -123,6 +337,10 @@ impl GameObject {
     where
         C: NewComponent + 'static,
     {
+        assert!(
+            self.is_alive(),
+            "cannot add a component to an object that has been deleted"
+        );
         let world = self.world();
         let mut comp: C = C::new(self.id);
         comp.init(world);
@@ -138,6 +356,9 @@ impl GameObject {
     where
         C: NewComponent + 'static,
     {
+        if !self.is_alive() {
+            return;
+        }
         for child in &mut self.children {
             child.add_component::<C>();
         }
@@ -149,6 +370,9 @@ impl GameObject {
     where
         C: NewComponent + 'static,
     {
+        if !self.is_alive() {
+            return;
+        }
         for child in &mut self.children {
             let mut comp = child.add_component::<C>();
             f(&mut comp);
@@ -237,6 +461,10 @@ impl GameObject {
     /// Destroys this game object tree, cleaning up any component-specific data,
     /// then unlinks and removes the object from the world.
     pub fn delete(&mut self) {
+        if !self.alive.replace(false) {
+            return;
+        }
+
         for mut child in self.children.iter().copied() {
             child.delete();
         }
@@ -248,8 +476,8 @@ impl GameObject {
         }
 
         self.children.clear();
-
-        world.unlink_internal(self.id);
+        self.unlink();
+        world.schedule_object_removal(self.id);
     }
 
     pub fn world(&self) -> &'static mut World {

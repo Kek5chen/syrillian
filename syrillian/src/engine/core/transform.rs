@@ -350,7 +350,7 @@ impl Transform {
                 * self.scale_mat.to_homogeneous(),
         );
 
-        self.is_dirty = true;
+        self.set_dirty();
 
         debug_assert_ne!(0.0, self.compound_mat.matrix().determinant());
     }
@@ -396,6 +396,18 @@ impl Transform {
 
     pub fn is_dirty(&self) -> bool {
         self.is_dirty
+    }
+
+    pub fn set_dirty(&mut self) {
+        self.is_dirty = true;
+
+        if !self.owner().exists() {
+            return;
+        }
+
+        for mut child in self.owner().children().iter().copied() {
+            child.transform.set_dirty();
+        }
     }
 
     pub fn clear_dirty(&mut self) {
