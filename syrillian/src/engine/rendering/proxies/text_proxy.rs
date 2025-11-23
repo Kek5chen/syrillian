@@ -8,7 +8,6 @@ use crate::rendering::{AssetCache, CPUDrawCtx, GPUDrawCtx, RenderPassType, Rende
 use crate::utils::hsv_to_rgb;
 use crate::{ensure_aligned, must_pipeline, proxy_data, proxy_data_mut};
 use etagere::euclid::approxeq::ApproxEq;
-use log::trace;
 use nalgebra::{Matrix4, Vector2, Vector3};
 use std::any::Any;
 use std::fmt::Debug;
@@ -16,7 +15,6 @@ use std::marker::PhantomData;
 use std::sync::RwLock;
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::{Buffer, BufferUsages, RenderPass, ShaderStages};
-use winit::window::Window;
 
 #[cfg(debug_assertions)]
 use crate::rendering::DebugRenderer;
@@ -334,7 +332,6 @@ impl<const D: u8, DIM: TextDim<D>> SceneProxy for TextProxy<D, DIM> {
         renderer: &Renderer,
         _local_to_world: &Matrix4<f32>,
     ) -> Box<dyn Any> {
-        trace!("REGENERATE GEOMETRY");
         self.regenerate_geometry(renderer);
 
         let device = &renderer.state.device;
@@ -358,7 +355,6 @@ impl<const D: u8, DIM: TextDim<D>> SceneProxy for TextProxy<D, DIM> {
         &mut self,
         renderer: &Renderer,
         data: &mut dyn Any,
-        _window: &Window,
         local_to_world: &Matrix4<f32>,
     ) {
         let data: &mut TextRenderData = proxy_data_mut!(data);

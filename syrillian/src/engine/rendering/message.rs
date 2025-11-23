@@ -1,4 +1,5 @@
 use crate::components::TypedComponentId;
+use crate::game_thread::RenderTargetId;
 use crate::rendering::lights::LightProxy;
 use crate::rendering::proxies::SceneProxy;
 use crate::rendering::render_data::CameraUniform;
@@ -16,7 +17,7 @@ pub enum RenderMsg {
     UpdateTransform(TypedComponentId, Affine3<f32>),
     ProxyUpdate(TypedComponentId, ProxyUpdateCommand),
     LightProxyUpdate(TypedComponentId, LightProxyCommand),
-    UpdateActiveCamera(CameraUpdateCommand),
+    UpdateActiveCamera(RenderTargetId, CameraUpdateCommand),
     ProxyState(TypedComponentId, bool), // enabled
     CommandBatch(Vec<RenderMsg>),
 }
@@ -30,7 +31,7 @@ impl Debug for RenderMsg {
             RenderMsg::UpdateTransform(..) => "Update Transform",
             RenderMsg::ProxyUpdate(..) => "Proxy Update",
             RenderMsg::LightProxyUpdate(..) => "Light Proxy Update",
-            RenderMsg::UpdateActiveCamera(_) => "Update Active Camera",
+            RenderMsg::UpdateActiveCamera(..) => "Update Active Camera",
             RenderMsg::ProxyState(_, enable) => &format!("Proxy Enabled: {enable}"),
             RenderMsg::CommandBatch(inner) => &format!("Command Batch {inner:?}"),
         };

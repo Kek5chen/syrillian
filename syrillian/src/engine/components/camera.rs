@@ -1,6 +1,7 @@
 use crate::World;
 use crate::components::{Component, NewComponent};
 use crate::core::GameObjectId;
+use crate::game_thread::RenderTargetId;
 use crate::utils::FloatMathExt;
 use nalgebra::{Matrix4, Perspective3, Point3, Vector2, Vector4};
 use rapier3d::geometry::Ray;
@@ -17,7 +18,7 @@ pub struct CameraComponent {
     parent: GameObjectId,
     pub zoom_speed: f32,
     projection_dirty: bool,
-    render_target: usize,
+    render_target: RenderTargetId,
 }
 
 impl CameraComponent {
@@ -120,11 +121,11 @@ impl CameraComponent {
         self.regenerate();
     }
 
-    pub fn render_target(&self) -> usize {
+    pub fn render_target(&self) -> RenderTargetId {
         self.render_target
     }
 
-    pub fn set_render_target(&mut self, target: usize) {
+    pub fn set_render_target(&mut self, target: RenderTargetId) {
         self.render_target = target;
     }
 

@@ -36,7 +36,7 @@ impl AppState for ParentingAndObjectTypes {
         self.frame_counter.new_frame_from_world(world);
 
         let title = format!("{} - FPS: [ {} ]", ENGINE_STR, self.frame_counter.fps());
-        world.set_window_title(title);
+        world.set_default_window_title(title);
 
         Ok(())
     }

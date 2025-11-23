@@ -87,8 +87,16 @@ impl LightManager {
     }
 
     pub fn add_proxy(&mut self, owner: TypedComponentId, proxy: LightProxy) {
-        self.proxies.push(proxy);
-        self.proxy_owners.push(owner);
+        if let Some((idx, _)) = self
+            .proxy_owners
+            .iter()
+            .find_position(|tcid| **tcid == owner)
+        {
+            self.proxies[idx] = proxy;
+        } else {
+            self.proxies.push(proxy);
+            self.proxy_owners.push(owner);
+        }
     }
 
     pub fn remove_proxy(&mut self, owner: TypedComponentId) {

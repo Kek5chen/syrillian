@@ -11,6 +11,9 @@ use crate::engine::rendering::FrameCtx;
 use crate::engine::rendering::cache::AssetCache;
 use crate::engine::rendering::offscreen_surface::OffscreenSurface;
 use crate::engine::rendering::post_process_pass::PostProcessData;
+use crate::game_thread::RenderTargetId;
+#[cfg(debug_assertions)]
+use crate::rendering::DebugRenderer;
 use crate::rendering::light_manager::LightManager;
 use crate::rendering::lights::LightType;
 use crate::rendering::message::RenderMsg;
@@ -19,70 +22,55 @@ use crate::rendering::render_data::RenderUniformData;
 use crate::rendering::{GPUDrawCtx, RenderPassType, State};
 use crossbeam_channel::Receiver;
 use itertools::Itertools;
-use log::{error, trace};
+use log::{error, trace, warn};
 use nalgebra::Vector2;
 use snafu::ResultExt;
 use std::collections::HashMap;
 use std::convert::TryFrom;
-use std::mem::swap;
+use std::mem;
 use std::sync::{Arc, RwLock};
 use syrillian_utils::debug_panic;
 use web_time::{Duration, Instant};
 use wgpu::{
     Color, CommandEncoderDescriptor, LoadOp, Operations, RenderPass, RenderPassColorAttachment,
-    RenderPassDepthStencilAttachment, RenderPassDescriptor, StoreOp, SurfaceError, TextureView,
+    RenderPassDepthStencilAttachment, RenderPassDescriptor, StoreOp, Surface, SurfaceConfiguration,
+    SurfaceError, TextureDescriptor, TextureDimension, TextureUsages, TextureView,
     TextureViewDescriptor,
 };
 use winit::dpi::PhysicalSize;
-use winit::window::Window;
+use winit::window::{Window, WindowId};
 
-#[cfg(debug_assertions)]
-use crate::rendering::DebugRenderer;
-
-#[allow(dead_code)]
-pub struct Renderer {
-    pub state: Box<State>,
-    pub window: Window,
-    render_data: RenderUniformData,
-    shadow_render_data: RenderUniformData,
-
-    post_process_data: PostProcessData,
+pub struct RenderViewport {
+    window: Window,
+    surface: Surface<'static>,
+    config: SurfaceConfiguration,
+    depth_texture: wgpu::Texture,
     offscreen_surface: OffscreenSurface,
-
-    pub cache: AssetCache,
-
-    game_rx: Receiver<RenderMsg>,
-    proxies: HashMap<TypedComponentId, SceneProxyBinding>,
-    sorted_proxies: Vec<TypedComponentId>,
-    pub(super) lights: LightManager,
-
+    post_process_data: PostProcessData,
+    render_data: RenderUniformData,
     start_time: Instant,
     delta_time: Duration,
     last_frame_time: Instant,
-
     frame_count: usize,
 }
 
-impl Renderer {
-    pub fn new(
-        game_rx: Receiver<RenderMsg>,
+impl RenderViewport {
+    fn new(
         window: Window,
-        store: Arc<AssetStore>,
-    ) -> Result<Self> {
-        let state = Box::new(State::new(&window).context(StateErr)?);
-        let offscreen_surface = OffscreenSurface::new(&state.device, &state.config);
-        let cache = AssetCache::new(store, &state);
+        surface: Surface<'static>,
+        mut config: SurfaceConfiguration,
+        state: &State,
+        cache: &AssetCache,
+    ) -> Self {
+        Self::clamp_config(&mut config);
+        surface.configure(&state.device, &config);
 
-        // Let's heat it up :)
         let render_bgl = cache.bgl_render();
         let pp_bgl = cache.bgl_post_process();
 
-        let render_data = RenderUniformData::empty(&state.device, &render_bgl);
-        let shadow_render_data = RenderUniformData::empty(&state.device, &render_bgl);
-
-        let depth_view = state
-            .depth_texture
-            .create_view(&TextureViewDescriptor::default());
+        let offscreen_surface = OffscreenSurface::new(&state.device, &config);
+        let depth_texture = Self::create_depth_texture(&state.device, &config);
+        let depth_view = depth_texture.create_view(&TextureViewDescriptor::default());
 
         let post_process_data = PostProcessData::new(
             &state.device,
@@ -91,74 +79,210 @@ impl Renderer {
             &depth_view,
         );
 
-        let lights = LightManager::new(&cache, &state.device);
+        let render_data = RenderUniformData::empty(&state.device, &render_bgl);
 
-        Ok(Renderer {
-            state,
+        RenderViewport {
             window,
-            render_data,
-            shadow_render_data,
-            post_process_data,
+            surface,
+            config,
+            depth_texture,
             offscreen_surface,
-            cache,
-
-            game_rx,
-            proxies: HashMap::new(),
-            sorted_proxies: Vec::new(),
-            lights,
-
+            post_process_data,
+            render_data,
             start_time: Instant::now(),
             delta_time: Duration::default(),
             last_frame_time: Instant::now(),
-
             frame_count: 0,
+        }
+    }
+
+    fn clamp_config(config: &mut SurfaceConfiguration) {
+        config.width = config.width.max(1);
+        config.height = config.height.max(1);
+    }
+
+    fn recreate_surface(&mut self, state: &State) {
+        self.surface.configure(&state.device, &self.config);
+    }
+
+    fn resize(&mut self, new_size: PhysicalSize<u32>, state: &State, cache: &AssetCache) {
+        let Ok(mut new_config) = state
+            .surface_config(&self.surface, new_size)
+            .context(StateErr)
+        else {
+            return;
+        };
+
+        Self::clamp_config(&mut new_config);
+        self.config = new_config;
+        self.surface.configure(&state.device, &self.config);
+
+        self.offscreen_surface.recreate(&state.device, &self.config);
+        self.depth_texture = Self::create_depth_texture(&state.device, &self.config);
+        let pp_bgl = cache.bgl_post_process();
+        let depth_view = self
+            .depth_texture
+            .create_view(&TextureViewDescriptor::default());
+        self.post_process_data = PostProcessData::new(
+            &state.device,
+            &pp_bgl,
+            self.offscreen_surface.view(),
+            &depth_view,
+        );
+    }
+
+    fn create_depth_texture(device: &wgpu::Device, config: &SurfaceConfiguration) -> wgpu::Texture {
+        device.create_texture(&TextureDescriptor {
+            label: Some("Depth Texture"),
+            size: wgpu::Extent3d {
+                width: config.width.max(1),
+                height: config.height.max(1),
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: TextureDimension::D2,
+            format: wgpu::TextureFormat::Depth32Float,
+            usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
         })
     }
 
-    pub fn handle_message(&mut self, msg: RenderMsg) {
-        match msg {
-            RenderMsg::RegisterProxy(cid, mut proxy, local_to_world) => {
-                trace!("Registered Proxy for #{:?}", cid.0);
-                let data = proxy.setup_render(self, local_to_world.matrix());
-                let binding = SceneProxyBinding::new(cid, local_to_world, data, proxy);
-                self.proxies.insert(cid, binding);
-            }
-            RenderMsg::RegisterLightProxy(cid, proxy) => {
-                trace!("Registered Light Proxy for #{:?}", cid.0);
-                self.lights.add_proxy(cid, *proxy);
-            }
-            RenderMsg::RemoveProxy(cid) => {
-                self.proxies.remove(&cid);
-                self.lights.remove_proxy(cid);
-            }
-            RenderMsg::UpdateTransform(cid, ltw) => {
-                if let Some(cid) = self.proxies.get_mut(&cid) {
-                    cid.update_transform(ltw);
-                }
-            }
-            RenderMsg::ProxyUpdate(cid, command) => {
-                if let Some(binding) = self.proxies.get_mut(&cid) {
-                    command(binding.proxy.as_mut());
-                }
-            }
-            RenderMsg::LightProxyUpdate(cid, command) => {
-                self.lights.execute_light_command(cid, command);
-            }
-            RenderMsg::UpdateActiveCamera(camera_data) => {
-                camera_data(&mut self.render_data.camera_data);
-                self.update_view_camera_data();
-            }
-            RenderMsg::ProxyState(cid, enabled) => {
-                if let Some(binding) = self.proxies.get_mut(&cid) {
-                    binding.enabled = enabled;
-                }
-            }
-            RenderMsg::CommandBatch(batch) => {
-                for message in batch {
-                    self.handle_message(message);
-                }
-            }
+    fn begin_render(&mut self, state: &State) -> Result<FrameCtx> {
+        self.frame_count += 1;
+
+        let mut output = self.surface.get_current_texture().context(SurfaceErr)?;
+        if output.suboptimal {
+            drop(output);
+            self.recreate_surface(state);
+            output = self.surface.get_current_texture().context(SurfaceErr)?;
         }
+
+        let color_view = output
+            .texture
+            .create_view(&TextureViewDescriptor::default());
+        let depth_view = self
+            .depth_texture
+            .create_view(&TextureViewDescriptor::default());
+
+        Ok(FrameCtx {
+            output,
+            color_view,
+            depth_view,
+        })
+    }
+
+    fn update_render_data(&mut self, queue: &wgpu::Queue) {
+        self.update_system_data(queue);
+    }
+
+    fn update_view_camera_data(&mut self, queue: &wgpu::Queue) {
+        self.render_data.upload_camera_data(queue);
+    }
+
+    fn update_system_data(&mut self, queue: &wgpu::Queue) {
+        let window_size = self.window.inner_size();
+        let window_size = Vector2::new(window_size.width.max(1), window_size.height.max(1));
+
+        let system_data = &mut self.render_data.system_data;
+        system_data.screen_size = window_size;
+        system_data.time = self.start_time.elapsed().as_secs_f32();
+        system_data.delta_time = self.delta_time.as_secs_f32();
+
+        self.render_data.upload_system_data(queue);
+    }
+
+    /// Updates the delta time based on the elapsed time since the last frame
+    fn tick_delta_time(&mut self) {
+        self.delta_time = self.last_frame_time.elapsed();
+        self.last_frame_time = Instant::now();
+    }
+
+    fn window(&self) -> &Window {
+        &self.window
+    }
+
+    fn window_mut(&mut self) -> &mut Window {
+        &mut self.window
+    }
+
+    fn size(&self) -> PhysicalSize<u32> {
+        PhysicalSize {
+            width: self.config.width,
+            height: self.config.height,
+        }
+    }
+}
+
+#[allow(dead_code)]
+pub struct Renderer {
+    pub state: Box<State>,
+    pub cache: AssetCache,
+    shadow_render_data: RenderUniformData,
+    viewports: HashMap<RenderTargetId, RenderViewport>,
+    window_map: HashMap<WindowId, RenderTargetId>,
+    game_rx: Receiver<RenderMsg>,
+    proxies: HashMap<TypedComponentId, SceneProxyBinding>,
+    sorted_proxies: Vec<TypedComponentId>,
+    start_time: Instant,
+    pub(super) lights: LightManager,
+}
+
+impl Renderer {
+    pub fn new(
+        game_rx: Receiver<RenderMsg>,
+        main_window: Window,
+        store: Arc<AssetStore>,
+    ) -> Result<Self> {
+        let (state, surface, config) = State::new(&main_window).context(StateErr)?;
+        let cache = AssetCache::new(store, &state);
+
+        let render_bgl = cache.bgl_render();
+        let shadow_render_data = RenderUniformData::empty(&state.device, &render_bgl);
+        let lights = LightManager::new(&cache, &state.device);
+        let start_time = Instant::now();
+
+        main_window.request_redraw();
+
+        let mut window_map = HashMap::new();
+        window_map.insert(main_window.id(), 0);
+
+        let mut viewports = HashMap::new();
+        viewports.insert(
+            0,
+            RenderViewport::new(main_window, surface, config, &state, &cache),
+        );
+
+        Ok(Renderer {
+            state: Box::new(state),
+            cache,
+            shadow_render_data,
+            viewports,
+            window_map,
+            game_rx,
+            start_time,
+            proxies: HashMap::new(),
+            sorted_proxies: Vec::new(),
+            lights,
+        })
+    }
+
+    pub fn find_render_target_id(&self, window_id: &WindowId) -> Option<RenderTargetId> {
+        self.window_map.get(window_id).copied()
+    }
+
+    pub fn window(&self, viewport: RenderTargetId) -> Option<&Window> {
+        self.viewports.get(&viewport).map(RenderViewport::window)
+    }
+
+    pub fn window_mut(&mut self, viewport: RenderTargetId) -> Option<&mut Window> {
+        self.viewports
+            .get_mut(&viewport)
+            .map(RenderViewport::window_mut)
+    }
+
+    pub fn start_time(&self) -> Instant {
+        self.start_time
     }
 
     pub fn handle_events(&mut self) {
@@ -166,30 +290,70 @@ impl Renderer {
             let Ok(msg) = self.game_rx.try_recv() else {
                 break;
             };
-            self.handle_message(msg)
+            self.handle_message(msg);
         }
+    }
+
+    pub fn resize(&mut self, target_id: RenderTargetId, new_size: PhysicalSize<u32>) -> bool {
+        let Some(mut viewport) = self.viewports.remove(&target_id) else {
+            warn!("Invalid Viewport #{target_id} referenced");
+            return false;
+        };
+
+        viewport.resize(new_size, &self.state, &self.cache);
+
+        self.viewports.insert(target_id, viewport);
+
+        true
+    }
+
+    pub fn redraw(&mut self, target_id: RenderTargetId) -> bool {
+        let Some(mut viewport) = self.viewports.remove(&target_id) else {
+            warn!("Invalid Viewport #{target_id} referenced");
+            return false;
+        };
+
+        viewport.tick_delta_time();
+        if !self.render_frame(&mut viewport) {
+            return false;
+        }
+
+        self.viewports.insert(target_id, viewport);
+
+        true
     }
 
     pub fn update(&mut self) {
-        let mut proxies = HashMap::new();
-        swap(&mut self.proxies, &mut proxies);
-
+        let mut proxies = mem::take(&mut self.proxies);
         for proxy in proxies.values_mut() {
-            proxy.update(self, self.window());
+            proxy.update(self);
+        }
+        self.proxies = proxies;
+
+        for vp in self.viewports.values_mut() {
+            vp.update_render_data(&self.state.queue);
         }
 
-        self.proxies = proxies;
         self.resort_proxies();
-        self.update_render_data();
+
+        self.lights
+            .update(&self.cache, &self.state.queue, &self.state.device);
     }
 
-    pub fn render_frame(&mut self) -> bool {
-        let mut ctx = match self.begin_render() {
+    fn resort_proxies(&mut self) {
+        self.sorted_proxies.clear();
+        self.sorted_proxies
+            .extend(sorted_enabled_proxy_ids(&self.proxies, self.cache.store()));
+    }
+
+    pub fn render_frame(&mut self, viewport: &mut RenderViewport) -> bool {
+        let mut ctx = match viewport.begin_render(&self.state) {
             Ok(ctx) => ctx,
             Err(RenderError::Surface {
                 source: SurfaceError::Lost,
             }) => {
-                self.state.resize(self.state.size);
+                let size = viewport.size();
+                viewport.resize(size, &self.state, &self.cache);
                 return true; // drop frame but don't cancel
             }
             Err(RenderError::Surface {
@@ -204,67 +368,15 @@ impl Renderer {
             }
         };
 
-        self.render(&mut ctx);
-        self.end_render(ctx);
+        self.render(viewport, &mut ctx);
+        self.end_render(viewport, ctx);
 
         true
     }
 
-    pub fn resize(&mut self, new_size: PhysicalSize<u32>) {
-        self.state.resize(new_size);
-
-        let pp_bgl = self.cache.bgl_post_process();
-
-        self.offscreen_surface
-            .recreate(&self.state.device, &self.state.config);
-        let depth_view = self
-            .state
-            .depth_texture
-            .create_view(&TextureViewDescriptor::default());
-        self.post_process_data = PostProcessData::new(
-            &self.state.device,
-            &pp_bgl,
-            self.offscreen_surface.view(),
-            &depth_view,
-        );
-    }
-
-    fn begin_render(&mut self) -> Result<FrameCtx> {
-        self.frame_count += 1;
-
-        let mut output = self
-            .state
-            .surface
-            .get_current_texture()
-            .context(SurfaceErr)?;
-        if output.suboptimal {
-            drop(output);
-            self.state.recreate_surface();
-            output = self
-                .state
-                .surface
-                .get_current_texture()
-                .context(SurfaceErr)?;
-        }
-
-        let color_view = output
-            .texture
-            .create_view(&TextureViewDescriptor::default());
-        let depth_view = self
-            .state
-            .depth_texture
-            .create_view(&TextureViewDescriptor::default());
-
-        Ok(FrameCtx {
-            output,
-            color_view,
-            depth_view,
-        })
-    }
-
-    fn render(&mut self, ctx: &mut FrameCtx) {
+    fn render(&mut self, viewport: &RenderViewport, ctx: &mut FrameCtx) {
         self.shadow_pass(ctx);
-        self.main_pass(ctx);
+        self.main_pass(viewport, ctx);
     }
 
     fn shadow_pass(&mut self, ctx: &mut FrameCtx) {
@@ -342,7 +454,7 @@ impl Renderer {
         self.state.queue.submit(Some(encoder.finish()));
     }
 
-    fn main_pass(&mut self, ctx: &mut FrameCtx) {
+    fn main_pass(&mut self, viewport: &RenderViewport, ctx: &mut FrameCtx) {
         let mut encoder = self
             .state
             .device
@@ -350,9 +462,9 @@ impl Renderer {
                 label: Some("Main Encoder"),
             });
 
-        let mut pass = self.prepare_main_render_pass(&mut encoder, ctx);
+        let mut pass = self.prepare_main_render_pass(&mut encoder, viewport, ctx);
 
-        let render_uniform = &self.render_data.uniform;
+        let render_uniform = &viewport.render_data.uniform;
         pass.set_bind_group(0, render_uniform.bind_group(), &[]);
 
         self.render_scene(ctx, pass, RenderPassType::Color);
@@ -384,26 +496,6 @@ impl Renderer {
         }
     }
 
-    fn resort_proxies(&mut self) {
-        self.sorted_proxies.clear();
-        self.sorted_proxies
-            .extend(sorted_enabled_proxy_ids(&self.proxies, self.cache.store()));
-    }
-}
-
-fn sorted_enabled_proxy_ids(
-    proxies: &HashMap<TypedComponentId, SceneProxyBinding>,
-    store: &AssetStore,
-) -> Vec<TypedComponentId> {
-    proxies
-        .iter()
-        .filter(|(_, binding)| binding.enabled)
-        .sorted_by_key(|(_, proxy)| proxy.proxy.priority(store))
-        .map(|(tid, _)| *tid)
-        .collect()
-}
-
-impl Renderer {
     fn render_proxies(&self, ctx: &GPUDrawCtx) {
         for proxy in self
             .sorted_proxies
@@ -418,14 +510,11 @@ impl Renderer {
         }
     }
 
-    fn end_render(&mut self, mut ctx: FrameCtx) {
-        self.render_final_pass(&mut ctx);
+    fn end_render(&mut self, viewport: &mut RenderViewport, mut ctx: FrameCtx) {
+        self.render_final_pass(viewport, &mut ctx);
 
-        self.window.pre_present_notify();
-
+        viewport.window.pre_present_notify();
         ctx.output.present();
-
-        self.tick_delta_time();
 
         if self.cache.last_refresh().elapsed().as_secs_f32() > 5.0 {
             trace!("Refreshing cache...");
@@ -436,7 +525,7 @@ impl Renderer {
         }
     }
 
-    fn render_final_pass(&mut self, ctx: &mut FrameCtx) {
+    fn render_final_pass(&mut self, viewport: &RenderViewport, ctx: &mut FrameCtx) {
         let mut encoder = self
             .state
             .device
@@ -459,8 +548,8 @@ impl Renderer {
 
         let post_shader = self.cache.shader_post_process();
         pass.set_pipeline(post_shader.solid_pipeline());
-        pass.set_bind_group(0, self.render_data.uniform.bind_group(), &[]);
-        pass.set_bind_group(1, self.post_process_data.uniform.bind_group(), &[]);
+        pass.set_bind_group(0, viewport.render_data.uniform.bind_group(), &[]);
+        pass.set_bind_group(1, viewport.post_process_data.uniform.bind_group(), &[]);
         pass.draw(0..6, 0..1);
 
         drop(pass);
@@ -468,34 +557,67 @@ impl Renderer {
         self.state.queue.submit(Some(encoder.finish()));
     }
 
-    pub fn window(&self) -> &Window {
-        &self.window
+    fn handle_message(&mut self, msg: RenderMsg) {
+        match msg {
+            RenderMsg::RegisterProxy(cid, mut proxy, local_to_world) => {
+                trace!("Registered Proxy for #{:?}", cid.0);
+                let data = proxy.setup_render(self, local_to_world.matrix());
+                let binding = SceneProxyBinding::new(cid, local_to_world, data, proxy);
+                self.proxies.insert(cid, binding);
+            }
+            RenderMsg::RegisterLightProxy(cid, proxy) => {
+                trace!("Registered Light Proxy for #{:?}", cid.0);
+                self.lights.add_proxy(cid, *proxy);
+            }
+            RenderMsg::RemoveProxy(cid) => {
+                self.proxies.remove(&cid);
+                self.lights.remove_proxy(cid);
+            }
+            RenderMsg::UpdateTransform(cid, ltw) => {
+                if let Some(cid) = self.proxies.get_mut(&cid) {
+                    cid.update_transform(ltw);
+                }
+            }
+            RenderMsg::ProxyUpdate(cid, command) => {
+                if let Some(binding) = self.proxies.get_mut(&cid) {
+                    command(binding.proxy.as_mut());
+                }
+            }
+            RenderMsg::LightProxyUpdate(cid, command) => {
+                self.lights.execute_light_command(cid, command);
+            }
+            RenderMsg::UpdateActiveCamera(render_target_id, camera_data) => {
+                if let Some(vp) = self.viewports.get_mut(&render_target_id) {
+                    camera_data(&mut vp.render_data.camera_data);
+                    vp.update_view_camera_data(&self.state.queue);
+                }
+            }
+            RenderMsg::ProxyState(cid, enabled) => {
+                if let Some(binding) = self.proxies.get_mut(&cid) {
+                    binding.enabled = enabled;
+                }
+            }
+            RenderMsg::CommandBatch(batch) => {
+                for message in batch {
+                    self.handle_message(message);
+                }
+            }
+        }
     }
 
-    pub fn window_mut(&mut self) -> &mut Window {
-        &mut self.window
-    }
+    pub fn add_window(&mut self, target_id: RenderTargetId, window: Window) -> Result<()> {
+        let surface = self.state.create_surface(&window).context(StateErr)?;
+        let config = self
+            .state
+            .surface_config(&surface, PhysicalSize::new(800, 600))
+            .context(StateErr)?;
 
-    fn update_render_data(&mut self) {
-        self.update_system_data();
-        self.lights
-            .update(&self.cache, &self.state.queue, &self.state.device);
-    }
+        self.window_map.insert(window.id(), target_id);
 
-    fn update_view_camera_data(&mut self) {
-        self.render_data.upload_camera_data(&self.state.queue);
-    }
+        let viewport = RenderViewport::new(window, surface, config, &self.state, &self.cache);
+        self.viewports.insert(target_id, viewport);
 
-    fn update_system_data(&mut self) {
-        let window_size = self.window.inner_size();
-        let window_size = Vector2::new(window_size.width, window_size.height);
-
-        let system_data = &mut self.render_data.system_data;
-        system_data.screen_size = window_size;
-        system_data.time = self.start_time.elapsed().as_secs_f32();
-        system_data.delta_time = self.delta_time.as_secs_f32();
-
-        self.render_data.upload_system_data(&self.state.queue);
+        Ok(())
     }
 
     fn prepare_shadow_pass<'a>(
@@ -521,12 +643,13 @@ impl Renderer {
     fn prepare_main_render_pass<'a>(
         &self,
         encoder: &'a mut wgpu::CommandEncoder,
+        viewport: &RenderViewport,
         ctx: &mut FrameCtx,
     ) -> RenderPass<'a> {
         encoder.begin_render_pass(&RenderPassDescriptor {
             label: Some("Offscreen Render Pass"),
             color_attachments: &[Some(RenderPassColorAttachment {
-                view: self.offscreen_surface.view(),
+                view: viewport.offscreen_surface.view(),
                 resolve_target: None,
                 ops: Operations {
                     load: LoadOp::Clear(Color::BLACK),
@@ -544,31 +667,18 @@ impl Renderer {
             ..RenderPassDescriptor::default()
         })
     }
+}
 
-    /// Updates the delta time based on the elapsed time since the last frame
-    pub fn tick_delta_time(&mut self) {
-        self.delta_time = self.last_frame_time.elapsed();
-        self.last_frame_time = Instant::now();
-    }
-
-    pub fn last_frame_time(&self) -> Instant {
-        self.last_frame_time
-    }
-
-    /// Returns the time elapsed since the last frame
-    pub fn delta_time(&self) -> Duration {
-        self.delta_time
-    }
-
-    /// Returns the instant in time when the world was created
-    pub fn start_time(&self) -> Instant {
-        self.start_time
-    }
-
-    /// Returns the total time elapsed since the world was created
-    pub fn time(&self) -> Duration {
-        self.start_time.elapsed()
-    }
+fn sorted_enabled_proxy_ids(
+    proxies: &HashMap<TypedComponentId, SceneProxyBinding>,
+    store: &AssetStore,
+) -> Vec<TypedComponentId> {
+    proxies
+        .iter()
+        .filter(|(_, binding)| binding.enabled)
+        .sorted_by_key(|(_, proxy)| proxy.proxy.priority(store))
+        .map(|(tid, _)| *tid)
+        .collect()
 }
 
 #[cfg(test)]
@@ -580,7 +690,6 @@ mod tests {
     use slotmap::Key;
     use std::any::{Any, TypeId};
     use std::collections::HashMap;
-    use winit::window::Window;
 
     #[derive(Debug)]
     struct TestProxy {
@@ -592,7 +701,7 @@ mod tests {
             Box::new(())
         }
 
-        fn update_render(&mut self, _: &Renderer, _: &mut dyn Any, _: &Window, _: &Matrix4<f32>) {}
+        fn update_render(&mut self, _: &Renderer, _: &mut dyn Any, _: &Matrix4<f32>) {}
 
         fn render(&self, _: &Renderer, _: &dyn Any, _: &GPUDrawCtx, _: &Matrix4<f32>) {}
 
