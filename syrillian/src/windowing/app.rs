@@ -1,11 +1,13 @@
 use crate::AppState;
 use crate::assets::AssetStore;
-use crate::game_thread::GameAppEvent;
+use crate::game_thread::{GameAppEvent, RenderTargetId};
 use crate::rendering::Renderer;
 use crate::windowing::game_thread::GameThread;
+use crate::world::WorldChannels;
+use crossbeam_channel::{Receiver, unbounded};
 use log::{error, info, trace};
+use std::collections::HashMap;
 use std::error::Error;
-use std::sync::mpsc;
 use web_time::Instant;
 use winit::application::ApplicationHandler;
 use winit::error::EventLoopError;
@@ -17,15 +19,22 @@ use winit::window::{CursorGrabMode, WindowAttributes, WindowId};
 use winit::platform::web::{EventLoopExtWebSys, WindowExtWebSys};
 
 pub struct App<S: AppState> {
-    window_attributes: WindowAttributes,
+    windows: Vec<WindowAttributes>,
+    runtimes: Vec<WindowRuntime>,
+    window_map: HashMap<WindowId, usize>,
     game_thread: Option<GameThread<S>>,
     state: Option<S>,
-    renderer: Option<Renderer>,
 }
 
 pub struct AppSettings<S: AppState> {
-    pub window: WindowAttributes,
+    pub windows: Vec<WindowAttributes>,
     pub state: S,
+}
+
+struct WindowRuntime {
+    renderer: Renderer,
+    game_event_rx: Receiver<GameAppEvent>,
+    drives_update: bool,
 }
 
 pub trait AppRuntime: AppState {
@@ -40,7 +49,16 @@ impl<S: AppState> AppSettings<S> {
         app.run(event_loop)
     }
 
+    pub fn with_additional_window(mut self, window: WindowAttributes) -> Self {
+        self.windows.push(window);
+        self
+    }
+
     fn init_state(self) -> Result<(EventLoop<()>, App<S>), Box<dyn Error>> {
+        if self.windows.is_empty() {
+            return Err("No windows configured".into());
+        }
+
         let event_loop = match EventLoop::new() {
             Err(EventLoopError::NotSupported(_)) => {
                 return Err("No graphics backend found that could be used.".into());
@@ -50,10 +68,11 @@ impl<S: AppState> AppSettings<S> {
         event_loop.set_control_flow(ControlFlow::Poll);
 
         let app = App {
-            window_attributes: self.window,
-            state: Some(self.state),
+            windows: self.windows,
+            runtimes: Vec::new(),
+            window_map: HashMap::new(),
             game_thread: None,
-            renderer: None,
+            state: Some(self.state),
         };
 
         Ok((event_loop, app))
@@ -78,41 +97,56 @@ impl<S: AppState> App<S> {
 
         let asset_store = AssetStore::new();
 
-        let (render_state_tx, render_state_rx) = mpsc::channel();
-        let state = self.state.take().unwrap();
+        let mut render_targets = Vec::new();
+        let mut runtimes = Vec::new();
 
-        #[allow(unused_mut)]
-        let mut game_thread = GameThread::new(state, asset_store.clone(), render_state_tx);
+        for (idx, window_attrs) in self.windows.iter().enumerate() {
+            let (render_state_tx, render_state_rx) = unbounded();
+            let (game_event_tx, game_event_rx) = unbounded();
 
-        let window = event_loop
-            .create_window(self.window_attributes.clone())
-            .unwrap();
+            render_targets.push((render_state_tx, game_event_tx));
 
-        #[cfg(target_arch = "wasm32")]
-        if let Some(canvas) = window.canvas() {
-            web_sys::window()
-                .unwrap()
-                .document()
-                .unwrap()
-                .get_elements_by_tag_name("body")
-                .get_with_index(0)
-                .unwrap()
-                .append_child(&canvas)
-                .unwrap();
+            let window_handle = event_loop.create_window(window_attrs.clone()).unwrap();
+
+            #[cfg(target_arch = "wasm32")]
+            if let Some(canvas) = window_handle.canvas() {
+                web_sys::window()
+                    .unwrap()
+                    .document()
+                    .unwrap()
+                    .get_elements_by_tag_name("body")
+                    .get_with_index(0)
+                    .unwrap()
+                    .append_child(&canvas)
+                    .unwrap();
+            }
+
+            trace!("Created render surface");
+
+            let renderer = match Renderer::new(render_state_rx, window_handle, asset_store.clone())
+            {
+                Ok(r) => r,
+                Err(err) => {
+                    error!("Couldn't create renderer: {err}");
+                    event_loop.exit();
+                    return;
+                }
+            };
+
+            trace!("Created Renderer");
+
+            let window_id = renderer.window().id();
+            self.window_map.insert(window_id, runtimes.len());
+            runtimes.push(WindowRuntime {
+                renderer,
+                game_event_rx,
+                drives_update: idx == 0,
+            });
         }
 
-        trace!("Created render surface");
-
-        let renderer = match Renderer::new(render_state_rx, window, asset_store) {
-            Ok(r) => r,
-            Err(err) => {
-                error!("Couldn't create renderer: {err}");
-                event_loop.exit();
-                return;
-            }
-        };
-
-        trace!("Created Renderer");
+        let state = self.state.take().expect("app state already initialized");
+        let channels = WorldChannels::from_targets(render_targets);
+        let game_thread = GameThread::new(state, asset_store.clone(), channels);
 
         if !game_thread.init() {
             error!("Couldn't initialize Game Thread");
@@ -120,36 +154,45 @@ impl<S: AppState> App<S> {
             return;
         }
 
-        trace!("Created Game Thread");
-
+        self.runtimes = runtimes;
         self.game_thread = Some(game_thread);
-        self.renderer = Some(renderer);
+
+        for runtime in &self.runtimes {
+            runtime.renderer.window().request_redraw();
+        }
     }
 
-    fn handle_events(game_thread: &GameThread<S>, renderer: &mut Renderer) -> bool {
-        for event in game_thread.receive_events() {
+    fn handle_events(runtime: &mut WindowRuntime, target: RenderTargetId) -> bool {
+        for event in runtime.game_event_rx.try_iter() {
             match event {
-                GameAppEvent::UpdateWindowTitle(title) => renderer.window_mut().set_title(&title),
-                GameAppEvent::SetCursorMode(locked, visible) => {
+                GameAppEvent::UpdateWindowTitle(event_target, title) if event_target == target => {
+                    runtime.renderer.window_mut().set_title(&title)
+                }
+                GameAppEvent::SetCursorMode(event_target, locked, visible)
+                    if event_target == target =>
+                {
                     if locked {
                         trace!("RT: Locked cursor");
-                        renderer
+                        runtime
+                            .renderer
                             .window_mut()
                             .set_cursor_grab(CursorGrabMode::Locked)
                             .or_else(|_| {
-                                renderer
+                                runtime
+                                    .renderer
                                     .window_mut()
                                     .set_cursor_grab(CursorGrabMode::Confined)
                             })
                             .expect("Couldn't grab cursor");
                     } else {
                         trace!("RT: Unlocked cursor");
-                        renderer
+                        runtime
+                            .renderer
                             .window_mut()
                             .set_cursor_grab(CursorGrabMode::None)
                             .expect("Couldn't ungrab cursor");
                     }
-                    renderer.window_mut().set_cursor_visible(visible);
+                    runtime.renderer.window_mut().set_cursor_visible(visible);
                     if visible {
                         trace!("RT: Shown cursor");
                     } else {
@@ -157,6 +200,16 @@ impl<S: AppState> App<S> {
                     }
                 }
                 GameAppEvent::Shutdown => return false,
+                _ => {}
+            }
+        }
+        true
+    }
+
+    fn handle_all_game_events(&mut self) -> bool {
+        for (idx, runtime) in self.runtimes.iter_mut().enumerate() {
+            if !Self::handle_events(runtime, idx) {
+                return false;
             }
         }
         true
@@ -166,7 +219,11 @@ impl<S: AppState> App<S> {
 impl<S: AppState> ApplicationHandler for App<S> {
     fn new_events(&mut self, event_loop: &ActiveEventLoop, cause: StartCause) {
         match cause {
-            StartCause::Poll => (),
+            StartCause::Poll => {
+                if !self.handle_all_game_events() {
+                    event_loop.exit();
+                }
+            }
             StartCause::Init => self.init(event_loop),
             StartCause::ResumeTimeReached { .. } => (),
             StartCause::WaitCancelled { .. } => (),
@@ -180,7 +237,7 @@ impl<S: AppState> ApplicationHandler for App<S> {
     fn window_event(
         &mut self,
         event_loop: &ActiveEventLoop,
-        _window_id: WindowId,
+        window_id: WindowId,
         event: WindowEvent,
     ) {
         let event_start = Instant::now();
@@ -188,37 +245,51 @@ impl<S: AppState> ApplicationHandler for App<S> {
             return;
         }
 
-        let game_thread = self.game_thread.as_ref().unwrap();
-        let renderer = self.renderer.as_mut().unwrap();
-
-        if !Self::handle_events(game_thread, renderer) {
+        if !self.handle_all_game_events() {
             event_loop.exit();
             return;
         }
 
+        let target_id = *self
+            .window_map
+            .get(&window_id)
+            .expect("runtime missing for window");
+        let Some(game_thread) = self.game_thread.as_ref() else {
+            return;
+        };
+        let drives_update = self
+            .runtimes
+            .get(target_id)
+            .map(|r| r.drives_update)
+            .unwrap_or(false);
+        let Some(runtime) = self.runtimes.get_mut(target_id) else {
+            return;
+        };
+
         match event {
             WindowEvent::RedrawRequested => {
-                renderer.tick_delta_time();
-                renderer.handle_events();
-                renderer.update();
-                renderer.render_frame();
-                if game_thread.next_frame().is_err() {
+                runtime.renderer.tick_delta_time();
+                runtime.renderer.handle_events();
+                runtime.renderer.update();
+                if !runtime.renderer.render_frame() {
                     event_loop.exit();
+                    return;
                 }
-                renderer.window.request_redraw();
+                if drives_update && game_thread.next_frame(target_id).is_err() {
+                    event_loop.exit();
+                    return;
+                }
+                runtime.renderer.window().request_redraw();
             }
-            WindowEvent::CloseRequested => {
-                // TODO: Quit Game Thread
-                event_loop.exit()
-            }
+            WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Resized(size) => {
-                renderer.resize(size);
-                if game_thread.resize(size).is_err() {
+                runtime.renderer.resize(size);
+                if game_thread.resize(target_id, size).is_err() {
                     event_loop.exit();
                 }
             }
             _ => {
-                if game_thread.input(event).is_err() {
+                if game_thread.input(target_id, event).is_err() {
                     event_loop.exit();
                 }
             }
@@ -233,13 +304,16 @@ impl<S: AppState> ApplicationHandler for App<S> {
         device_id: DeviceId,
         event: DeviceEvent,
     ) {
-        if self
-            .game_thread
-            .as_ref()
-            .unwrap()
-            .device_event(device_id, event)
-            .is_err()
-        {
+        if !self.handle_all_game_events() {
+            event_loop.exit();
+            return;
+        }
+
+        let Some(game_thread) = self.game_thread.as_ref() else {
+            return;
+        };
+
+        if game_thread.device_event(device_id, event.clone()).is_err() {
             event_loop.exit();
         }
     }

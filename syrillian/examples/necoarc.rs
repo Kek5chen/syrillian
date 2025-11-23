@@ -33,7 +33,6 @@ impl Default for NecoArc {
 
 impl AppState for NecoArc {
     fn init(&mut self, world: &mut World) -> Result<(), Box<dyn Error>> {
-        world.input.set_quit_on_escape(true);
         world.new_camera();
 
         let texture = Texture::load_image_from_memory(NECO_IMAGE)?.store(world);
@@ -77,6 +76,7 @@ impl AppState for NecoArc {
     }
 
     fn update(&mut self, world: &mut World) -> Result<(), Box<dyn Error>> {
+        world.input.auto_quit_on_escape();
         self.handle_click(world);
         Ok(())
     }

@@ -7,19 +7,19 @@
 use gilrs::Button;
 use kira::effect::reverb::ReverbBuilder;
 use kira::track::SpatialTrackBuilder;
-use log::info;
+use log::{LevelFilter, info};
 use nalgebra::UnitQuaternion;
 use rapier3d::parry::query::Ray;
 use rapier3d::prelude::QueryFilter;
 use std::error::Error;
-use syrillian::SyrillianApp;
 use syrillian::assets::scene_loader::SceneLoader;
 use syrillian::assets::{HMaterial, HSound, Sound, StoreType};
 use syrillian::assets::{Material, Shader};
 use syrillian::components::audio::AudioEmitter;
 use syrillian::components::{
-    CRef, Collider3D, FirstPersonCameraController, PointLightComponent, RigidBodyComponent,
-    RopeComponent, RotateComponent, SpotLightComponent, SpringComponent, Text2D, Text3D,
+    CRef, CameraComponent, Collider3D, FirstPersonCameraController, FreecamController,
+    PointLightComponent, RigidBodyComponent, RopeComponent, RotateComponent, SpotLightComponent,
+    SpringComponent, Text2D, Text3D,
 };
 use syrillian::core::{GameObjectExt, GameObjectId, GameObjectRef};
 use syrillian::prefabs::CubePrefab;
@@ -27,7 +27,9 @@ use syrillian::prefabs::first_person_player::FirstPersonPlayerPrefab;
 use syrillian::prefabs::prefab::Prefab;
 use syrillian::rendering::lights::Light;
 use syrillian::utils::frame_counter::FrameCounter;
-use syrillian::{AppState, World};
+use syrillian::winit::dpi::{PhysicalSize, Size};
+use syrillian::winit::window::WindowAttributes;
+use syrillian::{AppRuntime, AppState, World};
 use winit::event::MouseButton;
 use winit::keyboard::KeyCode;
 
@@ -46,8 +48,9 @@ struct DynamicMaterials {
     glass: HMaterial,
 }
 
-#[derive(Debug, SyrillianApp)]
+#[derive(Debug)]
 struct MyMain {
+    has_viewport: bool,
     frame_counter: FrameCounter,
     player: GameObjectRef,
     player_rb: CRef<RigidBodyComponent>,
@@ -58,12 +61,14 @@ struct MyMain {
     pop_sound: Option<HSound>,
     sound_cube_emitter: CRef<AudioEmitter>,
     sound_cube2_emitter: CRef<AudioEmitter>,
+    viewport_camera: Option<CRef<CameraComponent>>,
 }
 
 impl Default for MyMain {
     fn default() -> Self {
         unsafe {
             Self {
+                has_viewport: false,
                 frame_counter: FrameCounter::default(),
                 player: GameObjectRef::null(),
                 player_rb: CRef::null(),
@@ -74,6 +79,7 @@ impl Default for MyMain {
                 pop_sound: None,
                 sound_cube_emitter: CRef::null(),
                 sound_cube2_emitter: CRef::null(),
+                viewport_camera: None,
             }
         }
     }
@@ -81,12 +87,8 @@ impl Default for MyMain {
 
 impl AppState for MyMain {
     fn init(&mut self, world: &mut World) -> Result<(), Box<dyn Error>> {
-        Self::configure_input(world);
+        self.has_viewport = world.render_targets().len() > 1;
         world.spawn(&City);
-
-        let (player, player_rb) = Self::spawn_player(world);
-        self.player = player;
-        self.player_rb = player_rb;
 
         let materials = Self::build_dynamic_materials(world);
         Self::spawn_dynamic_cubes(world, &materials);
@@ -101,6 +103,16 @@ impl AppState for MyMain {
         self.light1 = light1;
         self.light2 = light2;
 
+        let (player, player_rb) = Self::spawn_player(world);
+        self.player = player;
+        self.player_rb = player_rb;
+
+        if self.has_viewport {
+            let camera = self.spawn_viewport_camera(world);
+            self.viewport_camera = Some(camera.clone());
+            world.set_active_camera_for_target(1, camera);
+        }
+
         world.print_objects();
 
         Ok(())
@@ -110,24 +122,20 @@ impl AppState for MyMain {
         self.frame_counter.new_frame_from_world(world);
         world.set_window_title(self.format_title());
 
-        self.update_camera_zoom(world);
         self.update_world_text(world);
-        self.handle_player_toggle(world);
-        self.update_pickup_interaction(world);
         self.update_audio_controls(world);
         self.spawn_on_demand_cubes(world);
+        self.update_camera_zoom(world);
+        self.handle_player_toggle(world);
+        self.update_pickup_interaction(world);
         self.handle_debug_overlays(world);
+        world.input.auto_quit_on_escape();
 
         Ok(())
     }
 }
 
 impl MyMain {
-    fn configure_input(world: &mut World) {
-        world.input.set_auto_cursor_lock(true);
-        world.input.set_quit_on_escape(true);
-    }
-
     fn spawn_player(world: &mut World) -> (GameObjectRef, CRef<RigidBodyComponent>) {
         let id = world.spawn(&FirstPersonPlayerPrefab);
         let mut player = world
@@ -138,6 +146,17 @@ impl MyMain {
             .expect("player prefab should include a rigid body");
         player.at(0.0, 20.0, 0.0);
         (player, player_rb)
+    }
+
+    fn spawn_viewport_camera(&self, world: &mut World) -> CRef<CameraComponent> {
+        let camera = world.new_camera();
+        let mut camera_obj = camera.parent();
+        camera_obj.transform.set_position(10.0, 15.0, 22.0);
+        camera_obj
+            .transform
+            .set_euler_rotation_deg(-15.0, 200.0, 0.0);
+        camera_obj.add_component::<FreecamController>();
+        camera
     }
 
     fn build_dynamic_materials(world: &World) -> DynamicMaterials {
@@ -522,6 +541,28 @@ impl MyMain {
 
         #[cfg(not(debug_assertions))]
         let _ = world;
+    }
+}
+
+fn main() {
+    let _ = env_logger::builder()
+        .filter_level(LevelFilter::Info)
+        .parse_default_env()
+        .try_init();
+
+    let viewport_window = WindowAttributes::default()
+        .with_inner_size(Size::Physical(PhysicalSize {
+            width: 960,
+            height: 720,
+        }))
+        .with_title("MyMain Viewport");
+
+    let app = MyMain::default()
+        .configure("MyMain", 1280, 720)
+        .with_additional_window(viewport_window);
+
+    if let Err(e) = app.run() {
+        syrillian::log::error!("{e}");
     }
 }
 

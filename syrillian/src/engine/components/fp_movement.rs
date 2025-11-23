@@ -1,6 +1,7 @@
 use crate::World;
 use crate::components::{
-    CRef, CWeak, Component, FirstPersonCameraController, NewComponent, RigidBodyComponent,
+    CRef, CWeak, CameraComponent, Component, FirstPersonCameraController, NewComponent,
+    RigidBodyComponent,
 };
 use crate::core::GameObjectId;
 use gilrs::Axis;
@@ -55,6 +56,14 @@ impl Component for FirstPersonMovementController {
     }
 
     fn update(&mut self, world: &mut World) {
+        let target = self
+            .parent
+            .get_component::<CameraComponent>()
+            .map(|c| c.render_target())
+            .unwrap_or(0);
+
+        world.input.set_active_target(target);
+
         let mut rigid = match self.rigid_body.upgrade(world) {
             None => {
                 warn!("Rigid body not set!");
@@ -71,7 +80,7 @@ impl Component for FirstPersonMovementController {
             Some(rigid) => rigid,
         };
 
-        if !world.input.is_cursor_locked() {
+        if !world.input.is_window_focused() || !world.input.is_cursor_locked() {
             return;
         }
 

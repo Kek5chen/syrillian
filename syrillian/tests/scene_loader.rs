@@ -55,7 +55,7 @@ fn load_scene_from_buffer_spawns_world_objects() {
     let bytes = std::fs::read(asset_path("testmodels/hampter/hampter.glb"))
         .expect("failed to read test model");
 
-    let (mut world, _render_rx, _event_rx) = unsafe { World::fresh() };
+    let (mut world, _render_rx, _event_rx) = World::fresh();
 
     let root =
         SceneLoader::load_buffer(world.as_mut(), &bytes).expect("scene should load into the world");
