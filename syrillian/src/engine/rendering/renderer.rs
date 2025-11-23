@@ -295,14 +295,12 @@ impl Renderer {
     }
 
     pub fn resize(&mut self, target_id: RenderTargetId, new_size: PhysicalSize<u32>) -> bool {
-        let Some(mut viewport) = self.viewports.remove(&target_id) else {
+        let Some(viewport) = self.viewports.get_mut(&target_id) else {
             warn!("Invalid Viewport #{target_id} referenced");
             return false;
         };
 
         viewport.resize(new_size, &self.state, &self.cache);
-
-        self.viewports.insert(target_id, viewport);
 
         true
     }
@@ -314,13 +312,11 @@ impl Renderer {
         };
 
         viewport.tick_delta_time();
-        if !self.render_frame(&mut viewport) {
-            return false;
-        }
+        let rendered = self.render_frame(&mut viewport);
 
         self.viewports.insert(target_id, viewport);
 
-        true
+        rendered
     }
 
     pub fn update(&mut self) {
@@ -609,7 +605,7 @@ impl Renderer {
         let surface = self.state.create_surface(&window).context(StateErr)?;
         let config = self
             .state
-            .surface_config(&surface, PhysicalSize::new(800, 600))
+            .surface_config(&surface, window.inner_size())
             .context(StateErr)?;
 
         self.window_map.insert(window.id(), target_id);
