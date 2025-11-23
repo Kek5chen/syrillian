@@ -24,7 +24,7 @@ impl Component for MyComponent {
 #[test]
 #[serial]
 fn component() {
-    let (mut world, _rx1, _rx2) = unsafe { World::fresh() };
+    let (mut world, _rx1, _rx2) = World::fresh();
     let mut obj = world.new_object("Test");
 
     let comp = obj.add_component::<MyComponent>();
@@ -69,7 +69,7 @@ fn component() {
 #[test]
 #[serial]
 fn check_typed() {
-    let (mut world, _rx1, _rx2) = unsafe { World::fresh() };
+    let (mut world, _rx1, _rx2) = World::fresh();
     let mut obj = world.new_object("Test");
 
     let comp = obj.add_component::<MyComponent>();

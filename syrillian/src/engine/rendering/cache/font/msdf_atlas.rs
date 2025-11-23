@@ -1,5 +1,4 @@
-use crate::World;
-use crate::assets::{HMaterial, HTexture, Material, Texture};
+use crate::assets::{AssetStore, HMaterial, HTexture, Material, Texture};
 use crate::rendering::AssetCache;
 use crate::rendering::glyph::GlyphBitmap;
 use etagere::{AtlasAllocator, size2};
@@ -56,7 +55,7 @@ impl MsdfAtlas {
         atlas_size: u32,
         shrinkage: f64,
         range: f64,
-        world: &World,
+        store: &AssetStore,
     ) -> Self {
         let face = Face::parse(&face_bytes, 0).expect("parse face");
         let units_per_em = face.units_per_em() as f32;
@@ -77,13 +76,13 @@ impl MsdfAtlas {
             height,
             TextureFormat::Rgba8Unorm, // linear
         );
-        let texture = world.assets.textures.add(texture);
+        let texture = store.textures.add(texture);
 
         let material = Material::builder()
             .name("MSDF Font Atlas")
             .diffuse_texture(texture)
             .build();
-        let material = world.assets.materials.add(material);
+        let material = store.materials.add(material);
 
         Self {
             width,

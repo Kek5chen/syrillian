@@ -107,20 +107,32 @@ impl Component for FirstPersonCameraController {
     }
 
     fn update(&mut self, world: &mut World) {
-        let input = &world.input;
+        let target = self
+            .parent
+            .get_component::<CameraComponent>()
+            .map(|c| c.render_target())
+            .unwrap_or(0);
+        world.input.set_active_target(target);
+
         let mut parent = self.parent;
         let transform = &mut parent.transform;
         let delta_time = world.delta_time().as_secs_f32();
 
-        self.calculate_jump_bob(delta_time);
-        self.update_jump_bob(transform);
-
-        if !input.is_cursor_locked() {
+        if !world.input.is_window_focused() {
             return;
         }
 
-        let mouse_delta = input.mouse_delta();
-        self.calculate_rotation(input, delta_time, mouse_delta);
+        world.input.auto_cursor_lock();
+
+        if !world.input.is_cursor_locked() {
+            return;
+        }
+
+        self.calculate_jump_bob(delta_time);
+        self.update_jump_bob(transform);
+
+        let mouse_delta = world.input.mouse_delta();
+        self.calculate_rotation(&world.input, delta_time, mouse_delta);
         self.update_rotation(transform, delta_time, mouse_delta);
         self.update_zoom();
     }

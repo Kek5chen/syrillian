@@ -1,8 +1,10 @@
 use crate::World;
-use crate::components::{Component, NewComponent};
+use crate::components::{CameraComponent, Component, NewComponent};
 use crate::core::GameObjectId;
+use crate::input::InputManager;
 use gilrs::{Axis, Button};
 use nalgebra::{UnitQuaternion, Vector2, Vector3};
+use winit::event::MouseButton;
 use winit::keyboard::KeyCode;
 
 pub struct FreecamController {
@@ -16,8 +18,8 @@ pub struct FreecamController {
 impl NewComponent for FreecamController {
     fn new(parent: GameObjectId) -> Self {
         FreecamController {
-            move_speed: 30.0f32,
-            look_sensitivity: 0.1f32,
+            move_speed: 12.0f32,
+            look_sensitivity: 0.12f32,
             parent,
             yaw: 0.0,
             pitch: 0.0,
@@ -27,29 +29,31 @@ impl NewComponent for FreecamController {
 
 impl Component for FreecamController {
     fn update(&mut self, world: &mut World) {
-        let delta_time = world.delta_time().as_secs_f32();
-        let transform = &mut self.parent.transform;
+        let target = self
+            .parent
+            .get_component::<CameraComponent>()
+            .map(|c| c.render_target())
+            .unwrap_or(0);
+        world.input.set_active_target(target);
 
+        if !world.input.is_window_focused() || !world.input.is_button_pressed(MouseButton::Left) {
+            return;
+        }
+
+        let delta_time = world.delta_time().as_secs_f32();
         let input = &world.input;
 
-        let gamepad_delta = Vector2::new(
-            -input.gamepad.axis(Axis::RightStickX),
-            input.gamepad.axis(Axis::RightStickY),
-        ) * 100.;
-        let delta = input.mouse_delta() + gamepad_delta;
-        self.yaw += delta.x * self.look_sensitivity / 30.0;
-        self.pitch += delta.y * self.look_sensitivity / 30.0;
+        if world.input.is_button_pressed(MouseButton::Left) {
+            self.update_view(input);
+        }
 
-        self.pitch = self.pitch.clamp(-89.0f32, 89.0f32);
+        self.update_movement(delta_time, input);
+    }
+}
 
-        let yaw_rotation =
-            UnitQuaternion::from_axis_angle(&Vector3::y_axis(), self.yaw.to_radians());
-        let pitch_rotation =
-            UnitQuaternion::from_axis_angle(&Vector3::x_axis(), self.pitch.to_radians());
-        let rotation = yaw_rotation * pitch_rotation;
-
-        transform.set_local_rotation(rotation);
-
+impl FreecamController {
+    fn update_movement(&mut self, delta_time: f32, input: &InputManager) {
+        let transform = &mut self.parent.transform;
         let mut fb_movement: f32 = 0.;
         if input.is_key_pressed(KeyCode::KeyW) {
             fb_movement += 1.;
@@ -110,5 +114,28 @@ impl Component for FreecamController {
             direction.normalize_mut();
             transform.translate(direction * move_speed * delta_time);
         }
+    }
+
+    fn update_view(&mut self, input: &InputManager) {
+        let transform = &mut self.parent.transform;
+
+        let gamepad_delta = Vector2::new(
+            -input.gamepad.axis(Axis::RightStickX),
+            input.gamepad.axis(Axis::RightStickY),
+        );
+        let mut delta = input.mouse_delta() + gamepad_delta * 80.0;
+        delta *= self.look_sensitivity;
+        self.yaw += delta.x;
+        self.pitch += delta.y;
+
+        self.pitch = self.pitch.clamp(-89.0f32, 89.0f32);
+
+        let yaw_rotation =
+            UnitQuaternion::from_axis_angle(&Vector3::y_axis(), self.yaw.to_radians());
+        let pitch_rotation =
+            UnitQuaternion::from_axis_angle(&Vector3::x_axis(), self.pitch.to_radians());
+        let rotation = yaw_rotation * pitch_rotation;
+
+        transform.set_local_rotation(rotation);
     }
 }

@@ -17,6 +17,7 @@ use crate::rendering::message::RenderMsg;
 use crate::rendering::proxies::SceneProxyBinding;
 use crate::rendering::render_data::RenderUniformData;
 use crate::rendering::{GPUDrawCtx, RenderPassType, State};
+use crossbeam_channel::Receiver;
 use itertools::Itertools;
 use log::{error, trace};
 use nalgebra::Vector2;
@@ -24,7 +25,7 @@ use snafu::ResultExt;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::mem::swap;
-use std::sync::{Arc, RwLock, mpsc};
+use std::sync::{Arc, RwLock};
 use syrillian_utils::debug_panic;
 use web_time::{Duration, Instant};
 use wgpu::{
@@ -50,7 +51,7 @@ pub struct Renderer {
 
     pub cache: AssetCache,
 
-    game_rx: mpsc::Receiver<RenderMsg>,
+    game_rx: Receiver<RenderMsg>,
     proxies: HashMap<TypedComponentId, SceneProxyBinding>,
     sorted_proxies: Vec<TypedComponentId>,
     pub(super) lights: LightManager,
@@ -64,7 +65,7 @@ pub struct Renderer {
 
 impl Renderer {
     pub fn new(
-        game_rx: mpsc::Receiver<RenderMsg>,
+        game_rx: Receiver<RenderMsg>,
         window: Window,
         store: Arc<AssetStore>,
     ) -> Result<Self> {

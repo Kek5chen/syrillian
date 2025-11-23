@@ -1,9 +1,9 @@
+use crate::AppState;
 use crate::assets::AssetStore;
-use crate::rendering::message::RenderMsg;
-use crate::{AppState, World};
+use crate::world::{World, WorldChannels};
+use crossbeam_channel::{Receiver, SendError, Sender, TryRecvError, unbounded};
 use log::{error, info};
-use std::sync::mpsc::{SendError, TryRecvError};
-use std::sync::{Arc, mpsc};
+use std::sync::Arc;
 use winit::dpi::PhysicalSize;
 use winit::event::{DeviceEvent, DeviceId, WindowEvent};
 
@@ -12,49 +12,52 @@ use std::marker::PhantomData;
 #[cfg(not(target_arch = "wasm32"))]
 use std::thread::JoinHandle;
 
+pub type RenderTargetId = usize;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RenderEventTarget {
+    pub id: RenderTargetId,
+}
+
 #[derive(Debug, Clone)]
 pub enum RenderAppEvent {
-    Init,
-    Input(WindowEvent),
+    Init(RenderEventTarget),
+    Input(RenderEventTarget, WindowEvent),
     DeviceEvent(DeviceId, DeviceEvent),
-    StartFrame,
-    Resize(PhysicalSize<u32>),
+    StartFrame(RenderEventTarget),
+    Resize(RenderEventTarget, PhysicalSize<u32>),
 }
 
 #[derive(Debug, Clone)]
 pub enum GameAppEvent {
-    UpdateWindowTitle(String),
-    SetCursorMode(bool, bool),
+    UpdateWindowTitle(RenderTargetId, String),
+    SetCursorMode(RenderTargetId, bool, bool),
     Shutdown,
 }
 
 impl GameAppEvent {
-    pub fn cursor_mode(locked: bool, visible: bool) -> GameAppEvent {
-        Self::SetCursorMode(locked, visible)
+    pub fn cursor_mode(target: RenderTargetId, locked: bool, visible: bool) -> GameAppEvent {
+        Self::SetCursorMode(target, locked, visible)
     }
 }
 
 #[cfg(not(target_arch = "wasm32"))]
 pub struct GameThread<S: AppState> {
     _thread: JoinHandle<()>,
-    render_event_tx: mpsc::Sender<RenderAppEvent>,
-    game_event_rx: mpsc::Receiver<GameAppEvent>,
-
+    render_event_tx: Sender<RenderAppEvent>,
     _state: PhantomData<S>,
 }
 
 #[cfg(target_arch = "wasm32")]
 pub struct GameThread<S: AppState> {
     thread: GameThreadInner<S>,
-    render_event_tx: mpsc::Sender<RenderAppEvent>,
-    game_event_rx: mpsc::Receiver<GameAppEvent>,
+    render_event_tx: Sender<RenderAppEvent>,
 }
 
 struct GameThreadInner<S: AppState> {
     world: Box<World>,
     state: S,
-    render_event_rx: mpsc::Receiver<RenderAppEvent>,
-    _game_event_tx: mpsc::Sender<GameAppEvent>,
+    render_event_rx: Receiver<RenderAppEvent>,
 }
 
 impl<S: AppState> GameThreadInner<S> {
@@ -62,19 +65,11 @@ impl<S: AppState> GameThreadInner<S> {
     fn spawn(
         state: S,
         asset_store: Arc<AssetStore>,
-        render_tx: mpsc::Sender<RenderMsg>,
-        game_event_tx: mpsc::Sender<GameAppEvent>,
-        render_event_rx: mpsc::Receiver<RenderAppEvent>,
+        channels: WorldChannels,
+        render_event_rx: Receiver<RenderAppEvent>,
     ) -> JoinHandle<()> {
         std::thread::spawn(move || {
-            Self::spawn_local(
-                state,
-                asset_store,
-                render_tx,
-                game_event_tx,
-                render_event_rx,
-            )
-            .run();
+            Self::spawn_local(state, asset_store, channels, render_event_rx).run();
             log::debug!("Game thread exited");
         })
     }
@@ -82,50 +77,49 @@ impl<S: AppState> GameThreadInner<S> {
     fn spawn_local(
         state: S,
         asset_store: Arc<AssetStore>,
-        render_tx: mpsc::Sender<RenderMsg>,
-        game_event_tx: mpsc::Sender<GameAppEvent>,
-        render_event_rx: mpsc::Receiver<RenderAppEvent>,
+        channels: WorldChannels,
+        render_event_rx: Receiver<RenderAppEvent>,
     ) -> GameThreadInner<S> {
-        let world = unsafe { World::new(asset_store, render_tx, game_event_tx.clone()) };
+        let world = World::new_with_channels(asset_store, channels);
 
         GameThreadInner {
             world,
             state,
             render_event_rx,
-            _game_event_tx: game_event_tx,
         }
     }
 }
 
 #[cfg(not(target_arch = "wasm32"))]
 impl<S: AppState> GameThread<S> {
-    pub fn new(state: S, asset_store: Arc<AssetStore>, render_tx: mpsc::Sender<RenderMsg>) -> Self {
-        let (render_event_tx, render_event_rx) = mpsc::channel();
-        let (game_event_tx, game_event_rx) = mpsc::channel();
+    pub fn new(state: S, asset_store: Arc<AssetStore>, channels: WorldChannels) -> Self {
+        let (render_event_tx, render_event_rx) = unbounded();
 
-        let thread = GameThreadInner::spawn(
-            state,
-            asset_store,
-            render_tx,
-            game_event_tx,
-            render_event_rx,
-        );
+        let thread = GameThreadInner::spawn(state, asset_store, channels, render_event_rx);
 
         GameThread {
             _thread: thread,
             render_event_tx,
-            game_event_rx,
             _state: PhantomData,
         }
     }
 
     pub fn init(&self) -> bool {
-        self.render_event_tx.send(RenderAppEvent::Init).is_ok()
+        self.render_event_tx
+            .send(RenderAppEvent::Init(RenderEventTarget { id: 0 }))
+            .is_ok()
     }
 
-    pub fn input(&self, event: WindowEvent) -> Result<(), Box<SendError<RenderAppEvent>>> {
+    pub fn input(
+        &self,
+        target: RenderTargetId,
+        event: WindowEvent,
+    ) -> Result<(), Box<SendError<RenderAppEvent>>> {
         self.render_event_tx
-            .send(RenderAppEvent::Input(event))
+            .send(RenderAppEvent::Input(
+                RenderEventTarget { id: target },
+                event,
+            ))
             .map_err(Box::new)
     }
 
@@ -139,79 +133,79 @@ impl<S: AppState> GameThread<S> {
             .map_err(Box::new)
     }
 
-    pub fn resize(&self, size: PhysicalSize<u32>) -> Result<(), Box<SendError<RenderAppEvent>>> {
+    pub fn resize(
+        &self,
+        target: RenderTargetId,
+        size: PhysicalSize<u32>,
+    ) -> Result<(), Box<SendError<RenderAppEvent>>> {
         self.render_event_tx
-            .send(RenderAppEvent::Resize(size))
+            .send(RenderAppEvent::Resize(
+                RenderEventTarget { id: target },
+                size,
+            ))
             .map_err(Box::new)
     }
 
-    pub fn receive_events(&self) -> impl Iterator<Item = GameAppEvent> {
-        self.game_event_rx.try_iter()
-    }
-
     // TODO: Think about if render frame and world should be linked
-    pub fn next_frame(&self) -> Result<(), Box<SendError<RenderAppEvent>>> {
+    pub fn next_frame(&self, target: RenderTargetId) -> Result<(), Box<SendError<RenderAppEvent>>> {
         self.render_event_tx
-            .send(RenderAppEvent::StartFrame)
+            .send(RenderAppEvent::StartFrame(RenderEventTarget { id: target }))
             .map_err(Box::new)
     }
 }
 
 #[cfg(target_arch = "wasm32")]
 impl<S: AppState> GameThread<S> {
-    pub fn new(state: S, asset_store: Arc<AssetStore>, render_tx: mpsc::Sender<RenderMsg>) -> Self {
-        let (render_event_tx, render_event_rx) = mpsc::channel();
-        let (game_event_tx, game_event_rx) = mpsc::channel();
+    pub fn new(state: S, asset_store: Arc<AssetStore>, channels: WorldChannels) -> Self {
+        let (render_event_tx, render_event_rx) = unbounded();
 
-        let thread = GameThreadInner::spawn_local(
-            state,
-            asset_store,
-            render_tx,
-            game_event_tx,
-            render_event_rx,
-        );
+        let thread = GameThreadInner::spawn_local(state, asset_store, channels, render_event_rx);
 
         GameThread {
             thread,
             render_event_tx,
-            game_event_rx,
         }
     }
     pub fn init(&mut self) -> bool {
         self.thread.init()
     }
 
-    pub fn input(&self, event: WindowEvent) -> Result<(), Box<SendError<RenderAppEvent>>> {
-        self.render_event_tx
-            .send(RenderAppEvent::Input(event))
-            .map_err(Box::new)
+    pub fn input(
+        &self,
+        target: RenderTargetId,
+        event: WindowEvent,
+    ) -> Result<(), SendError<RenderAppEvent>> {
+        self.render_event_tx.send(RenderAppEvent::Input(
+            RenderEventTarget { id: target },
+            event,
+        ))
     }
 
     pub fn device_event(
         &self,
+        target: RenderTargetId,
         device_id: DeviceId,
         event: DeviceEvent,
-    ) -> Result<(), Box<SendError<RenderAppEvent>>> {
+    ) -> Result<(), SendError<RenderAppEvent>> {
         self.render_event_tx
             .send(RenderAppEvent::DeviceEvent(device_id, event))
-            .map_err(Box::new)
     }
 
-    pub fn resize(&self, size: PhysicalSize<u32>) -> Result<(), Box<SendError<RenderAppEvent>>> {
-        self.render_event_tx
-            .send(RenderAppEvent::Resize(size))
-            .map_err(Box::new)
-    }
-
-    pub fn receive_events(&self) -> impl Iterator<Item = GameAppEvent> {
-        self.game_event_rx.try_iter()
+    pub fn resize(
+        &self,
+        target: RenderTargetId,
+        size: PhysicalSize<u32>,
+    ) -> Result<(), SendError<RenderAppEvent>> {
+        self.render_event_tx.send(RenderAppEvent::Resize(
+            RenderEventTarget { id: target },
+            size,
+        ))
     }
 
     // TODO: Think about if render frame and world should be linked
-    pub fn next_frame(&self) -> Result<(), Box<SendError<RenderAppEvent>>> {
+    pub fn next_frame(&self, target: RenderTargetId) -> Result<(), SendError<RenderAppEvent>> {
         self.render_event_tx
-            .send(RenderAppEvent::StartFrame)
-            .map_err(Box::new)
+            .send(RenderAppEvent::StartFrame(RenderEventTarget { id: target }))
     }
 }
 impl<S: AppState> GameThreadInner<S> {
@@ -238,11 +232,19 @@ impl<S: AppState> GameThreadInner<S> {
             };
 
             keep_running = match event {
-                RenderAppEvent::Init => self.init(),
-                RenderAppEvent::Input(event) => self.input(event),
-                RenderAppEvent::Resize(size) => self.resize(size),
-                RenderAppEvent::StartFrame => {
-                    update_signaled = true;
+                RenderAppEvent::Init(target) => {
+                    if target.id == 0 {
+                        self.init()
+                    } else {
+                        true
+                    }
+                }
+                RenderAppEvent::Input(target, event) => self.input(target.id, event),
+                RenderAppEvent::Resize(target, size) => self.resize(target.id, size),
+                RenderAppEvent::StartFrame(target) => {
+                    if target.id == 0 {
+                        update_signaled = true;
+                    }
                     true
                 }
                 RenderAppEvent::DeviceEvent(id, event) => self.device_event(id, &event),
@@ -255,6 +257,7 @@ impl<S: AppState> GameThreadInner<S> {
 
         if keep_running {
             if update_signaled {
+                self.world.input.set_active_target(0);
                 keep_running = self.update();
             }
         } else {
@@ -273,23 +276,21 @@ impl<S: AppState> GameThreadInner<S> {
         true
     }
 
-    pub fn input(&mut self, event: WindowEvent) -> bool {
-        self.world.input.process_event(&event);
+    pub fn input(&mut self, target: RenderTargetId, event: WindowEvent) -> bool {
+        self.world.input.set_active_target(target);
+        self.world.input.process_event(target, &event);
 
         true
     }
 
-    pub fn device_event(&mut self, _: DeviceId, event: &DeviceEvent) -> bool {
+    pub fn device_event(&mut self, _device: DeviceId, event: &DeviceEvent) -> bool {
         self.world.input.process_device_input_event(event);
 
         true
     }
 
-    pub fn resize(&mut self, size: PhysicalSize<u32>) -> bool {
-        // TODO: consider updating this in the CameraComponent
-        if let Some(mut cam) = self.world.active_camera().upgrade(&self.world) {
-            cam.resize(size.width as f32, size.height as f32);
-        }
+    pub fn resize(&mut self, target: RenderTargetId, size: PhysicalSize<u32>) -> bool {
+        self.world.set_viewport_size(target, size);
 
         true
     }

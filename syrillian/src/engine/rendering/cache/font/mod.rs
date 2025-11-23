@@ -1,4 +1,3 @@
-use crate::World;
 use crate::assets::{Font, HMaterial, HTexture};
 use crate::rendering::glyph::GlyphBitmap;
 use crate::rendering::msdf_atlas::{FontLineMetrics, GlyphAtlasEntry, MsdfAtlas};
@@ -16,9 +15,9 @@ use std::sync::{Arc, RwLock};
 use ttf_parser::Face;
 use wgpu::{Device, Queue};
 
-use fdsm::bezier::prepared::PreparedColoredShape;
 #[cfg(not(target_arch = "wasm32"))]
-use std::sync::mpsc;
+use crossbeam_channel::{Receiver, Sender, TryRecvError, unbounded};
+use fdsm::bezier::prepared::PreparedColoredShape;
 
 pub mod glyph;
 pub mod msdf_atlas;
@@ -28,9 +27,9 @@ pub struct FontAtlas {
     requested: DashSet<char>,
 
     #[cfg(not(target_arch = "wasm32"))]
-    gen_tx: mpsc::Sender<char>,
+    gen_tx: Sender<char>,
     #[cfg(not(target_arch = "wasm32"))]
-    ready_rx: mpsc::Receiver<GlyphBitmap>,
+    ready_rx: Receiver<GlyphBitmap>,
 
     #[cfg(target_arch = "wasm32")]
     pending: RwLock<std::collections::VecDeque<char>>,
@@ -48,10 +47,14 @@ pub struct FontAtlas {
 impl CacheType for Font {
     type Hot = FontAtlas;
 
-    fn upload(self, _device: &Device, _queue: &Queue, _cache: &AssetCache) -> Self::Hot {
-        let world = World::instance();
-
-        let msdf = MsdfAtlas::new(self.font_bytes.clone(), self.atlas_em_px, 16.0, 4.0, world);
+    fn upload(self, _device: &Device, _queue: &Queue, cache: &AssetCache) -> Self::Hot {
+        let msdf = MsdfAtlas::new(
+            self.font_bytes.clone(),
+            self.atlas_em_px,
+            16.0,
+            4.0,
+            cache.store(),
+        );
         let atlas = Arc::new(RwLock::new(msdf));
 
         #[cfg(not(target_arch = "wasm32"))]
@@ -126,7 +129,7 @@ impl FontAtlas {
                     updated |= self.integrate_ready_bitmap(cache, queue, bmp);
                     processed += 1;
                 }
-                Err(mpsc::TryRecvError::Empty) | Err(mpsc::TryRecvError::Disconnected) => break,
+                Err(TryRecvError::Empty) | Err(TryRecvError::Disconnected) => break,
             }
         }
 
@@ -189,11 +192,9 @@ impl FontAtlas {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn spawn_native_worker(
-    atlas: &Arc<RwLock<MsdfAtlas>>,
-) -> (mpsc::Sender<char>, mpsc::Receiver<GlyphBitmap>) {
-    let (tx_req, rx_req) = mpsc::channel();
-    let (tx_ready, rx_ready) = mpsc::channel();
+fn spawn_native_worker(atlas: &Arc<RwLock<MsdfAtlas>>) -> (Sender<char>, Receiver<GlyphBitmap>) {
+    let (tx_req, rx_req) = unbounded();
+    let (tx_ready, rx_ready) = unbounded();
     let (face_bytes, units_per_em, shrinkage, range) = atlas.read().unwrap().font_params();
 
     std::thread::spawn(move || {

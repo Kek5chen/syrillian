@@ -17,23 +17,128 @@ use crate::physics::PhysicsManager;
 use crate::prefabs::CameraPrefab;
 use crate::rendering::CPUDrawCtx;
 use crate::rendering::message::RenderMsg;
+use crate::windowing::game_thread::RenderTargetId;
 use log::info;
 use nalgebra::Matrix4;
 use slotmap::{HopSlotMap, Key};
 use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
 use std::mem::swap;
-use std::sync::{Arc, mpsc};
+use std::sync::Arc;
 use web_time::{Duration, Instant};
 
-static mut G_WORLD: *mut World = std::ptr::null_mut();
+use crossbeam_channel::unbounded;
+use crossbeam_channel::{Receiver, Sender};
+use winit::dpi::PhysicalSize;
+
+thread_local! {
+    static CURRENT_WORLD: Cell<*mut World> = const { Cell::new(std::ptr::null_mut()) };
+}
+
+#[derive(Debug)]
+struct WorldBinding {
+    previous: *mut World,
+}
+
+impl WorldBinding {
+    fn bind(world: &mut World) -> Self {
+        let ptr = world as *mut _;
+        let previous = CURRENT_WORLD.with(|slot| {
+            let prev = slot.get();
+            slot.set(ptr);
+            prev
+        });
+
+        WorldBinding { previous }
+    }
+}
+
+impl Drop for WorldBinding {
+    fn drop(&mut self) {
+        CURRENT_WORLD.with(|slot| {
+            slot.set(self.previous);
+        });
+    }
+}
+
+#[derive(Clone)]
+pub struct RenderTargetChannels {
+    pub render_tx: Sender<RenderMsg>,
+    pub game_event_tx: Sender<GameAppEvent>,
+    pub active_camera: CWeak<CameraComponent>,
+    pub viewport: Option<PhysicalSize<u32>>,
+}
+
+#[derive(Clone)]
+pub struct WorldChannels {
+    targets: Vec<RenderTargetChannels>,
+}
+
+impl WorldChannels {
+    pub fn from_targets(targets: Vec<(Sender<RenderMsg>, Sender<GameAppEvent>)>) -> Self {
+        let targets = targets
+            .into_iter()
+            .map(|(render_tx, game_event_tx)| RenderTargetChannels {
+                render_tx,
+                game_event_tx,
+                active_camera: CWeak::null(),
+                viewport: None,
+            })
+            .collect();
+
+        Self { targets }
+    }
+
+    pub fn primary_game_event_tx(&self) -> &Sender<GameAppEvent> {
+        &self
+            .targets
+            .first()
+            .expect("at least one render target expected")
+            .game_event_tx
+    }
+
+    pub fn game_event_txs(&self) -> Vec<Sender<GameAppEvent>> {
+        self.targets
+            .iter()
+            .map(|t| t.game_event_tx.clone())
+            .collect()
+    }
+
+    pub fn targets(&self) -> &[RenderTargetChannels] {
+        &self.targets
+    }
+
+    pub fn targets_mut(&mut self) -> &mut [RenderTargetChannels] {
+        &mut self.targets
+    }
+
+    pub fn set_active_camera(&mut self, target: RenderTargetId, camera: CWeak<CameraComponent>) {
+        if let Some(t) = self.targets.get_mut(target) {
+            t.active_camera = camera;
+        }
+    }
+
+    pub fn active_camera_for(&self, target: RenderTargetId) -> CWeak<CameraComponent> {
+        self.targets
+            .get(target)
+            .map(|t| t.active_camera)
+            .unwrap_or_else(CWeak::null)
+    }
+
+    pub fn set_viewport(&mut self, target: RenderTargetId, size: PhysicalSize<u32>) {
+        if let Some(t) = self.targets.get_mut(target) {
+            t.viewport = Some(size);
+        }
+    }
+}
 
 /// Central structure representing the running scene.
 ///
 /// The world keeps track of all [`GameObject`](GameObject)
 /// instances and provides access to shared systems like physics and input.
-/// Only one instance can exist at a time and is globally accessible via
-/// [`World::instance`].
+/// Bind a world to the current thread with [`World::bind_thread`] (done automatically in
+/// [`World::new`]) to access it through [`World::instance`]. Multiple worlds can live
+/// on different threads simultaneously.
 pub struct World {
     /// Collection of all game objects indexed by their unique ID
     pub objects: HopSlotMap<GameObjectId, Box<GameObject>>,
@@ -65,24 +170,13 @@ pub struct World {
 
     /// Flag indicating whether a shutdown has been requested
     requested_shutdown: bool,
-    render_tx: mpsc::Sender<RenderMsg>,
-    game_event_tx: mpsc::Sender<GameAppEvent>,
+    channels: WorldChannels,
+    thread_binding: Option<WorldBinding>,
 }
 
 impl World {
     /// Create a new, empty, clean-slate world with default data.
-    ///
-    /// This currently isn't really useful on its own because it
-    /// still depends on the initialization routine in the World::new
-    /// function. In the future, a better solution has to be found.
-    /// Than managing the world state globally. It's currently like this
-    /// because the GameObjectId Deref makes usage very - !! very !! simple.
-    /// At the cost of safety and some other things.
-    fn empty(
-        render_tx: mpsc::Sender<RenderMsg>,
-        game_event_tx: mpsc::Sender<GameAppEvent>,
-        assets: Arc<AssetStore>,
-    ) -> Box<World> {
+    fn empty(channels: WorldChannels, assets: Arc<AssetStore>) -> Box<World> {
         Box::new(World {
             objects: HopSlotMap::with_key(),
             components: ComponentStorage::default(),
@@ -91,7 +185,7 @@ impl World {
             pending_deletions: HashSet::new(),
             active_camera: CWeak::null(),
             physics: PhysicsManager::default(),
-            input: InputManager::new(game_event_tx.clone()),
+            input: InputManager::new(channels.game_event_txs()),
             assets,
             audio: AudioScene::default(),
 
@@ -100,46 +194,34 @@ impl World {
             last_frame_time: Instant::now(),
 
             requested_shutdown: false,
-            render_tx,
-            game_event_tx,
+            channels,
+            thread_binding: None,
         })
     }
 
-    /// # Safety
-    ///
-    /// Creates a new world through World::empty and registers it globally.
-    ///
-    /// This function must only be called once during program startup since the
-    /// returned world is stored in a global pointer for [`World::instance`]. The
-    /// world should remain alive for the duration of the application.
-    pub unsafe fn new(
+    /// Creates a new world through World::empty and binds it to the current thread.
+    pub fn new(
         assets: Arc<AssetStore>,
-        render_tx: mpsc::Sender<RenderMsg>,
-        game_event_tx: mpsc::Sender<GameAppEvent>,
+        render_tx: Sender<RenderMsg>,
+        game_event_tx: Sender<GameAppEvent>,
     ) -> Box<World> {
-        let mut world = World::empty(render_tx, game_event_tx, assets);
+        let channels = WorldChannels::from_targets(vec![(render_tx, game_event_tx)]);
+        World::new_with_channels(assets, channels)
+    }
 
-        // create a second mutable reference so G_WORLD can be used in (~un~)safe code
-        unsafe {
-            G_WORLD = world.as_mut();
-        }
-
+    pub fn new_with_channels(assets: Arc<AssetStore>, channels: WorldChannels) -> Box<World> {
+        let mut world = World::empty(channels, assets);
+        world.bind_thread();
         world
     }
 
-    /// # Safety
-    ///
     /// View [`World::new`]. This function will just set up data structures around the world
     /// needed for initialization. Mostly useful for tests.
-    pub unsafe fn fresh() -> (
-        Box<World>,
-        mpsc::Receiver<RenderMsg>,
-        mpsc::Receiver<GameAppEvent>,
-    ) {
-        let (tx1, rx1) = mpsc::channel();
-        let (tx2, rx2) = mpsc::channel();
+    pub fn fresh() -> (Box<World>, Receiver<RenderMsg>, Receiver<GameAppEvent>) {
+        let (tx1, rx1) = unbounded();
+        let (tx2, rx2) = unbounded();
         let store = AssetStore::new();
-        let world = unsafe { World::new(store, tx1, tx2) };
+        let world = World::new(store, tx1, tx2);
         (world, rx1, rx2)
     }
 
@@ -148,12 +230,46 @@ impl World {
     /// # Panics
     /// Panics if [`World::new`] has not been called beforehand.
     pub fn instance() -> &'static mut World {
-        unsafe {
-            if G_WORLD.is_null() {
-                panic!("G_WORLD has not been initialized");
-            }
-            &mut *G_WORLD
+        let ptr = CURRENT_WORLD.get();
+        if ptr.is_null() {
+            panic!("World has not been bound to this thread yet");
         }
+
+        unsafe { &mut *ptr }
+    }
+
+    pub(crate) fn is_thread_loaded() -> bool {
+        !CURRENT_WORLD.get().is_null()
+    }
+
+    /// Binds this world as the active [`World::instance`] for the current thread.
+    ///
+    /// The binding persists as long as the world is alive (or until it is rebound). This
+    /// enables having multiple worlds active on different threads without relying on a
+    /// single global mutable pointer.
+    pub fn bind_thread(&mut self) {
+        self.thread_binding = Some(WorldBinding::bind(self));
+    }
+
+    /// Replace the channels used to communicate with the render and windowing threads.
+    ///
+    /// This lets a world be moved between render targets without reconstructing it.
+    pub fn rewire_channels(&mut self, channels: WorldChannels) {
+        self.channels = channels;
+        self.input
+            .set_game_event_targets(self.channels.game_event_txs());
+    }
+
+    pub fn render_targets(&self) -> &[RenderTargetChannels] {
+        self.channels.targets()
+    }
+
+    pub fn render_targets_mut(&mut self) -> &mut [RenderTargetChannels] {
+        self.channels.targets_mut()
+    }
+
+    pub fn game_event_txs(&self) -> impl Iterator<Item = &Sender<GameAppEvent>> {
+        self.channels.targets().iter().map(|t| &t.game_event_tx)
     }
 
     /// Retrieves a reference to a game object by its ID
@@ -289,8 +405,35 @@ impl World {
         camera
     }
 
-    pub fn set_active_camera(&mut self, camera: CRef<CameraComponent>) {
+    pub fn set_active_camera(&mut self, mut camera: CRef<CameraComponent>) {
+        camera.set_render_target(0);
         self.active_camera = camera.downgrade();
+        self.channels.set_active_camera(0, self.active_camera);
+    }
+
+    pub fn set_active_camera_for_target(
+        &mut self,
+        target: RenderTargetId,
+        mut camera: CRef<CameraComponent>,
+    ) {
+        camera.set_render_target(target);
+        self.channels.set_active_camera(target, camera.downgrade());
+    }
+
+    fn active_camera_for_target(&self, target: RenderTargetId) -> CWeak<CameraComponent> {
+        let target_cam = self.channels.active_camera_for(target);
+        if target_cam.exists(self) {
+            target_cam
+        } else {
+            self.active_camera
+        }
+    }
+
+    pub fn set_viewport_size(&mut self, target: RenderTargetId, size: PhysicalSize<u32>) {
+        self.channels.set_viewport(target, size);
+        if let Some(mut cam) = self.active_camera_for_target(target).upgrade(self) {
+            cam.resize(size.width as f32, size.height as f32);
+        }
     }
 
     pub fn active_camera(&self) -> CWeak<CameraComponent> {
@@ -352,64 +495,80 @@ impl World {
     /// If you're using the App runtime, this will be handled for you. Only call this function
     /// if you are trying to use a detached world context.
     pub fn post_update(&mut self) {
-        let mut frame_proxy_batch = Vec::with_capacity(self.components.len());
         self.execute_component_func(Component::post_update);
         self.sync_fresh_components();
         self.sync_removed_components();
 
-        for (_, obj) in self.objects.iter() {
-            if !obj.is_alive() || !obj.transform.is_dirty() {
-                continue;
+        let target_count = self.channels.targets().len();
+        for target_id in 0..target_count {
+            let render_tx = {
+                let targets = self.channels.targets();
+                targets
+                    .get(target_id)
+                    .expect("render target missing")
+                    .render_tx
+                    .clone()
+            };
+            let mut target_batch = Vec::with_capacity(self.components.len());
+
+            for (_, obj) in self.objects.iter() {
+                if !obj.is_alive() || !obj.transform.is_dirty() {
+                    continue;
+                }
+                for comp in obj.components.iter() {
+                    target_batch.push(RenderMsg::UpdateTransform(
+                        comp.typed_id(),
+                        obj.transform.global_transform_matrix(),
+                    ));
+                }
             }
-            for comp in obj.components.iter() {
-                frame_proxy_batch.push(RenderMsg::UpdateTransform(
-                    comp.typed_id(),
-                    obj.transform.global_transform_matrix(),
-                ));
+            let world = self as *mut World;
+            for (ctid, comp) in self.components.iter_mut() {
+                let ctx = CPUDrawCtx::new(ctid, &mut target_batch);
+                unsafe {
+                    comp.update_proxy(&*world, ctx);
+                }
             }
+
+            if let Some(mut camera) = self.active_camera_for_target(target_id).upgrade(self) {
+                Self::push_camera_updates(&mut target_batch, &mut camera);
+            }
+
+            render_tx
+                .send(RenderMsg::CommandBatch(target_batch))
+                .unwrap();
         }
-        let world = self as *mut World;
-        for (ctid, comp) in self.components.iter_mut() {
-            let ctx = CPUDrawCtx::new(ctid, &mut frame_proxy_batch);
-            unsafe {
-                comp.update_proxy(&*world, ctx);
-            }
+    }
+
+    fn push_camera_updates(batch: &mut Vec<RenderMsg>, active_camera: &mut CRef<CameraComponent>) {
+        let obj = active_camera.parent();
+        if obj.transform.is_dirty() {
+            let pos = obj.transform.position();
+            let view_mat = obj.transform.view_matrix_rigid().to_matrix();
+            let view_proj_mat = active_camera.projection.as_matrix() * view_mat;
+            let inv_view_proj = view_proj_mat
+                .try_inverse()
+                .unwrap_or_else(Matrix4::identity);
+            batch.push(RenderMsg::UpdateActiveCamera(Box::new(move |cam| {
+                cam.view_mat = view_mat;
+                cam.proj_view_mat = view_proj_mat;
+                cam.inv_proj_view_mat = inv_view_proj;
+                cam.pos = pos;
+            })));
         }
 
-        if let Some(mut active_camera) = self.active_camera.upgrade(self) {
-            let obj = active_camera.parent();
-            if obj.transform.is_dirty() {
-                let pos = obj.transform.position();
-                let view_mat = obj.transform.view_matrix_rigid().to_matrix();
-                let view_proj_mat = active_camera.projection.as_matrix() * view_mat;
-                let inv_view_proj = view_proj_mat
+        if active_camera.is_projection_dirty() {
+            let proj_mat = active_camera.projection;
+            batch.push(RenderMsg::UpdateActiveCamera(Box::new(move |cam| {
+                cam.projection_mat = proj_mat;
+                let view_proj_mat = cam.projection_mat.as_matrix() * cam.view_mat;
+                cam.proj_view_mat = view_proj_mat;
+                cam.inv_proj_view_mat = view_proj_mat
                     .try_inverse()
                     .unwrap_or_else(Matrix4::identity);
-                frame_proxy_batch.push(RenderMsg::UpdateActiveCamera(Box::new(move |cam| {
-                    cam.view_mat = view_mat;
-                    cam.proj_view_mat = view_proj_mat;
-                    cam.inv_proj_view_mat = inv_view_proj;
-                    cam.pos = pos;
-                })));
-            }
-
-            if active_camera.is_projection_dirty() {
-                let proj_mat = active_camera.projection;
-                frame_proxy_batch.push(RenderMsg::UpdateActiveCamera(Box::new(move |cam| {
-                    cam.projection_mat = proj_mat;
-                    let view_proj_mat = cam.projection_mat.as_matrix() * cam.view_mat;
-                    cam.proj_view_mat = view_proj_mat;
-                    cam.inv_proj_view_mat = view_proj_mat
-                        .try_inverse()
-                        .unwrap_or_else(Matrix4::identity);
-                })));
-                active_camera.clear_projection_dirty();
-            }
+            })));
+            active_camera.clear_projection_dirty();
         }
-
-        self.render_tx
-            .send(RenderMsg::CommandBatch(frame_proxy_batch))
-            .unwrap();
     }
 
     /// Internally sync removed components to the Render Thread for proxy deletion
@@ -422,7 +581,9 @@ impl World {
         swap(&mut removed, &mut self.components.removed);
 
         for ctid in removed {
-            self.render_tx.send(RenderMsg::RemoveProxy(ctid)).unwrap();
+            for target in self.channels.targets() {
+                target.render_tx.send(RenderMsg::RemoveProxy(ctid)).unwrap();
+            }
         }
     }
 
@@ -440,15 +601,19 @@ impl World {
             };
 
             let local_to_world = comp.parent().transform.global_transform_matrix();
-            if let Some(proxy) = comp.create_render_proxy(self) {
-                self.render_tx
-                    .send(RenderMsg::RegisterProxy(cid, proxy, local_to_world))
-                    .unwrap();
-            }
-            if let Some(proxy) = comp.create_light_proxy(self) {
-                self.render_tx
-                    .send(RenderMsg::RegisterLightProxy(cid, proxy))
-                    .unwrap();
+            for target in self.channels.targets() {
+                if let Some(proxy) = comp.create_render_proxy(self) {
+                    target
+                        .render_tx
+                        .send(RenderMsg::RegisterProxy(cid, proxy, local_to_world))
+                        .unwrap();
+                }
+                if let Some(proxy) = comp.create_light_proxy(self) {
+                    target
+                        .render_tx
+                        .send(RenderMsg::RegisterLightProxy(cid, proxy))
+                        .unwrap();
+                }
             }
         }
     }
@@ -463,7 +628,7 @@ impl World {
                 child.transform.clear_dirty();
             }
         }
-        self.input.next_frame();
+        self.input.next_frame_all();
         self.tick_delta_time();
     }
 
@@ -585,9 +750,9 @@ impl World {
     }
 
     pub fn set_window_title(&mut self, title: String) {
-        self.game_event_tx
-            .send(GameAppEvent::UpdateWindowTitle(title))
-            .unwrap();
+        for (idx, tx) in self.game_event_txs().enumerate() {
+            let _ = tx.send(GameAppEvent::UpdateWindowTitle(idx, title.clone()));
+        }
     }
 
     /// Requests a shutdown of the world
@@ -599,7 +764,9 @@ impl World {
         }
         self.requested_shutdown = true;
         self.teardown();
-        let _ = self.game_event_tx.send(GameAppEvent::Shutdown);
+        for tx in self.game_event_txs() {
+            let _ = tx.send(GameAppEvent::Shutdown);
+        }
     }
 
     /// `true` if a shutdown has been requested, `false` otherwise

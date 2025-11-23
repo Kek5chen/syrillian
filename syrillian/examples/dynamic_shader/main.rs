@@ -3,13 +3,12 @@
 //! Hotkeys:
 //! - Use L to toggle / switch to the next debug rendering mode
 
+use crossbeam_channel::{Receiver, TryRecvError, unbounded};
 use log::{debug, error, info};
 use notify::{Config, Event, RecommendedWatcher, RecursiveMode, Watcher};
 use slotmap::Key;
 use std::error::Error;
 use std::fs;
-use std::sync::mpsc;
-use std::sync::mpsc::TryRecvError;
 use syrillian::assets::{HMaterial, HShader, Material, Shader, StoreType};
 use syrillian::components::RotateComponent;
 use syrillian::core::GameObjectId;
@@ -33,14 +32,17 @@ struct DynamicShaderExample {
     shader_id: HShader,
     material_id: HMaterial,
     _watcher: RecommendedWatcher,
-    file_events: mpsc::Receiver<notify::Result<Event>>,
+    file_events: Receiver<notify::Result<Event>>,
     cube: GameObjectId,
 }
 
 impl Default for DynamicShaderExample {
     fn default() -> Self {
-        let (tx, rx) = mpsc::channel();
-        let mut watcher = notify::recommended_watcher(tx).expect("failed to create watcher");
+        let (tx, rx) = unbounded();
+        let mut watcher = notify::recommended_watcher(move |res| {
+            let _ = tx.send(res);
+        })
+        .expect("failed to create watcher");
         watcher
             .watch(SHADER_PATH.as_ref(), RecursiveMode::NonRecursive)
             .expect("failed to start watcher");

@@ -17,6 +17,7 @@ pub struct CameraComponent {
     parent: GameObjectId,
     pub zoom_speed: f32,
     projection_dirty: bool,
+    render_target: usize,
 }
 
 impl CameraComponent {
@@ -119,6 +120,14 @@ impl CameraComponent {
         self.regenerate();
     }
 
+    pub fn render_target(&self) -> usize {
+        self.render_target
+    }
+
+    pub fn set_render_target(&mut self, target: usize) {
+        self.render_target = target;
+    }
+
     #[cfg(debug_assertions)]
     pub fn push_debug_ray(&mut self, ray: Ray, max_toi: f32) {
         use crate::components::CameraDebug;
@@ -152,6 +161,7 @@ impl NewComponent for CameraComponent {
             height: 600.0,
             parent,
             projection_dirty: true,
+            render_target: 0,
         }
     }
 }

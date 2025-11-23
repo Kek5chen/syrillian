@@ -190,8 +190,10 @@ impl Clone for GameObjectRef {
 
 impl Drop for GameObjectRef {
     fn drop(&mut self) {
-        let world = World::instance();
-        world.release_object(self.id);
+        if World::is_thread_loaded() {
+            let world = World::instance();
+            world.release_object(self.id);
+        }
     }
 }
 
