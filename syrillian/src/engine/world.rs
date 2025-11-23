@@ -62,73 +62,63 @@ impl Drop for WorldBinding {
 }
 
 #[derive(Clone)]
-pub struct RenderTargetChannels {
-    pub render_tx: Sender<RenderMsg>,
-    pub game_event_tx: Sender<GameAppEvent>,
+pub struct RenderTargets {
     pub active_camera: CWeak<CameraComponent>,
-    pub viewport: Option<PhysicalSize<u32>>,
+    pub size: PhysicalSize<u32>,
 }
 
 #[derive(Clone)]
 pub struct WorldChannels {
-    targets: Vec<RenderTargetChannels>,
+    pub render_tx: Sender<RenderMsg>,
+    pub game_event_tx: Sender<GameAppEvent>,
+    targets: HashMap<RenderTargetId, RenderTargets>,
+    next_target_id: RenderTargetId,
 }
 
 impl WorldChannels {
-    pub fn from_targets(targets: Vec<(Sender<RenderMsg>, Sender<GameAppEvent>)>) -> Self {
-        let targets = targets
-            .into_iter()
-            .map(|(render_tx, game_event_tx)| RenderTargetChannels {
-                render_tx,
-                game_event_tx,
-                active_camera: CWeak::null(),
-                viewport: None,
-            })
-            .collect();
-
-        Self { targets }
-    }
-
-    pub fn primary_game_event_tx(&self) -> &Sender<GameAppEvent> {
-        &self
-            .targets
-            .first()
-            .expect("at least one render target expected")
-            .game_event_tx
-    }
-
-    pub fn game_event_txs(&self) -> Vec<Sender<GameAppEvent>> {
-        self.targets
-            .iter()
-            .map(|t| t.game_event_tx.clone())
-            .collect()
-    }
-
-    pub fn targets(&self) -> &[RenderTargetChannels] {
-        &self.targets
-    }
-
-    pub fn targets_mut(&mut self) -> &mut [RenderTargetChannels] {
-        &mut self.targets
+    pub fn new(render_tx: Sender<RenderMsg>, game_event_tx: Sender<GameAppEvent>) -> Self {
+        Self {
+            render_tx,
+            game_event_tx,
+            targets: HashMap::new(),
+            next_target_id: 1,
+        }
     }
 
     pub fn set_active_camera(&mut self, target: RenderTargetId, camera: CWeak<CameraComponent>) {
-        if let Some(t) = self.targets.get_mut(target) {
+        if let Some(t) = self.targets.get_mut(&target) {
             t.active_camera = camera;
         }
     }
 
     pub fn active_camera_for(&self, target: RenderTargetId) -> CWeak<CameraComponent> {
         self.targets
-            .get(target)
+            .get(&target)
             .map(|t| t.active_camera)
             .unwrap_or_else(CWeak::null)
     }
 
-    pub fn set_viewport(&mut self, target: RenderTargetId, size: PhysicalSize<u32>) {
-        if let Some(t) = self.targets.get_mut(target) {
-            t.viewport = Some(size);
+    pub fn set_viewport_size(&mut self, target: RenderTargetId, size: PhysicalSize<u32>) {
+        if let Some(t) = self.targets.get_mut(&target) {
+            t.size = size;
         }
+    }
+
+    pub fn add_window(
+        &mut self,
+        active_camera: CWeak<CameraComponent>,
+        size: PhysicalSize<u32>,
+    ) -> RenderTargetId {
+        let target_id = self.next_target_id;
+        self.targets.insert(
+            target_id,
+            RenderTargets {
+                active_camera,
+                size,
+            },
+        );
+        self.next_target_id += 1;
+        target_id
     }
 }
 
@@ -151,7 +141,7 @@ pub struct World {
     /// Objects that are awaiting final removal once all references drop
     pending_deletions: HashSet<GameObjectId>,
     /// The currently active camera used for rendering
-    active_camera: CWeak<CameraComponent>,
+    main_active_camera: CWeak<CameraComponent>,
     /// Physics simulation system
     pub physics: PhysicsManager,
     /// Input management system
@@ -183,9 +173,9 @@ impl World {
             children: vec![],
             object_ref_counts: HashMap::new(),
             pending_deletions: HashSet::new(),
-            active_camera: CWeak::null(),
+            main_active_camera: CWeak::null(),
             physics: PhysicsManager::default(),
-            input: InputManager::new(channels.game_event_txs()),
+            input: InputManager::new(channels.game_event_tx.clone()),
             assets,
             audio: AudioScene::default(),
 
@@ -205,7 +195,7 @@ impl World {
         render_tx: Sender<RenderMsg>,
         game_event_tx: Sender<GameAppEvent>,
     ) -> Box<World> {
-        let channels = WorldChannels::from_targets(vec![(render_tx, game_event_tx)]);
+        let channels = WorldChannels::new(render_tx, game_event_tx);
         World::new_with_channels(assets, channels)
     }
 
@@ -257,19 +247,7 @@ impl World {
     pub fn rewire_channels(&mut self, channels: WorldChannels) {
         self.channels = channels;
         self.input
-            .set_game_event_targets(self.channels.game_event_txs());
-    }
-
-    pub fn render_targets(&self) -> &[RenderTargetChannels] {
-        self.channels.targets()
-    }
-
-    pub fn render_targets_mut(&mut self) -> &mut [RenderTargetChannels] {
-        self.channels.targets_mut()
-    }
-
-    pub fn game_event_txs(&self) -> impl Iterator<Item = &Sender<GameAppEvent>> {
-        self.channels.targets().iter().map(|t| &t.game_event_tx)
+            .set_game_event_tx(self.channels.game_event_tx.clone());
     }
 
     /// Retrieves a reference to a game object by its ID
@@ -397,7 +375,7 @@ impl World {
             .get_component::<CameraComponent>()
             .expect("CameraPrefab should always attach a camera to itself");
 
-        if !self.active_camera.exists(self) {
+        if !self.main_active_camera.exists(self) {
             self.add_child(obj);
             self.set_active_camera(camera.clone());
         }
@@ -407,8 +385,8 @@ impl World {
 
     pub fn set_active_camera(&mut self, mut camera: CRef<CameraComponent>) {
         camera.set_render_target(0);
-        self.active_camera = camera.downgrade();
-        self.channels.set_active_camera(0, self.active_camera);
+        self.main_active_camera = camera.downgrade();
+        self.channels.set_active_camera(0, self.main_active_camera);
     }
 
     pub fn set_active_camera_for_target(
@@ -425,19 +403,30 @@ impl World {
         if target_cam.exists(self) {
             target_cam
         } else {
-            self.active_camera
+            self.main_active_camera
         }
     }
 
     pub fn set_viewport_size(&mut self, target: RenderTargetId, size: PhysicalSize<u32>) {
-        self.channels.set_viewport(target, size);
+        self.channels.set_viewport_size(target, size);
         if let Some(mut cam) = self.active_camera_for_target(target).upgrade(self) {
             cam.resize(size.width as f32, size.height as f32);
         }
     }
 
+    pub fn create_window(&mut self) -> RenderTargetId {
+        let target_id = self
+            .channels
+            .add_window(self.main_active_camera, PhysicalSize::new(800, 600));
+        let _ = self
+            .channels
+            .game_event_tx
+            .send(GameAppEvent::AddWindow(target_id));
+        target_id
+    }
+
     pub fn active_camera(&self) -> CWeak<CameraComponent> {
-        self.active_camera
+        self.main_active_camera
     }
 
     /// Adds a game object as a child of the world (root level)
@@ -499,48 +488,48 @@ impl World {
         self.sync_fresh_components();
         self.sync_removed_components();
 
-        let target_count = self.channels.targets().len();
-        for target_id in 0..target_count {
-            let render_tx = {
-                let targets = self.channels.targets();
-                targets
-                    .get(target_id)
-                    .expect("render target missing")
-                    .render_tx
-                    .clone()
-            };
-            let mut target_batch = Vec::with_capacity(self.components.len());
+        let mut command_batch = Vec::with_capacity(self.components.len());
 
-            for (_, obj) in self.objects.iter() {
-                if !obj.is_alive() || !obj.transform.is_dirty() {
-                    continue;
-                }
-                for comp in obj.components.iter() {
-                    target_batch.push(RenderMsg::UpdateTransform(
-                        comp.typed_id(),
-                        obj.transform.global_transform_matrix(),
-                    ));
-                }
+        for (_, obj) in self.objects.iter() {
+            if !obj.is_alive() || !obj.transform.is_dirty() {
+                continue;
             }
-            let world = self as *mut World;
-            for (ctid, comp) in self.components.iter_mut() {
-                let ctx = CPUDrawCtx::new(ctid, &mut target_batch);
-                unsafe {
-                    comp.update_proxy(&*world, ctx);
-                }
+            for comp in obj.components.iter() {
+                command_batch.push(RenderMsg::UpdateTransform(
+                    comp.typed_id(),
+                    obj.transform.global_transform_matrix(),
+                ));
             }
-
-            if let Some(mut camera) = self.active_camera_for_target(target_id).upgrade(self) {
-                Self::push_camera_updates(&mut target_batch, &mut camera);
-            }
-
-            render_tx
-                .send(RenderMsg::CommandBatch(target_batch))
-                .unwrap();
         }
+        let world = self as *mut World;
+        for (ctid, comp) in self.components.iter_mut() {
+            let ctx = CPUDrawCtx::new(ctid, &mut command_batch);
+            unsafe {
+                comp.update_proxy(&*world, ctx);
+            }
+        }
+
+        if let Some(mut camera) = self.active_camera().upgrade(self) {
+            Self::push_camera_updates(0, &mut command_batch, &mut camera);
+        }
+
+        for target_id in self.channels.targets.keys().copied() {
+            if let Some(mut camera) = self.active_camera_for_target(target_id).upgrade(self) {
+                Self::push_camera_updates(target_id, &mut command_batch, &mut camera);
+            }
+        }
+
+        self.channels
+            .render_tx
+            .send(RenderMsg::CommandBatch(command_batch))
+            .unwrap();
     }
 
-    fn push_camera_updates(batch: &mut Vec<RenderMsg>, active_camera: &mut CRef<CameraComponent>) {
+    fn push_camera_updates(
+        target_id: RenderTargetId,
+        batch: &mut Vec<RenderMsg>,
+        active_camera: &mut CRef<CameraComponent>,
+    ) {
         let obj = active_camera.parent();
         if obj.transform.is_dirty() {
             let pos = obj.transform.position();
@@ -549,24 +538,30 @@ impl World {
             let inv_view_proj = view_proj_mat
                 .try_inverse()
                 .unwrap_or_else(Matrix4::identity);
-            batch.push(RenderMsg::UpdateActiveCamera(Box::new(move |cam| {
-                cam.view_mat = view_mat;
-                cam.proj_view_mat = view_proj_mat;
-                cam.inv_proj_view_mat = inv_view_proj;
-                cam.pos = pos;
-            })));
+            batch.push(RenderMsg::UpdateActiveCamera(
+                target_id,
+                Box::new(move |cam| {
+                    cam.view_mat = view_mat;
+                    cam.proj_view_mat = view_proj_mat;
+                    cam.inv_proj_view_mat = inv_view_proj;
+                    cam.pos = pos;
+                }),
+            ));
         }
 
         if active_camera.is_projection_dirty() {
             let proj_mat = active_camera.projection;
-            batch.push(RenderMsg::UpdateActiveCamera(Box::new(move |cam| {
-                cam.projection_mat = proj_mat;
-                let view_proj_mat = cam.projection_mat.as_matrix() * cam.view_mat;
-                cam.proj_view_mat = view_proj_mat;
-                cam.inv_proj_view_mat = view_proj_mat
-                    .try_inverse()
-                    .unwrap_or_else(Matrix4::identity);
-            })));
+            batch.push(RenderMsg::UpdateActiveCamera(
+                target_id,
+                Box::new(move |cam| {
+                    cam.projection_mat = proj_mat;
+                    let view_proj_mat = cam.projection_mat.as_matrix() * cam.view_mat;
+                    cam.proj_view_mat = view_proj_mat;
+                    cam.inv_proj_view_mat = view_proj_mat
+                        .try_inverse()
+                        .unwrap_or_else(Matrix4::identity);
+                }),
+            ));
             active_camera.clear_projection_dirty();
         }
     }
@@ -581,9 +576,10 @@ impl World {
         swap(&mut removed, &mut self.components.removed);
 
         for ctid in removed {
-            for target in self.channels.targets() {
-                target.render_tx.send(RenderMsg::RemoveProxy(ctid)).unwrap();
-            }
+            self.channels
+                .render_tx
+                .send(RenderMsg::RemoveProxy(ctid))
+                .unwrap();
         }
     }
 
@@ -601,19 +597,17 @@ impl World {
             };
 
             let local_to_world = comp.parent().transform.global_transform_matrix();
-            for target in self.channels.targets() {
-                if let Some(proxy) = comp.create_render_proxy(self) {
-                    target
-                        .render_tx
-                        .send(RenderMsg::RegisterProxy(cid, proxy, local_to_world))
-                        .unwrap();
-                }
-                if let Some(proxy) = comp.create_light_proxy(self) {
-                    target
-                        .render_tx
-                        .send(RenderMsg::RegisterLightProxy(cid, proxy))
-                        .unwrap();
-                }
+            if let Some(proxy) = comp.create_render_proxy(self) {
+                self.channels
+                    .render_tx
+                    .send(RenderMsg::RegisterProxy(cid, proxy, local_to_world))
+                    .unwrap();
+            }
+            if let Some(proxy) = comp.create_light_proxy(self) {
+                self.channels
+                    .render_tx
+                    .send(RenderMsg::RegisterLightProxy(cid, proxy))
+                    .unwrap();
             }
         }
     }
@@ -749,10 +743,15 @@ impl World {
         self.schedule_object_removal(caller);
     }
 
-    pub fn set_window_title(&mut self, title: String) {
-        for (idx, tx) in self.game_event_txs().enumerate() {
-            let _ = tx.send(GameAppEvent::UpdateWindowTitle(idx, title.clone()));
-        }
+    pub fn set_default_window_title(&mut self, title: String) {
+        self.set_window_title(0, title);
+    }
+
+    pub fn set_window_title(&mut self, target_id: RenderTargetId, title: String) {
+        let _ = self
+            .channels
+            .game_event_tx
+            .send(GameAppEvent::UpdateWindowTitle(target_id, title));
     }
 
     /// Requests a shutdown of the world
@@ -764,9 +763,7 @@ impl World {
         }
         self.requested_shutdown = true;
         self.teardown();
-        for tx in self.game_event_txs() {
-            let _ = tx.send(GameAppEvent::Shutdown);
-        }
+        let _ = self.channels.game_event_tx.send(GameAppEvent::Shutdown);
     }
 
     /// `true` if a shutdown has been requested, `false` otherwise

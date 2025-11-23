@@ -22,20 +22,18 @@ use syrillian::components::{
     SpringComponent, Text2D, Text3D,
 };
 use syrillian::core::{GameObjectExt, GameObjectId, GameObjectRef};
+use syrillian::game_thread::RenderTargetId;
 use syrillian::prefabs::CubePrefab;
 use syrillian::prefabs::first_person_player::FirstPersonPlayerPrefab;
 use syrillian::prefabs::prefab::Prefab;
-use syrillian::rendering::lights::Light;
-use syrillian::utils::frame_counter::FrameCounter;
-use syrillian::winit::dpi::{PhysicalSize, Size};
-use syrillian::winit::window::WindowAttributes;
-use syrillian::{AppRuntime, AppState, World};
-use winit::event::MouseButton;
-use winit::keyboard::KeyCode;
-
 #[cfg(debug_assertions)]
 use syrillian::rendering::DebugRenderer;
 use syrillian::rendering::glyph::TextAlignment;
+use syrillian::rendering::lights::Light;
+use syrillian::utils::frame_counter::FrameCounter;
+use syrillian::{AppRuntime, AppState, World};
+use winit::event::MouseButton;
+use winit::keyboard::KeyCode;
 // const NECO_IMAGE: &[u8; 1293] = include_bytes!("assets/neco.jpg");
 
 const SHADER1: &str = include_str!("dynamic_shader/shader.wgsl");
@@ -50,7 +48,6 @@ struct DynamicMaterials {
 
 #[derive(Debug)]
 struct MyMain {
-    has_viewport: bool,
     frame_counter: FrameCounter,
     player: GameObjectRef,
     player_rb: CRef<RigidBodyComponent>,
@@ -62,13 +59,13 @@ struct MyMain {
     sound_cube_emitter: CRef<AudioEmitter>,
     sound_cube2_emitter: CRef<AudioEmitter>,
     viewport_camera: Option<CRef<CameraComponent>>,
+    viewport_window: RenderTargetId,
 }
 
 impl Default for MyMain {
     fn default() -> Self {
         unsafe {
             Self {
-                has_viewport: false,
                 frame_counter: FrameCounter::default(),
                 player: GameObjectRef::null(),
                 player_rb: CRef::null(),
@@ -80,6 +77,7 @@ impl Default for MyMain {
                 sound_cube_emitter: CRef::null(),
                 sound_cube2_emitter: CRef::null(),
                 viewport_camera: None,
+                viewport_window: 0,
             }
         }
     }
@@ -87,7 +85,6 @@ impl Default for MyMain {
 
 impl AppState for MyMain {
     fn init(&mut self, world: &mut World) -> Result<(), Box<dyn Error>> {
-        self.has_viewport = world.render_targets().len() > 1;
         world.spawn(&City);
 
         let materials = Self::build_dynamic_materials(world);
@@ -107,11 +104,11 @@ impl AppState for MyMain {
         self.player = player;
         self.player_rb = player_rb;
 
-        if self.has_viewport {
-            let camera = self.spawn_viewport_camera(world);
-            self.viewport_camera = Some(camera.clone());
-            world.set_active_camera_for_target(1, camera);
-        }
+        self.viewport_window = world.create_window();
+
+        let camera = self.spawn_viewport_camera(world);
+        self.viewport_camera = Some(camera.clone());
+        world.set_active_camera_for_target(self.viewport_window, camera);
 
         world.print_objects();
 
@@ -120,7 +117,8 @@ impl AppState for MyMain {
 
     fn update(&mut self, world: &mut World) -> Result<(), Box<dyn Error>> {
         self.frame_counter.new_frame_from_world(world);
-        world.set_window_title(self.format_title());
+        world.set_window_title(0, self.format_title(false));
+        world.set_window_title(self.viewport_window, self.format_title(true));
 
         self.update_world_text(world);
         self.update_audio_controls(world);
@@ -378,16 +376,17 @@ impl MyMain {
         }
     }
 
-    fn format_title(&self) -> String {
+    fn format_title(&self, is_viewport: bool) -> String {
         let debug_or_release = if cfg!(debug_assertions) {
             "[DEBUG]"
         } else {
             "[RELEASE]"
         };
 
+        let viewport = if is_viewport { "(Viewport)" } else { "" };
+
         format!(
-            "{} {} - FPS: [ {} ]",
-            debug_or_release,
+            "{debug_or_release} {} {viewport} - FPS: [ {} ]",
             syrillian::ENGINE_STR,
             self.frame_counter.fps(),
         )
@@ -550,16 +549,7 @@ fn main() {
         .parse_default_env()
         .try_init();
 
-    let viewport_window = WindowAttributes::default()
-        .with_inner_size(Size::Physical(PhysicalSize {
-            width: 960,
-            height: 720,
-        }))
-        .with_title("MyMain Viewport");
-
-    let app = MyMain::default()
-        .configure("MyMain", 1280, 720)
-        .with_additional_window(viewport_window);
+    let app = MyMain::default().configure("MyMain", 1280, 720);
 
     if let Err(e) = app.run() {
         syrillian::log::error!("{e}");

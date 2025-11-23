@@ -26,25 +26,21 @@ pub trait AppState: Sized + Send + 'static {
 impl<S: AppState> AppRuntime for S {
     fn configure(self, title: &str, width: u32, height: u32) -> AppSettings<Self> {
         AppSettings {
-            windows: vec![
-                WindowAttributes::default()
-                    .with_inner_size(Size::Physical(PhysicalSize { width, height }))
-                    .with_title(title),
-            ],
+            main_window: WindowAttributes::default()
+                .with_inner_size(Size::Physical(PhysicalSize { width, height }))
+                .with_title(title),
             state: self,
         }
     }
 
     fn default_config(self) -> AppSettings<Self> {
         AppSettings {
-            windows: vec![
-                WindowAttributes::default()
-                    .with_inner_size(Size::Physical(PhysicalSize {
-                        width: 800,
-                        height: 600,
-                    }))
-                    .with_title("Syrillian Window"),
-            ],
+            main_window: WindowAttributes::default()
+                .with_inner_size(Size::Physical(PhysicalSize {
+                    width: 800,
+                    height: 600,
+                }))
+                .with_title("Syrillian Window"),
             state: self,
         }
     }

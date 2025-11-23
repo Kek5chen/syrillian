@@ -3,7 +3,6 @@ use crate::rendering::{GPUDrawCtx, Renderer};
 use nalgebra::{Affine3, Matrix4};
 use std::any::Any;
 use std::fmt::Debug;
-use winit::window::Window;
 
 pub mod image;
 pub mod mesh_proxy;
@@ -58,7 +57,6 @@ pub trait SceneProxy: Send + Any + Debug {
         &mut self,
         renderer: &Renderer,
         data: &mut dyn Any,
-        window: &Window,
         local_to_world: &Matrix4<f32>,
     );
     fn render(
@@ -99,11 +97,10 @@ impl SceneProxyBinding {
         self.local_to_world = local_to_world;
     }
 
-    pub fn update(&mut self, renderer: &Renderer, window: &Window) {
+    pub fn update(&mut self, renderer: &Renderer) {
         self.proxy.update_render(
             renderer,
             self.proxy_data.as_mut(),
-            window,
             self.local_to_world.matrix(),
         );
     }

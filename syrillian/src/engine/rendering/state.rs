@@ -6,12 +6,12 @@
 
 use futures::executor::block_on;
 use snafu::{ResultExt, Snafu, ensure};
+use std::mem;
 use std::sync::Arc;
 use wgpu::{
-    Adapter, CompositeAlphaMode, CreateSurfaceError, Device, DeviceDescriptor, Extent3d, Features,
-    Instance, InstanceDescriptor, Limits, MemoryHints, PowerPreference, PresentMode, Queue,
-    RequestAdapterOptions, RequestDeviceError, Surface, SurfaceConfiguration, Texture,
-    TextureDescriptor, TextureDimension, TextureFormat, TextureUsages,
+    Adapter, CreateSurfaceError, Device, DeviceDescriptor, Features, Instance, InstanceDescriptor,
+    Limits, MemoryHints, PowerPreference, Queue, RequestAdapterOptions, RequestDeviceError,
+    Surface, SurfaceConfiguration, TextureFormat,
 };
 use winit::dpi::PhysicalSize;
 use winit::window::Window;
@@ -29,19 +29,17 @@ pub enum StateError {
     ))]
     ColorFormatNotAvailable { formats: Vec<TextureFormat> },
 
-    #[snafu(display("Failed to create surface: {source}"))]
+    #[snafu(display("Unable to create surface: {source}"))]
     CreateSurface { source: CreateSurfaceError },
 }
 
 #[allow(unused)]
 pub struct State {
     pub(crate) instance: Instance,
-    pub(crate) surface: Surface<'static>,
-    pub(crate) config: SurfaceConfiguration,
+    pub(crate) adapter: Adapter,
     pub(crate) device: Arc<Device>,
     pub(crate) queue: Arc<Queue>,
-    pub(crate) size: PhysicalSize<u32>,
-    pub(crate) depth_texture: Texture,
+    pub(crate) preferred_format: TextureFormat,
 }
 
 impl State {
@@ -49,20 +47,11 @@ impl State {
         Instance::new(&InstanceDescriptor::from_env_or_default())
     }
 
-    fn setup_surface(instance: &Instance, window: &Window) -> Result<Surface<'static>> {
-        unsafe {
-            // We are creating a 'static lifetime out of a local reference
-            // VERY UNSAFE: Make sure `window` lives as long as `surface`
-            let surface = instance.create_surface(window).context(CreateSurfaceErr)?;
-            Ok(std::mem::transmute::<Surface, Surface<'static>>(surface))
-        }
-    }
-
-    async fn setup_adapter(instance: &Instance, surface: &Surface<'_>) -> Adapter {
+    async fn setup_adapter(instance: &Instance, surface: Option<&Surface<'static>>) -> Adapter {
         instance
             .request_adapter(&RequestAdapterOptions {
                 power_preference: PowerPreference::HighPerformance,
-                compatible_surface: Some(surface),
+                compatible_surface: surface,
                 ..RequestAdapterOptions::default()
             })
             .await
@@ -100,99 +89,102 @@ impl State {
         Ok((Arc::new(device), Arc::new(queue)))
     }
 
-    fn configure_surface(
-        size: &PhysicalSize<u32>,
-        surface: &Surface,
-        adapter: &Adapter,
-        device: &Device,
-    ) -> Result<SurfaceConfiguration> {
-        let caps = surface.get_capabilities(adapter);
-
-        let present_mode = if caps.present_modes.contains(&PresentMode::Mailbox) {
-            PresentMode::Mailbox
-        } else if caps.present_modes.contains(&PresentMode::Immediate) {
-            PresentMode::Immediate
-        } else {
-            caps.present_modes
-                .first()
-                .cloned()
-                .unwrap_or(PresentMode::Fifo)
-        };
-
+    fn preferred_surface_format(formats: &[TextureFormat]) -> Result<TextureFormat> {
         ensure!(
-            caps.formats.contains(&TextureFormat::Bgra8UnormSrgb),
+            formats.contains(&TextureFormat::Bgra8UnormSrgb),
             ColorFormatNotAvailableErr {
-                formats: caps.formats
+                formats: formats.to_vec()
             }
         );
 
-        let config = SurfaceConfiguration {
-            usage: TextureUsages::RENDER_ATTACHMENT,
-            format: TextureFormat::Bgra8UnormSrgb,
+        Ok(TextureFormat::Bgra8UnormSrgb)
+    }
+
+    fn clamp_size(size: PhysicalSize<u32>) -> PhysicalSize<u32> {
+        PhysicalSize {
+            width: size.width.max(1),
+            height: size.height.max(1),
+        }
+    }
+
+    pub fn surface_config(
+        &self,
+        surface: &Surface<'static>,
+        size: PhysicalSize<u32>,
+    ) -> Result<SurfaceConfiguration> {
+        let caps = surface.get_capabilities(&self.adapter);
+        let format = Self::preferred_surface_format(&caps.formats)?;
+        let size = Self::clamp_size(size);
+
+        Ok(SurfaceConfiguration {
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            format,
             width: size.width,
             height: size.height,
-            desired_maximum_frame_latency: 2,
-            present_mode,
-            alpha_mode: CompositeAlphaMode::Auto,
+            present_mode: caps
+                .present_modes
+                .first()
+                .copied()
+                .unwrap_or(wgpu::PresentMode::Fifo),
+            alpha_mode: caps
+                .alpha_modes
+                .first()
+                .copied()
+                .unwrap_or(wgpu::CompositeAlphaMode::Auto),
             view_formats: vec![],
-        };
-        surface.configure(device, &config);
-        Ok(config)
-    }
-
-    fn setup_depth_texture(size: &PhysicalSize<u32>, device: &Device) -> Texture {
-        device.create_texture(&TextureDescriptor {
-            label: Some("Depth Texture"),
-            size: Extent3d {
-                width: size.width,
-                height: size.height,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: TextureDimension::D2,
-            format: TextureFormat::Depth32Float,
-            usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
-            view_formats: &[TextureFormat::Depth32Float],
+            desired_maximum_frame_latency: 1,
         })
     }
 
-    pub fn new(window: &Window) -> Result<Self> {
-        let size = window.inner_size();
-        let size = PhysicalSize {
-            height: size.height.max(1),
-            width: size.width.max(1),
-        };
+    pub fn create_surface(&self, window: &Window) -> Result<Surface<'static>> {
+        let surface = self
+            .instance
+            .create_surface(window)
+            .context(CreateSurfaceErr)?;
+        // SAFETY: The surface holds a boxed window handle, so extending the lifetime is safe as
+        // long as the caller owns the window.
+        Ok(unsafe { mem::transmute::<Surface<'_>, Surface<'static>>(surface) })
+    }
 
+    pub fn new(window: &Window) -> Result<(Self, Surface<'static>, SurfaceConfiguration)> {
         let instance = Self::setup_instance();
-        let surface = Self::setup_surface(&instance, window)?;
-        let adapter = block_on(Self::setup_adapter(&instance, &surface));
+        let surface = instance.create_surface(window).context(CreateSurfaceErr)?;
+        // SAFETY: The surface stores the window handle internally and the caller owns the window.
+        let surface = unsafe { mem::transmute::<Surface<'_>, wgpu::Surface<'_>>(surface) };
+        let adapter = block_on(Self::setup_adapter(&instance, Some(&surface)));
         let (device, queue) = block_on(Self::get_device_and_queue(&adapter))?;
-        let config = Self::configure_surface(&size, &surface, &adapter, &device)?;
-        let depth_texture = Self::setup_depth_texture(&size, &device);
+        let caps = surface.get_capabilities(&adapter);
+        let preferred_format = Self::preferred_surface_format(&caps.formats)?;
+        let size = Self::clamp_size(window.inner_size());
+        let config = SurfaceConfiguration {
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            format: preferred_format,
+            width: size.width,
+            height: size.height,
+            present_mode: caps
+                .present_modes
+                .first()
+                .copied()
+                .unwrap_or(wgpu::PresentMode::Fifo),
+            alpha_mode: caps
+                .alpha_modes
+                .first()
+                .copied()
+                .unwrap_or(wgpu::CompositeAlphaMode::Auto),
+            view_formats: vec![],
+            desired_maximum_frame_latency: 1,
+        };
 
-        Ok(State {
-            instance,
+        Ok((
+            State {
+                instance,
+                adapter,
+                device,
+                queue,
+                preferred_format,
+            },
             surface,
-            device,
-            queue,
             config,
-            size,
-            depth_texture,
-        })
-    }
-
-    pub fn resize(&mut self, mut new_size: PhysicalSize<u32>) {
-        new_size.height = new_size.height.max(1);
-        new_size.width = new_size.width.max(1);
-        self.size = new_size;
-        self.config.width = new_size.width;
-        self.config.height = new_size.height;
-        self.recreate_surface();
-    }
-
-    pub fn recreate_surface(&mut self) {
-        self.surface.configure(&self.device, &self.config);
-        self.depth_texture = Self::setup_depth_texture(&self.size, &self.device);
+        ))
     }
 }

@@ -30,23 +30,23 @@ pub struct InputManager {
     focus: HashMap<RenderTargetId, bool>,
     active_target: RenderTargetId,
     pub gamepad: GamePadManager,
-    game_event_txs: Vec<Sender<GameAppEvent>>,
+    game_event_tx: Sender<GameAppEvent>,
 }
 
 #[allow(unused)]
 impl InputManager {
-    pub fn new(game_event_txs: Vec<Sender<GameAppEvent>>) -> Self {
+    pub fn new(game_event_tx: Sender<GameAppEvent>) -> Self {
         InputManager {
             state: InputState::default(),
             focus: HashMap::default(),
             active_target: 0,
             gamepad: GamePadManager::default(),
-            game_event_txs,
+            game_event_tx,
         }
     }
 
-    pub fn set_game_event_targets(&mut self, game_event_txs: Vec<Sender<GameAppEvent>>) {
-        self.game_event_txs = game_event_txs;
+    pub fn set_game_event_tx(&mut self, game_event_tx: Sender<GameAppEvent>) {
+        self.game_event_tx = game_event_tx;
     }
 
     fn state_mut(&mut self) -> &mut InputState {
@@ -209,18 +209,18 @@ impl InputManager {
         trace!("GT: Locked cursor");
         let state = self.state_mut();
         state.is_locked = true;
-        if let Some(tx) = self.game_event_txs.get(self.active_target) {
-            let _ = tx.send(GameAppEvent::cursor_mode(self.active_target, true, false));
-        }
+        let _ = self
+            .game_event_tx
+            .send(GameAppEvent::cursor_mode(self.active_target, true, false));
     }
 
     pub fn unlock_cursor(&mut self) {
         trace!("GT: Unlocked cursor");
         let state = self.state_mut();
         state.is_locked = false;
-        if let Some(tx) = self.game_event_txs.get(self.active_target) {
-            let _ = tx.send(GameAppEvent::cursor_mode(self.active_target, false, true));
-        }
+        let _ = self
+            .game_event_tx
+            .send(GameAppEvent::cursor_mode(self.active_target, false, true));
     }
 
     pub fn is_cursor_locked(&self) -> bool {
@@ -258,9 +258,7 @@ impl InputManager {
     pub fn auto_quit_on_escape(&mut self) {
         if self.is_key_down(KeyCode::Escape) && !self.is_cursor_locked() {
             info!("Shutting down world from escape press");
-            if let Some(tx) = self.game_event_txs.get(self.active_target) {
-                let _ = tx.send(GameAppEvent::Shutdown);
-            }
+            let _ = self.game_event_tx.send(GameAppEvent::Shutdown);
         }
     }
 

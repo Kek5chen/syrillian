@@ -2,6 +2,7 @@ use crate::components::{Component, NewComponent};
 use crate::core::GameObjectId;
 use crate::engine::assets::HMaterial;
 use crate::engine::rendering::CPUDrawCtx;
+use crate::game_thread::RenderTargetId;
 use crate::rendering::proxies::SceneProxy;
 use crate::rendering::proxies::image::ImageSceneProxy;
 use crate::{World, proxy_data_mut};
@@ -38,6 +39,7 @@ pub struct Image {
     translation: Matrix4<f32>,
     dirty: bool,
     pub parent: GameObjectId,
+    render_target: RenderTargetId,
 }
 
 impl Image {
@@ -74,6 +76,7 @@ impl NewComponent for Image {
             },
             translation: Matrix4::identity(),
             dirty: false,
+            render_target: 0,
         }
     }
 }
@@ -85,6 +88,7 @@ impl Component for Image {
             scaling: self.scaling,
             translation: self.translation,
             dirty: false,
+            render_target: self.render_target,
         }))
     }
 

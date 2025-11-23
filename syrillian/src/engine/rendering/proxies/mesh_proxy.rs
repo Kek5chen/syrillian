@@ -10,7 +10,6 @@ use std::any::Any;
 use std::sync::RwLockWriteGuard;
 use syrillian_macros::UniformIndex;
 use wgpu::{IndexFormat, RenderPass};
-use winit::window::Window;
 
 #[cfg(debug_assertions)]
 use crate::rendering::DebugRenderer;
@@ -47,7 +46,6 @@ impl SceneProxy for MeshSceneProxy {
         &mut self,
         renderer: &Renderer,
         data: &mut dyn Any,
-        _window: &Window,
         local_to_world: &Matrix4<f32>,
     ) {
         let data: &mut RuntimeMeshData = proxy_data_mut!(data);

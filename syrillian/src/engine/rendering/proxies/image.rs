@@ -1,14 +1,15 @@
 use crate::assets::{AssetStore, HMaterial};
 use crate::components::{BoneData, ImageScalingMode};
 use crate::core::ModelUniform;
+use crate::game_thread::RenderTargetId;
 use crate::rendering::proxies::mesh_proxy::{MeshUniformIndex, RuntimeMeshData};
 use crate::rendering::proxies::{PROXY_PRIORITY_2D, SceneProxy};
 use crate::rendering::uniform::ShaderUniform;
 use crate::rendering::{GPUDrawCtx, RenderPassType, Renderer};
 use crate::{proxy_data, proxy_data_mut};
+use log::warn;
 use nalgebra::{Matrix4, Scale3, Translation3};
 use std::any::Any;
-use winit::window::Window;
 
 #[derive(Debug)]
 pub struct ImageSceneProxy {
@@ -16,6 +17,7 @@ pub struct ImageSceneProxy {
     pub material: HMaterial,
     pub scaling: ImageScalingMode,
     pub dirty: bool,
+    pub render_target: RenderTargetId,
 }
 
 impl SceneProxy for ImageSceneProxy {
@@ -34,10 +36,14 @@ impl SceneProxy for ImageSceneProxy {
         &mut self,
         renderer: &Renderer,
         data: &mut dyn Any,
-        window: &Window,
         _local_to_world: &Matrix4<f32>,
     ) {
         let data: &mut RuntimeMeshData = proxy_data_mut!(data);
+
+        let Some(window) = renderer.window(self.render_target) else {
+            warn!("Window doesn't exist anymore");
+            return;
+        };
 
         let window_size = window.inner_size();
         let width = window_size.width as f32;

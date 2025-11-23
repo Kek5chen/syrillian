@@ -12,7 +12,6 @@ use std::any::Any;
 use syrillian_utils::debug_panic;
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::{Buffer, BufferUsages, Device, IndexFormat, Queue, ShaderStages};
-use winit::window::Window;
 
 #[derive(Debug)]
 pub(crate) struct GPUDebugProxyData {
@@ -54,7 +53,6 @@ impl SceneProxy for DebugSceneProxy {
         &mut self,
         renderer: &Renderer,
         data: &mut dyn Any,
-        _window: &Window,
         local_to_world: &Matrix4<f32>,
     ) {
         let data: &mut GPUDebugProxyData = proxy_data_mut!(data);
