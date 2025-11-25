@@ -39,7 +39,7 @@ impl InputManager {
         InputManager {
             state: InputState::default(),
             focus: HashMap::default(),
-            active_target: 0,
+            active_target: RenderTargetId::PRIMARY,
             gamepad: GamePadManager::default(),
             game_event_tx,
         }

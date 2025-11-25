@@ -76,7 +76,7 @@ impl NewComponent for Image {
             },
             translation: Matrix4::identity(),
             dirty: false,
-            render_target: 0,
+            render_target: RenderTargetId::PRIMARY,
         }
     }
 }

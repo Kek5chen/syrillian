@@ -12,7 +12,20 @@ use std::marker::PhantomData;
 #[cfg(not(target_arch = "wasm32"))]
 use std::thread::JoinHandle;
 
-pub type RenderTargetId = u64;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct RenderTargetId(pub u64);
+
+impl RenderTargetId {
+    pub const PRIMARY: Self = Self(0);
+
+    pub const fn get(self) -> u64 {
+        self.0
+    }
+
+    pub const fn is_primary(self) -> bool {
+        self.get() == Self::PRIMARY.get()
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RenderEventTarget {
@@ -24,7 +37,7 @@ pub enum RenderAppEvent {
     Init(RenderEventTarget),
     Input(RenderEventTarget, WindowEvent),
     DeviceEvent(DeviceId, DeviceEvent),
-    StartFrame,
+    StartFrame(RenderEventTarget),
     Resize(RenderEventTarget, PhysicalSize<u32>),
 }
 
@@ -32,7 +45,7 @@ pub enum RenderAppEvent {
 pub enum GameAppEvent {
     UpdateWindowTitle(RenderTargetId, String),
     SetCursorMode(RenderTargetId, bool, bool),
-    AddWindow(RenderTargetId),
+    AddWindow(RenderTargetId, PhysicalSize<u32>),
     Shutdown,
 }
 
@@ -114,7 +127,9 @@ impl<S: AppState> GameThread<S> {
 
     pub fn init(&self) -> bool {
         self.render_event_tx
-            .send(RenderAppEvent::Init(RenderEventTarget { id: 0 }))
+            .send(RenderAppEvent::Init(RenderEventTarget {
+                id: RenderTargetId::PRIMARY,
+            }))
             .is_ok()
     }
 
@@ -155,9 +170,9 @@ impl<S: AppState> GameThread<S> {
     }
 
     // TODO: Think about if render frame and world should be linked
-    pub fn next_frame(&self) -> Result<(), Box<SendError<RenderAppEvent>>> {
+    pub fn next_frame(&self, target: RenderTargetId) -> Result<(), Box<SendError<RenderAppEvent>>> {
         self.render_event_tx
-            .send(RenderAppEvent::StartFrame)
+            .send(RenderAppEvent::StartFrame(RenderEventTarget { id: target }))
             .map_err(Box::new)
     }
 }
@@ -241,7 +256,7 @@ impl<S: AppState> GameThreadInner<S> {
 
             keep_running = match event {
                 RenderAppEvent::Init(target) => {
-                    if target.id == 0 {
+                    if target.id == RenderTargetId::PRIMARY {
                         self.init()
                     } else {
                         true
@@ -249,7 +264,8 @@ impl<S: AppState> GameThreadInner<S> {
                 }
                 RenderAppEvent::Input(target, event) => self.input(target.id, event),
                 RenderAppEvent::Resize(target, size) => self.resize(target.id, size),
-                RenderAppEvent::StartFrame => {
+                RenderAppEvent::StartFrame(target) => {
+                    self.world.input.set_active_target(target.id);
                     update_signaled = true;
                     true
                 }
@@ -263,7 +279,7 @@ impl<S: AppState> GameThreadInner<S> {
 
         if keep_running {
             if update_signaled {
-                self.world.input.set_active_target(0);
+                self.world.input.set_active_target(RenderTargetId::PRIMARY);
                 keep_running = self.update();
             }
         } else {

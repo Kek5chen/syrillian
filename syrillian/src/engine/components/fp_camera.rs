@@ -1,6 +1,7 @@
 use crate::World;
 use crate::components::{CameraComponent, Component, NewComponent};
 use crate::core::{GameObjectId, Transform};
+use crate::game_thread::RenderTargetId;
 use crate::input::InputManager;
 use crate::utils::FloatMathExt;
 use gilrs::Axis;
@@ -111,7 +112,7 @@ impl Component for FirstPersonCameraController {
             .parent
             .get_component::<CameraComponent>()
             .map(|c| c.render_target())
-            .unwrap_or(0);
+            .unwrap_or(RenderTargetId::PRIMARY);
         world.input.set_active_target(target);
 
         let mut parent = self.parent;
