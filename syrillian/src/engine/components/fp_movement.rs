@@ -4,6 +4,7 @@ use crate::components::{
     RigidBodyComponent,
 };
 use crate::core::GameObjectId;
+use crate::game_thread::RenderTargetId;
 use gilrs::Axis;
 use log::warn;
 use nalgebra::Vector3;
@@ -60,7 +61,7 @@ impl Component for FirstPersonMovementController {
             .parent
             .get_component::<CameraComponent>()
             .map(|c| c.render_target())
-            .unwrap_or(0);
+            .unwrap_or(RenderTargetId::PRIMARY);
 
         world.input.set_active_target(target);
 

@@ -77,7 +77,7 @@ impl Default for MyMain {
                 sound_cube_emitter: CRef::null(),
                 sound_cube2_emitter: CRef::null(),
                 viewport_camera: None,
-                viewport_window: 0,
+                viewport_window: RenderTargetId::PRIMARY,
             }
         }
     }
@@ -117,7 +117,7 @@ impl AppState for MyMain {
 
     fn update(&mut self, world: &mut World) -> Result<(), Box<dyn Error>> {
         self.frame_counter.new_frame_from_world(world);
-        world.set_window_title(0, self.format_title(false));
+        world.set_window_title(RenderTargetId::PRIMARY, self.format_title(false));
         world.set_window_title(self.viewport_window, self.format_title(true));
 
         self.update_world_text(world);

@@ -245,11 +245,11 @@ impl Renderer {
         main_window.request_redraw();
 
         let mut window_map = HashMap::new();
-        window_map.insert(main_window.id(), 0);
+        window_map.insert(main_window.id(), RenderTargetId::PRIMARY);
 
         let mut viewports = HashMap::new();
         viewports.insert(
-            0,
+            RenderTargetId::PRIMARY,
             RenderViewport::new(main_window, surface, config, &state, &cache),
         );
 
@@ -296,7 +296,7 @@ impl Renderer {
 
     pub fn resize(&mut self, target_id: RenderTargetId, new_size: PhysicalSize<u32>) -> bool {
         let Some(viewport) = self.viewports.get_mut(&target_id) else {
-            warn!("Invalid Viewport #{target_id} referenced");
+            warn!("Invalid Viewport {target_id:?} referenced");
             return false;
         };
 
@@ -307,7 +307,7 @@ impl Renderer {
 
     pub fn redraw(&mut self, target_id: RenderTargetId) -> bool {
         let Some(mut viewport) = self.viewports.remove(&target_id) else {
-            warn!("Invalid Viewport #{target_id} referenced");
+            warn!("Invalid Viewport {target_id:?} referenced");
             return false;
         };
 
@@ -602,6 +602,14 @@ impl Renderer {
     }
 
     pub fn add_window(&mut self, target_id: RenderTargetId, window: Window) -> Result<()> {
+        if self.viewports.contains_key(&target_id) {
+            warn!(
+                "Viewport #{:?} already exists; ignoring duplicate add",
+                target_id
+            );
+            return Ok(());
+        }
+
         let surface = self.state.create_surface(&window).context(StateErr)?;
         let config = self
             .state

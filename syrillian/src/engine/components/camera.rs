@@ -162,7 +162,7 @@ impl NewComponent for CameraComponent {
             height: 600.0,
             parent,
             projection_dirty: true,
-            render_target: 0,
+            render_target: RenderTargetId::PRIMARY,
         }
     }
 }

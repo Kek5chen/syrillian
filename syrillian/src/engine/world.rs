@@ -72,23 +72,34 @@ pub struct WorldChannels {
     pub render_tx: Sender<RenderMsg>,
     pub game_event_tx: Sender<GameAppEvent>,
     targets: HashMap<RenderTargetId, RenderTargets>,
-    next_target_id: RenderTargetId,
+    next_target_id: u64,
 }
 
 impl WorldChannels {
     pub fn new(render_tx: Sender<RenderMsg>, game_event_tx: Sender<GameAppEvent>) -> Self {
+        let mut targets = HashMap::new();
+        targets.insert(
+            RenderTargetId::PRIMARY,
+            RenderTargets {
+                active_camera: CWeak::null(),
+                size: PhysicalSize::new(0, 0),
+            },
+        );
+
         Self {
             render_tx,
             game_event_tx,
-            targets: HashMap::new(),
-            next_target_id: 1,
+            targets,
+            next_target_id: RenderTargetId::PRIMARY.get() + 1,
         }
     }
 
     pub fn set_active_camera(&mut self, target: RenderTargetId, camera: CWeak<CameraComponent>) {
-        if let Some(t) = self.targets.get_mut(&target) {
-            t.active_camera = camera;
-        }
+        let entry = self.targets.entry(target).or_insert(RenderTargets {
+            active_camera: CWeak::null(),
+            size: PhysicalSize::new(0, 0),
+        });
+        entry.active_camera = camera;
     }
 
     pub fn active_camera_for(&self, target: RenderTargetId) -> CWeak<CameraComponent> {
@@ -99,9 +110,11 @@ impl WorldChannels {
     }
 
     pub fn set_viewport_size(&mut self, target: RenderTargetId, size: PhysicalSize<u32>) {
-        if let Some(t) = self.targets.get_mut(&target) {
-            t.size = size;
-        }
+        let entry = self.targets.entry(target).or_insert(RenderTargets {
+            active_camera: CWeak::null(),
+            size,
+        });
+        entry.size = size;
     }
 
     pub fn add_window(
@@ -109,7 +122,7 @@ impl WorldChannels {
         active_camera: CWeak<CameraComponent>,
         size: PhysicalSize<u32>,
     ) -> RenderTargetId {
-        let target_id = self.next_target_id;
+        let target_id = RenderTargetId(self.next_target_id);
         self.targets.insert(
             target_id,
             RenderTargets {
@@ -384,9 +397,10 @@ impl World {
     }
 
     pub fn set_active_camera(&mut self, mut camera: CRef<CameraComponent>) {
-        camera.set_render_target(0);
+        camera.set_render_target(RenderTargetId::PRIMARY);
         self.main_active_camera = camera.downgrade();
-        self.channels.set_active_camera(0, self.main_active_camera);
+        self.channels
+            .set_active_camera(RenderTargetId::PRIMARY, self.main_active_camera);
     }
 
     pub fn set_active_camera_for_target(
@@ -415,13 +429,15 @@ impl World {
     }
 
     pub fn create_window(&mut self) -> RenderTargetId {
-        let target_id = self
-            .channels
-            .add_window(self.main_active_camera, PhysicalSize::new(800, 600));
+        self.create_window_with_size(PhysicalSize::new(800, 600))
+    }
+
+    pub fn create_window_with_size(&mut self, size: PhysicalSize<u32>) -> RenderTargetId {
+        let target_id = self.channels.add_window(self.main_active_camera, size);
         let _ = self
             .channels
             .game_event_tx
-            .send(GameAppEvent::AddWindow(target_id));
+            .send(GameAppEvent::AddWindow(target_id, size));
         target_id
     }
 
@@ -507,10 +523,6 @@ impl World {
             unsafe {
                 comp.update_proxy(&*world, ctx);
             }
-        }
-
-        if let Some(mut camera) = self.active_camera().upgrade(self) {
-            Self::push_camera_updates(0, &mut command_batch, &mut camera);
         }
 
         for target_id in self.channels.targets.keys().copied() {
@@ -744,7 +756,7 @@ impl World {
     }
 
     pub fn set_default_window_title(&mut self, title: String) {
-        self.set_window_title(0, title);
+        self.set_window_title(RenderTargetId::PRIMARY, title);
     }
 
     pub fn set_window_title(&mut self, target_id: RenderTargetId, title: String) {

@@ -1,6 +1,7 @@
 use crate::World;
 use crate::components::{CameraComponent, Component, NewComponent};
 use crate::core::GameObjectId;
+use crate::game_thread::RenderTargetId;
 use crate::input::InputManager;
 use gilrs::{Axis, Button};
 use nalgebra::{UnitQuaternion, Vector2, Vector3};
@@ -33,7 +34,7 @@ impl Component for FreecamController {
             .parent
             .get_component::<CameraComponent>()
             .map(|c| c.render_target())
-            .unwrap_or(0);
+            .unwrap_or(RenderTargetId::PRIMARY);
         world.input.set_active_target(target);
 
         if !world.input.is_window_focused() || !world.input.is_button_pressed(MouseButton::Left) {

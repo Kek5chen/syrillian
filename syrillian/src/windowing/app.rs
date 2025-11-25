@@ -9,6 +9,7 @@ use log::{error, info, trace};
 use std::error::Error;
 use web_time::Instant;
 use winit::application::ApplicationHandler;
+use winit::dpi::Size;
 use winit::error::EventLoopError;
 use winit::event::{DeviceEvent, DeviceId, StartCause, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
@@ -160,8 +161,12 @@ impl<S: AppState> App<S> {
                         }
                     }
                 }
-                GameAppEvent::AddWindow(event_target) => {
-                    let window = match event_loop.create_window(WindowAttributes::default()) {
+                GameAppEvent::AddWindow(event_target, size) => {
+                    let window = match event_loop.create_window(
+                        WindowAttributes::default()
+                            .with_inner_size(Size::Physical(size))
+                            .with_title(format!("Syrillian Window {}", event_target.get())),
+                    ) {
                         Ok(w) => w,
                         Err(e) => {
                             error!("Failed to create window: {e}");
@@ -240,7 +245,7 @@ impl<S: AppState> ApplicationHandler for App<S> {
         let target_id = renderer
             .find_render_target_id(&window_id)
             .expect("runtime missing for window");
-        let drives_update = target_id == 0;
+        let drives_update = target_id.is_primary();
 
         match event {
             WindowEvent::RedrawRequested => {
@@ -254,7 +259,7 @@ impl<S: AppState> ApplicationHandler for App<S> {
                     return;
                 }
 
-                if drives_update && game_thread.next_frame().is_err() {
+                if drives_update && game_thread.next_frame(target_id).is_err() {
                     event_loop.exit();
                     return;
                 }
