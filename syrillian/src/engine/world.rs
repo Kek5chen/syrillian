@@ -110,6 +110,7 @@ impl WorldChannels {
     }
 
     pub fn set_viewport_size(&mut self, target: RenderTargetId, size: PhysicalSize<u32>) {
+        let size = PhysicalSize::new(size.width.max(1), size.height.max(1));
         let entry = self.targets.entry(target).or_insert(RenderTargets {
             active_camera: CWeak::null(),
             size,
@@ -426,6 +427,10 @@ impl World {
         if let Some(mut cam) = self.active_camera_for_target(target).upgrade(self) {
             cam.resize(size.width as f32, size.height as f32);
         }
+    }
+
+    pub fn viewport_size(&self, target: RenderTargetId) -> Option<PhysicalSize<u32>> {
+        self.channels.targets.get(&target).map(|t| t.size)
     }
 
     pub fn create_window(&mut self) -> RenderTargetId {
