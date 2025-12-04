@@ -5,8 +5,7 @@ use crate::engine::rendering::uniform::ShaderUniform;
 use crate::ensure_aligned;
 use nalgebra::Vector3;
 use syrillian_macros::UniformIndex;
-use wgpu::wgt::SamplerDescriptor;
-use wgpu::{AddressMode, Device, FilterMode, Queue};
+use wgpu::{Device, Queue};
 
 #[repr(u8)]
 #[derive(Debug, Copy, Clone, UniformIndex)]
@@ -75,24 +74,14 @@ impl CacheType for Material {
         let roughness = cache.texture_opt(self.roughness_texture, HTexture::FALLBACK_ROUGHNESS);
 
         // TODO: Add additional material mapping properties and such
-        let sampler = device.create_sampler(&SamplerDescriptor {
-            address_mode_u: AddressMode::Repeat,
-            address_mode_v: AddressMode::Repeat,
-            address_mode_w: AddressMode::Repeat,
-            mag_filter: FilterMode::Linear,
-            min_filter: FilterMode::Linear,
-            mipmap_filter: FilterMode::Linear,
-            ..Default::default()
-        });
-
         let uniform = ShaderUniform::<MaterialUniformIndex>::builder(&mat_bgl)
             .with_buffer_data(&data)
             .with_texture(&diffuse.view)
-            .with_sampler(&sampler)
+            .with_sampler(&diffuse.sampler)
             .with_texture(&normal.view)
-            .with_sampler(&sampler)
+            .with_sampler(&normal.sampler)
             .with_texture(&roughness.view)
-            .with_sampler(&sampler)
+            .with_sampler(&roughness.sampler)
             .build(device);
 
         RuntimeMaterial {

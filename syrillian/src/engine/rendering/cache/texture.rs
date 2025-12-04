@@ -1,12 +1,13 @@
 use crate::engine::assets::Texture as CpuTexture;
 use crate::engine::rendering::cache::{AssetCache, CacheType};
 use wgpu::util::{DeviceExt, TextureDataOrder};
-use wgpu::{Device, Queue, Texture as WgpuTexture, TextureView};
+use wgpu::{Device, Queue, Sampler, Texture as WgpuTexture, TextureView};
 
 #[derive(Debug)]
 pub struct GpuTexture {
     pub texture: WgpuTexture,
     pub view: TextureView,
+    pub sampler: Sampler,
 }
 
 impl CacheType for CpuTexture {
@@ -24,7 +25,12 @@ impl CacheType for CpuTexture {
         };
 
         let view = texture.create_view(&self.view_desc());
+        let sampler = device.create_sampler(&self.sampler_desc());
 
-        GpuTexture { texture, view }
+        GpuTexture {
+            texture,
+            view,
+            sampler,
+        }
     }
 }
