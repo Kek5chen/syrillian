@@ -45,6 +45,12 @@ impl StoreTypeFallback for Font {
     }
 }
 
+impl<T: StoreTypeFallback> Default for H<T> {
+    fn default() -> Self {
+        T::fallback()
+    }
+}
+
 pub const DEFAULT_ATLAS_SIZE: u32 = 1024;
 
 impl Font {
