@@ -30,6 +30,10 @@ pub enum ImageScalingMode {
         top: f32,
         bottom: f32,
     },
+    Ndc {
+        center: [f32; 2],
+        size: [f32; 2],
+    },
 }
 
 #[derive(Debug)]
@@ -58,6 +62,21 @@ impl Image {
 
     pub fn set_material(&mut self, material: HMaterial) {
         self.material = material;
+        self.dirty = true;
+    }
+
+    pub fn set_render_target(&mut self, target: RenderTargetId) {
+        self.render_target = target;
+        self.dirty = true;
+    }
+
+    pub fn set_ndc_layout(&mut self, center: [f32; 2], size: [f32; 2]) {
+        self.scaling = ImageScalingMode::Ndc { center, size };
+        self.dirty = true;
+    }
+
+    pub fn set_translation(&mut self, translation: Matrix4<f32>) {
+        self.translation = translation;
         self.dirty = true;
     }
 }
@@ -99,11 +118,15 @@ impl Component for Image {
 
         let scaling = self.scaling;
         let material = self.material;
+        let translation = self.translation;
+        let target = self.render_target;
         ctx.send_proxy_update(move |proxy| {
             let proxy: &mut ImageSceneProxy = proxy_data_mut!(proxy);
 
             proxy.scaling = scaling;
             proxy.material = material;
+            proxy.translation = translation;
+            proxy.render_target = target;
             proxy.dirty = true;
         });
         self.dirty = false;

@@ -49,7 +49,7 @@ impl SceneProxy for ImageSceneProxy {
         let width = window_size.width as f32;
         let height = window_size.height as f32;
 
-        data.mesh_data.model_mat = self.calculate_model_matrix(width, height);
+        data.mesh_data.model_mat = self.translation * self.calculate_model_matrix(width, height);
 
         renderer.state.queue.write_buffer(
             data.uniform.buffer(MeshUniformIndex::MeshData),
@@ -179,6 +179,15 @@ impl ImageSceneProxy {
             ImageScalingMode::Absolute {..} => self.calculate_model_matrix_absolute(window_width, window_height),
             ImageScalingMode::Relative {..} => self.calculate_model_matrix_relative(),
             ImageScalingMode::RelativeStretch {..} => self.calculate_model_matrix_relative_stretch(),
+            ImageScalingMode::Ndc { center, size } => {
+                let sx = size[0] * 0.5;
+                let sy = size[1] * 0.5;
+                let tx = center[0];
+                let ty = center[1];
+
+                Translation3::new(tx, ty, 0.0).to_homogeneous()
+                    * Scale3::new(sx, sy, 1.0).to_homogeneous()
+            }
         }
     }
 }
