@@ -53,6 +53,7 @@ pub mod rotate;
 pub mod skeletal;
 pub mod spring;
 pub mod text;
+pub mod ui_rect;
 
 #[cfg(debug_assertions)]
 pub mod camera_debug;
@@ -73,6 +74,7 @@ pub use rotate::*;
 pub use skeletal::*;
 pub use spring::*;
 pub use text::*;
+pub use ui_rect::*;
 
 #[cfg(debug_assertions)]
 pub use camera_debug::*;
