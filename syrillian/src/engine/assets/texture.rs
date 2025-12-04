@@ -3,7 +3,10 @@ use crate::engine::assets::{H, HTexture, StoreTypeFallback};
 use crate::store_add_checked;
 use std::error::Error;
 use std::fs;
-use wgpu::{Extent3d, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages};
+use wgpu::{
+    AddressMode, Extent3d, FilterMode, TextureDescriptor, TextureDimension, TextureFormat,
+    TextureUsages,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Texture {
@@ -13,6 +16,8 @@ pub struct Texture {
     pub data: Option<Vec<u8>>,
     pub view_formats: [TextureFormat; 1],
     pub array_layers: u32,
+    pub repeat_mode: AddressMode,
+    pub filter_mode: FilterMode,
 }
 
 impl H<Texture> {
@@ -49,6 +54,8 @@ impl Texture {
             data: None,
             view_formats: [TextureFormat::Depth32Float],
             array_layers: capacity,
+            repeat_mode: AddressMode::Repeat,
+            filter_mode: FilterMode::Linear,
         }
     }
 
@@ -100,6 +107,18 @@ impl Texture {
         }
     }
 
+    pub fn sampler_desc(&self) -> wgpu::SamplerDescriptor<'_> {
+        wgpu::SamplerDescriptor {
+            address_mode_u: self.repeat_mode,
+            address_mode_v: self.repeat_mode,
+            address_mode_w: self.repeat_mode,
+            mag_filter: self.filter_mode,
+            min_filter: self.filter_mode,
+            mipmap_filter: self.filter_mode,
+            ..Default::default()
+        }
+    }
+
     pub fn load_image(path: &str) -> Result<Texture, Box<dyn Error>> {
         let bytes = fs::read(path)?;
         Self::load_image_from_memory(&bytes)
@@ -124,6 +143,8 @@ impl Texture {
             data: Some(data),
             view_formats: [TextureFormat::Bgra8UnormSrgb],
             array_layers: 1,
+            repeat_mode: AddressMode::Repeat,
+            filter_mode: FilterMode::Linear,
         };
 
         Ok(tex)
@@ -137,6 +158,8 @@ impl Texture {
             data: Some(pixels),
             view_formats: [format],
             array_layers: 1,
+            repeat_mode: AddressMode::Repeat,
+            filter_mode: FilterMode::Linear,
         }
     }
 }
@@ -205,6 +228,8 @@ impl Texture {
             data: None,
             view_formats: [TextureFormat::Depth32Float],
             array_layers: capacity.max(1),
+            repeat_mode: AddressMode::Repeat,
+            filter_mode: FilterMode::Linear,
         }
     }
 }
