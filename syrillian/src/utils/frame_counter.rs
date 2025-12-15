@@ -29,3 +29,27 @@ impl FrameCounter {
         (1.0 / self.mean_delta_time()) as u32
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tracks_mean_over_sliding_window() {
+        let mut counter = FrameCounter::default();
+        for _ in 0..DEFAULT_RUNNING_SIZE {
+            counter.new_frame(0.01);
+        }
+
+        // push values that force eviction of the oldest entries
+        for _ in 0..5 {
+            counter.new_frame(0.02);
+        }
+
+        assert_eq!(counter.frame_times.len(), DEFAULT_RUNNING_SIZE);
+        // last 5 are 0.02, preceding 55 are 0.01 -> mean should reflect both
+        let expected = (55.0 * 0.01 + 5.0 * 0.02) / DEFAULT_RUNNING_SIZE as f32;
+        assert!((counter.mean_delta_time() - expected).abs() < 1e-6);
+        assert_eq!(counter.fps(), (1.0 / expected) as u32);
+    }
+}
