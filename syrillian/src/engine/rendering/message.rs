@@ -1,3 +1,4 @@
+use crate::assets::HTexture;
 use crate::components::TypedComponentId;
 use crate::core::ObjectHash;
 use crate::game_thread::RenderTargetId;
@@ -7,6 +8,7 @@ use crate::rendering::proxies::SceneProxy;
 use crate::rendering::render_data::CameraUniform;
 use nalgebra::Affine3;
 use std::fmt::{Debug, Formatter};
+use std::path::PathBuf;
 
 pub type ProxyUpdateCommand = Box<dyn FnOnce(&mut dyn SceneProxy) + Send>;
 pub type LightProxyCommand = Box<dyn FnOnce(&mut LightProxy) + Send>;
@@ -28,6 +30,9 @@ pub enum RenderMsg {
     ProxyState(TypedComponentId, bool), // enabled
     PickRequest(PickRequest),
     CommandBatch(Vec<RenderMsg>),
+    CaptureOffscreenTexture(RenderTargetId, PathBuf),
+    CapturePickingTexture(RenderTargetId, PathBuf),
+    CaptureTexture(HTexture, PathBuf),
 }
 
 impl Debug for RenderMsg {
@@ -43,6 +48,9 @@ impl Debug for RenderMsg {
             RenderMsg::ProxyState(_, enable) => &format!("Proxy Enabled: {enable}"),
             RenderMsg::PickRequest(..) => "Pick Request",
             RenderMsg::CommandBatch(inner) => &format!("Command Batch {inner:?}"),
+            RenderMsg::CaptureOffscreenTexture(_, _) => "Capture Offscreen Texture",
+            RenderMsg::CapturePickingTexture(_, _) => "Capture Picking Texture",
+            RenderMsg::CaptureTexture(_, _) => "Capture Texture",
         };
 
         write!(f, "{name}")

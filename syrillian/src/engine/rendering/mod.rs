@@ -40,6 +40,7 @@ pub mod proxies;
 pub(crate) mod render_data;
 pub mod renderer;
 pub mod state;
+pub mod texture_export;
 pub(crate) mod uniform;
 
 #[cfg(debug_assertions)]
