@@ -195,15 +195,15 @@ mod tests {
     use winit::dpi::PhysicalSize;
 
     fn world_with_viewport() -> Box<World> {
-        let (mut world, _, _) = World::fresh();
+        let (mut world, ..) = World::fresh();
         world.set_viewport_size(RenderTargetId::PRIMARY, PhysicalSize::new(800, 600));
         world
     }
 
     fn as_image_proxy(
-        proxy: &mut Box<dyn crate::rendering::proxies::SceneProxy>,
+        proxy: &mut dyn crate::rendering::proxies::SceneProxy,
     ) -> &mut ImageSceneProxy {
-        (proxy.as_mut() as &mut dyn Any)
+        (proxy as &mut dyn Any)
             .downcast_mut::<ImageSceneProxy>()
             .expect("image proxy")
     }
@@ -259,7 +259,7 @@ mod tests {
         let mut image_proxy_box = image
             .create_render_proxy(&world)
             .expect("image proxy should be created");
-        let image_proxy = as_image_proxy(&mut image_proxy_box);
+        let image_proxy = as_image_proxy(&mut *image_proxy_box);
 
         match image_proxy.scaling {
             ImageScalingMode::Absolute {
@@ -317,7 +317,7 @@ mod tests {
         let mut proxy = image
             .create_render_proxy(&world)
             .expect("image proxy should exist");
-        let proxy = as_image_proxy(&mut proxy);
+        let proxy = as_image_proxy(&mut *proxy);
         assert_eq!(proxy.draw_order, 3);
         assert!((proxy.translation[(2, 3)] - 0.5).abs() < 1e-6);
     }
