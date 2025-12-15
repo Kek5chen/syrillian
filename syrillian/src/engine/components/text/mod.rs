@@ -25,6 +25,10 @@ impl<const D: u8, DIM: TextDim<D>> Text<D, DIM> {
         &mut self.proxy
     }
 
+    pub fn size(&self) -> f32 {
+        self.proxy.size()
+    }
+
     delegate! {
         to self.proxy {
             pub fn set_text(&mut self, text: impl Into<String>);
@@ -37,6 +41,7 @@ impl<const D: u8, DIM: TextDim<D>> Text<D, DIM> {
             pub const fn set_color_vec(&mut self, color: Vector3<f32>);
             pub const fn set_size(&mut self, text_size: f32);
             pub const fn set_rainbow_mode(&mut self, enable: bool);
+            pub fn set_draw_order(&mut self, order: u32);
         }
     }
 }

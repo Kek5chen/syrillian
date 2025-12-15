@@ -54,6 +54,7 @@ pub enum Shader {
         name: String,
         code: ShaderCode,
         polygon_mode: PolygonMode,
+        depth_enabled: bool,
     },
 
     PostProcess {
@@ -69,6 +70,7 @@ pub enum Shader {
         vertex_buffers: &'static [VertexBufferLayout<'static>],
         push_constant_ranges: &'static [PushConstantRange],
         shadow_transparency: bool,
+        depth_enabled: bool,
     },
 }
 
@@ -158,7 +160,8 @@ impl StoreDefaults for Shader {
     fn populate(store: &mut Store<Self>) {
         store_add_checked_many!(store,
             HShader::FALLBACK_ID => Shader::new_default("Fallback", SHADER_FALLBACK3D),
-            HShader::DIM2_ID => Shader::new_default("2D Default Pipeline", SHADER_DIM2),
+            HShader::DIM2_ID => Shader::new_default("2D Default Pipeline", SHADER_DIM2)
+                .with_depth_enabled(false),
             HShader::DIM3_ID => Shader::new_fragment("3D Default Pipeline", SHADER_DIM3),
             HShader::POST_PROCESS_ID => Shader::new_post_process("Post Process", SHADER_FS_COPY),
         );
@@ -196,6 +199,7 @@ impl StoreDefaults for Shader {
                 vertex_buffers: TEXT_VBL,
                 push_constant_ranges: TEXT_PC,
                 shadow_transparency: false,
+                depth_enabled: false,
             }
         );
 
@@ -210,6 +214,7 @@ impl StoreDefaults for Shader {
                 vertex_buffers: TEXT_VBL,
                 push_constant_ranges: TEXT_PC,
                 shadow_transparency: true,
+                depth_enabled: true,
             }
         );
 
@@ -233,6 +238,7 @@ impl StoreDefaults for Shader {
                         range: 0..WGPU_VEC4_ALIGN as u32,
                     }],
                     shadow_transparency: false,
+                    depth_enabled: true,
                 }
             );
 
@@ -247,6 +253,7 @@ impl StoreDefaults for Shader {
                     vertex_buffers: &DEFAULT_VBL_STEP_INSTANCE,
                     push_constant_ranges: &[],
                     shadow_transparency: false,
+                    depth_enabled: true,
                 }
             );
 
@@ -288,6 +295,7 @@ impl StoreDefaults for Shader {
                     vertex_buffers: DEBUG_LINE_VBL,
                     push_constant_ranges: &[],
                     shadow_transparency: false,
+                    depth_enabled: true,
                 }
             );
 
@@ -312,6 +320,7 @@ impl StoreDefaults for Shader {
                     vertex_buffers: DEBUG_TEXT,
                     push_constant_ranges: TEXT_PC,
                     shadow_transparency: false,
+                    depth_enabled: false,
                 }
             );
 
@@ -326,6 +335,7 @@ impl StoreDefaults for Shader {
                     vertex_buffers: DEBUG_TEXT,
                     push_constant_ranges: TEXT_PC,
                     shadow_transparency: false,
+                    depth_enabled: true,
                 }
             );
 
@@ -343,6 +353,7 @@ impl StoreDefaults for Shader {
                         range: 0..4,
                     }],
                     shadow_transparency: false,
+                    depth_enabled: true,
                 }
             );
         }
@@ -441,6 +452,7 @@ impl Shader {
             name: name.into(),
             code: ShaderCode::Fragment(code.into()),
             polygon_mode: PolygonMode::Fill,
+            depth_enabled: true,
         }
     }
 
@@ -453,6 +465,7 @@ impl Shader {
             name: name.into(),
             code: ShaderCode::Full(code.into()),
             polygon_mode: PolygonMode::Fill,
+            depth_enabled: true,
         }
     }
 
@@ -523,6 +536,25 @@ impl Shader {
         }
     }
 
+    pub fn depth_enabled(&self) -> bool {
+        match self {
+            Shader::Default { depth_enabled, .. } | Shader::Custom { depth_enabled, .. } => {
+                *depth_enabled
+            }
+            Shader::PostProcess { .. } => false,
+        }
+    }
+
+    pub fn with_depth_enabled(mut self, enabled: bool) -> Self {
+        match &mut self {
+            Shader::Default { depth_enabled, .. } | Shader::Custom { depth_enabled, .. } => {
+                *depth_enabled = enabled;
+            }
+            Shader::PostProcess { .. } => {}
+        }
+        self
+    }
+
     pub fn is_custom(&self) -> bool {
         matches!(self, Shader::Custom { .. })
     }
@@ -547,6 +579,10 @@ impl Shader {
 
     pub fn needs_bgl(&self, bgl: HBGL) -> bool {
         if !self.is_custom() {
+            if bgl == HBGL::LIGHT || bgl == HBGL::SHADOW {
+                return self.depth_enabled();
+            }
+
             return true;
         }
 
