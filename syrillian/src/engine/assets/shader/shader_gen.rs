@@ -1,4 +1,4 @@
-use crate::assets::{PipelineStage, Shader, ShaderCode};
+use crate::assets::{BindGroupMap, PipelineStage, Shader, ShaderCode};
 use log::warn;
 
 const POST_PROCESS_HEADER: &str = include_str!("shaders/groups/post_process.wgsl");
@@ -12,11 +12,12 @@ const POST_PROCESS_VERTEX: &str = include_str!("shaders/default_vertex_post.wgsl
 
 pub struct ShaderGen<'a> {
     shader: &'a Shader,
+    map: &'a BindGroupMap,
 }
 
 impl<'a> ShaderGen<'a> {
-    pub fn new(shader: &'a Shader) -> Self {
-        Self { shader }
+    pub fn new(shader: &'a Shader, map: &'a BindGroupMap) -> Self {
+        Self { shader, map }
     }
 
     pub fn generate(self) -> String {
@@ -25,14 +26,19 @@ impl<'a> ShaderGen<'a> {
 
         match shader.stage() {
             PipelineStage::Default => {
-                generate_default(code, shader.is_custom(), shader.depth_enabled())
+                generate_default(code, shader.is_custom(), shader.depth_enabled(), self.map)
             }
-            PipelineStage::PostProcess => generate_post_process(code),
+            PipelineStage::PostProcess => generate_post_process(code, self.map),
         }
     }
 }
 
-fn generate_default(code: &ShaderCode, custom: bool, has_depth: bool) -> String {
+fn generate_default(
+    code: &ShaderCode,
+    custom: bool,
+    has_depth: bool,
+    map: &BindGroupMap,
+) -> String {
     let mut generated = format!("{BASE_GROUP}\n");
     let fragment_only = code.is_only_fragment_shader();
 
@@ -57,7 +63,7 @@ fn generate_default(code: &ShaderCode, custom: bool, has_depth: bool) -> String 
         }
 
         generated.push_str(code.code());
-        return generated;
+        return rewrite_bind_groups(generated, map);
     }
 
     // for custom shaders, we add to the shader what it needs using the use statements at the top
@@ -80,10 +86,10 @@ fn generate_default(code: &ShaderCode, custom: bool, has_depth: bool) -> String 
         generated.push('\n');
     }
 
-    generated
+    rewrite_bind_groups(generated, map)
 }
 
-fn generate_post_process(code: &ShaderCode) -> String {
+fn generate_post_process(code: &ShaderCode, map: &BindGroupMap) -> String {
     let mut generated = format!("{BASE_GROUP}\n{POST_PROCESS_HEADER}\n");
     let fragment_only = code.is_only_fragment_shader();
 
@@ -93,5 +99,34 @@ fn generate_post_process(code: &ShaderCode) -> String {
     }
 
     generated.push_str(code.code());
-    generated
+    rewrite_bind_groups(generated, map)
+}
+
+fn rewrite_bind_groups(source: String, map: &BindGroupMap) -> String {
+    let mut out = source;
+
+    let mut replace = |orig: u32, new_idx: u32| {
+        let needle = format!("@group({orig})");
+        let repl = format!("@group({new_idx})");
+        out = out.replace(&needle, &repl);
+    };
+
+    replace(0, map.render);
+    if let Some(idx) = map.model {
+        replace(1, idx);
+    }
+    if let Some(idx) = map.material {
+        replace(2, idx);
+    }
+    if let Some(idx) = map.light {
+        replace(3, idx);
+    }
+    if let Some(idx) = map.shadow {
+        replace(4, idx);
+    }
+    if let Some(idx) = map.post_process {
+        replace(1, idx);
+    }
+
+    out
 }

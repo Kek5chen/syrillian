@@ -1,10 +1,10 @@
 mod shader_gen;
+pub(crate) use shader_gen::ShaderGen;
 
 // this module only has tests for the built-in shaders and can be safely ignored
 mod shaders;
 
 use crate::assets::HBGL;
-use crate::assets::shader::shader_gen::ShaderGen;
 use crate::engine::assets::generic_store::{HandleName, Store, StoreDefaults, StoreType};
 use crate::engine::assets::{H, HShader, StoreTypeFallback, StoreTypeName};
 use crate::rendering::AssetCache;
@@ -14,6 +14,7 @@ use crate::{store_add_checked, store_add_checked_many};
 use std::error::Error;
 use std::fs;
 use std::path::Path;
+use std::sync::Arc;
 use wgpu::{
     BindGroupLayout, Device, PipelineLayout, PipelineLayoutDescriptor, PolygonMode,
     PrimitiveTopology, PushConstantRange, ShaderStages, VertexAttribute, VertexBufferLayout,
@@ -72,6 +73,25 @@ pub enum Shader {
         shadow_transparency: bool,
         depth_enabled: bool,
     },
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct BindGroupMap {
+    pub render: u32,
+    pub model: Option<u32>,
+    pub material: Option<u32>,
+    pub light: Option<u32>,
+    pub shadow: Option<u32>,
+    pub post_process: Option<u32>,
+}
+
+impl BindGroupMap {
+    pub fn new(render: u32) -> Self {
+        BindGroupMap {
+            render,
+            ..Self::default()
+        }
+    }
 }
 
 impl H<Shader> {
@@ -574,7 +594,8 @@ impl Shader {
     }
 
     pub fn gen_code(&self) -> String {
-        ShaderGen::new(self).generate()
+        let map = self.bind_group_map();
+        ShaderGen::new(self, &map).generate()
     }
 
     pub fn needs_bgl(&self, bgl: HBGL) -> bool {
@@ -610,42 +631,73 @@ impl Shader {
         false
     }
 
-    pub(crate) fn solid_layout(&self, device: &Device, cache: &AssetCache) -> PipelineLayout {
-        let layout_name = format!("{} Pipeline Layout", self.name());
-
-        let cam_bgl = cache.bgl_render();
-        let mdl_bgl = cache.bgl_model();
-        let mat_bgl = cache.bgl_material();
-        let lgt_bgl = cache.bgl_light();
-        let sdw_bgl = cache.bgl_shadow();
-        let pp_bgl = cache.bgl_post_process();
-        let empty_bgl = cache.bgl_empty();
-
-        let mut slots: [Option<&BindGroupLayout>; 6] = [None; 6];
-        slots[0] = Some(&cam_bgl);
+    pub fn bind_group_map(&self) -> BindGroupMap {
+        let mut map = BindGroupMap::new(0);
+        let mut idx = 1;
 
         if self.is_post_process() {
-            slots[1] = Some(&pp_bgl);
-        } else {
-            if self.needs_bgl(HBGL::MODEL) {
-                slots[1] = Some(&mdl_bgl);
-            }
-            if self.needs_bgl(HBGL::MATERIAL) {
-                slots[2] = Some(&mat_bgl);
-            }
-            if self.needs_bgl(HBGL::LIGHT) {
-                slots[3] = Some(&lgt_bgl);
-            }
-            if self.needs_bgl(HBGL::SHADOW) {
-                slots[4] = Some(&sdw_bgl);
-            }
+            map.post_process = Some(idx);
+            return map;
         }
 
-        let last = slots.iter().rposition(|s| s.is_some()).unwrap_or(0);
-        let fixed: Vec<&BindGroupLayout> =
-            (0..=last).map(|i| slots[i].unwrap_or(&empty_bgl)).collect();
+        if self.needs_bgl(HBGL::MODEL) {
+            map.model = Some(idx);
+            idx += 1;
+        }
+        if self.needs_bgl(HBGL::MATERIAL) {
+            map.material = Some(idx);
+            idx += 1;
+        }
+        if self.needs_bgl(HBGL::LIGHT) {
+            map.light = Some(idx);
+            idx += 1;
+        }
+        if self.needs_bgl(HBGL::SHADOW) {
+            map.shadow = Some(idx);
+        }
 
-        self.layout_with(device, &layout_name, &fixed)
+        map
+    }
+
+    fn required_bgls(&self) -> Vec<HBGL> {
+        let mut out = Vec::new();
+        out.push(HBGL::RENDER);
+
+        if self.is_post_process() {
+            out.push(HBGL::POST_PROCESS);
+            return out;
+        }
+
+        if self.needs_bgl(HBGL::MODEL) {
+            out.push(HBGL::MODEL);
+        }
+        if self.needs_bgl(HBGL::MATERIAL) {
+            out.push(HBGL::MATERIAL);
+        }
+        if self.needs_bgl(HBGL::LIGHT) {
+            out.push(HBGL::LIGHT);
+        }
+        if self.needs_bgl(HBGL::SHADOW) {
+            out.push(HBGL::SHADOW);
+        }
+
+        out
+    }
+
+    pub(crate) fn solid_layout(&self, device: &Device, cache: &AssetCache) -> PipelineLayout {
+        let layout_name = format!("{} Pipeline Layout", self.name());
+        let bgls = self.required_bgls();
+        let layouts: Vec<Arc<BindGroupLayout>> = bgls
+            .iter()
+            .map(|handle| {
+                cache
+                    .bgl(*handle)
+                    .expect("required bind group layout should exist")
+            })
+            .collect();
+        let refs: Vec<&BindGroupLayout> = layouts.iter().map(|l| l.as_ref()).collect();
+
+        self.layout_with(device, &layout_name, &refs)
     }
 
     pub(crate) fn shadow_layout(
@@ -658,31 +710,18 @@ impl Shader {
         }
 
         let layout_name = format!("{} Shadow Pipeline Layout", self.name());
+        let bgls = self.required_bgls();
+        let layouts: Vec<Arc<BindGroupLayout>> = bgls
+            .iter()
+            .map(|handle| {
+                cache
+                    .bgl(*handle)
+                    .expect("required bind group layout should exist")
+            })
+            .collect();
+        let refs: Vec<&BindGroupLayout> = layouts.iter().map(|l| l.as_ref()).collect();
 
-        let cam_bgl = cache.bgl_render();
-        let mdl_bgl = cache.bgl_model();
-        let mat_bgl = cache.bgl_material();
-        let lgt_bgl = cache.bgl_light();
-        let empty_bgl = cache.bgl_empty();
-
-        let mut slots: [Option<&BindGroupLayout>; 6] = [None; 6];
-        slots[0] = Some(&cam_bgl);
-
-        if self.needs_bgl(HBGL::MODEL) {
-            slots[1] = Some(&mdl_bgl);
-        }
-        if self.needs_bgl(HBGL::MATERIAL) {
-            slots[2] = Some(&mat_bgl);
-        }
-        if self.needs_bgl(HBGL::LIGHT) {
-            slots[3] = Some(&lgt_bgl);
-        }
-
-        let last = slots.iter().rposition(|s| s.is_some()).unwrap_or(0);
-        let fixed: Vec<&BindGroupLayout> =
-            (0..=last).map(|i| slots[i].unwrap_or(&empty_bgl)).collect();
-
-        Some(self.layout_with(device, &layout_name, &fixed))
+        Some(self.layout_with(device, &layout_name, &refs))
     }
 
     fn layout_with(

@@ -3,7 +3,7 @@ use crate::rendering::lights::LightProxy;
 use crate::rendering::message::RenderMsg;
 use crate::rendering::proxies::SceneProxy;
 use std::sync::RwLock;
-use wgpu::{RenderPass, SurfaceTexture, TextureView};
+use wgpu::{BindGroup, RenderPass, SurfaceTexture, TextureView};
 
 pub struct FrameCtx {
     pub output: SurfaceTexture,
@@ -22,6 +22,9 @@ pub struct GPUDrawCtx<'a> {
     pub pass: RwLock<RenderPass<'a>>,
     pub pass_type: RenderPassType,
     pub frame: &'a FrameCtx,
+    pub render_bind_group: &'a BindGroup,
+    pub light_bind_group: &'a BindGroup,
+    pub shadow_bind_group: &'a BindGroup,
 }
 
 pub struct CPUDrawCtx<'a> {

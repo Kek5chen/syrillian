@@ -440,16 +440,14 @@ impl Renderer {
             });
 
         let layer_view = self.lights.shadow_layer(&self.cache, layer);
-        let mut pass = self.prepare_shadow_pass(&mut encoder, &layer_view);
-
-        let render_uniform = &self.shadow_render_data.uniform;
-        pass.set_bind_group(0, render_uniform.bind_group(), &[]);
+        let pass = self.prepare_shadow_pass(&mut encoder, &layer_view);
 
         self.render_scene(
             ctx,
             pass,
             RenderPassType::Shadow,
             &self.sorted_proxies[..split_idx],
+            &self.shadow_render_data,
         );
 
         self.state.queue.submit(Some(encoder.finish()));
@@ -464,29 +462,28 @@ impl Renderer {
             });
 
         let split_idx = self.first_ui_proxy_index();
-        let render_uniform = &viewport.render_data.uniform;
 
         {
-            let mut pass = self.prepare_main_render_pass(&mut encoder, viewport, ctx);
-            pass.set_bind_group(0, render_uniform.bind_group(), &[]);
+            let pass = self.prepare_main_render_pass(&mut encoder, viewport, ctx);
 
             self.render_scene(
                 ctx,
                 pass,
                 RenderPassType::Color,
                 &self.sorted_proxies[..split_idx],
+                &viewport.render_data,
             );
         }
 
         if split_idx < self.sorted_proxies.len() {
-            let mut pass = self.prepare_ui_render_pass(&mut encoder, viewport, ctx);
-            pass.set_bind_group(0, render_uniform.bind_group(), &[]);
+            let pass = self.prepare_ui_render_pass(&mut encoder, viewport, ctx);
 
             self.render_scene(
                 ctx,
                 pass,
                 RenderPassType::Color2D,
                 &self.sorted_proxies[split_idx..],
+                &viewport.render_data,
             );
         }
 
@@ -496,28 +493,24 @@ impl Renderer {
     fn render_scene(
         &self,
         frame_ctx: &FrameCtx,
-        mut pass: RenderPass,
+        pass: RenderPass,
         pass_type: RenderPassType,
         proxies: &[(u32, TypedComponentId)],
+        render_uniform: &RenderUniformData,
     ) {
-        let light_uniform = self.lights.uniform();
-
-        if pass_type != RenderPassType::Color2D {
-            pass.set_bind_group(3, light_uniform.bind_group(), &[]);
-        } else {
-            pass.set_bind_group(3, &self.lights.empty_light_bind_group, &[]);
-            pass.set_bind_group(4, &self.lights.empty_light_bind_group, &[]);
+        let shadow_bind_group = match pass_type {
+            RenderPassType::Color | RenderPassType::Color2D => self.lights.shadow_uniform(),
+            RenderPassType::Shadow => self.lights.placeholder_shadow_uniform(),
         }
-
-        if pass_type == RenderPassType::Color {
-            let shadow_uniform = self.lights.shadow_uniform();
-            pass.set_bind_group(4, shadow_uniform.bind_group(), &[]);
-        }
+        .bind_group();
 
         let draw_ctx = GPUDrawCtx {
             frame: frame_ctx,
             pass: RwLock::new(pass),
             pass_type,
+            render_bind_group: render_uniform.uniform.bind_group(),
+            light_bind_group: self.lights.uniform().bind_group(),
+            shadow_bind_group,
         };
 
         self.render_proxies(&draw_ctx, proxies);
@@ -580,9 +573,16 @@ impl Renderer {
         });
 
         let post_shader = self.cache.shader_post_process();
+        let groups = post_shader.bind_groups();
         pass.set_pipeline(post_shader.solid_pipeline());
-        pass.set_bind_group(0, viewport.render_data.uniform.bind_group(), &[]);
-        pass.set_bind_group(1, viewport.post_process_data.uniform.bind_group(), &[]);
+        pass.set_bind_group(
+            groups.render,
+            viewport.render_data.uniform.bind_group(),
+            &[],
+        );
+        if let Some(idx) = groups.post_process {
+            pass.set_bind_group(idx, viewport.post_process_data.uniform.bind_group(), &[]);
+        }
         pass.draw(0..6, 0..1);
 
         drop(pass);

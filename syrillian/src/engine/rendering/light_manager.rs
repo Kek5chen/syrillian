@@ -9,8 +9,8 @@ use log::warn;
 use std::convert::TryFrom;
 use syrillian_utils::debug_panic;
 use wgpu::{
-    AddressMode, BindGroup, BindGroupDescriptor, BindGroupLayoutDescriptor, Device, FilterMode,
-    Queue, Sampler, SamplerDescriptor, TextureUsages, TextureView, TextureViewDescriptor,
+    AddressMode, Device, FilterMode, Queue, Sampler, SamplerDescriptor, TextureUsages, TextureView,
+    TextureViewDescriptor,
 };
 
 #[cfg(debug_assertions)]
@@ -24,7 +24,7 @@ pub struct LightManager {
 
     uniform: ShaderUniform<LightUniformIndex>,
     shadow_uniform: ShaderUniform<ShadowUniformIndex>,
-    pub(crate) empty_light_bind_group: BindGroup,
+    empty_shadow_uniform: ShaderUniform<ShadowUniformIndex>,
     pub(crate) shadow_texture: HTexture,
     pub(crate) _shadow_sampler: Sampler,
 }
@@ -154,6 +154,10 @@ impl LightManager {
         &self.uniform
     }
 
+    pub fn placeholder_shadow_uniform(&self) -> &ShaderUniform<ShadowUniformIndex> {
+        &self.empty_shadow_uniform
+    }
+
     pub fn shadow_uniform(&self) -> &ShaderUniform<ShadowUniformIndex> {
         &self.shadow_uniform
     }
@@ -171,7 +175,10 @@ impl LightManager {
 
         let shadow_texture =
             Texture::new_2d_shadow_map_array(48, 1024, 1024).store(&cache.textures.store());
+        let empty_shadow_texture =
+            Texture::new_2d_shadow_map_array(2, 1, 1).store(&cache.textures.store());
         let texture = cache.textures.try_get(shadow_texture, cache).unwrap();
+        let empty_texture = cache.textures.try_get(empty_shadow_texture, cache).unwrap();
 
         let bgl = cache.bgl_light();
         let count: u32 = 0;
@@ -201,23 +208,18 @@ impl LightManager {
             .with_sampler(&shadow_sampler)
             .build(device);
 
-        let empty_bgl = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-            label: Some("Empty Bind Group Layout"),
-            entries: &[],
-        });
-        let empty_light_bind_group = device.create_bind_group(&BindGroupDescriptor {
-            label: Some("Empty Bind Group"),
-            layout: &empty_bgl,
-            entries: &[],
-        });
+        let empty_shadow_uniform = ShaderUniform::builder(&bgl)
+            .with_texture(&empty_texture.view)
+            .with_sampler(&shadow_sampler)
+            .build(device);
 
         Self {
             proxy_owners: vec![],
             proxies: vec![],
             shadow_assignments: Vec::new(),
             uniform,
-            empty_light_bind_group,
             shadow_uniform,
+            empty_shadow_uniform,
             shadow_texture,
             _shadow_sampler: shadow_sampler,
         }

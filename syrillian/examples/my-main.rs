@@ -91,7 +91,6 @@ impl AppState for MyMain {
         Self::spawn_dynamic_cubes(world, &materials);
 
         self.setup_audio_demo(world, materials.primary)?;
-        Self::spawn_2d_text(world);
         self.text3d = Self::spawn_3d_text(world);
         Self::spawn_spring_demo(world);
         // Self::cleanup_color_pads(world);
@@ -277,16 +276,6 @@ impl MyMain {
 
         world.add_child(&text);
         text
-    }
-
-    fn spawn_2d_text(world: &mut World) {
-        let mut text = world.new_object("Text");
-        let mut text2d = text.add_component::<Text2D>();
-        text2d.set_text("Meow");
-        text2d.set_size(50.);
-        text2d.set_position(0., 50.);
-        text2d.set_rainbow_mode(true);
-        world.add_child(text);
     }
 
     fn spawn_spring_demo(world: &mut World) {

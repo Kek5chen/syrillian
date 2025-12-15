@@ -1,4 +1,4 @@
-use crate::engine::assets::Shader;
+use crate::engine::assets::{BindGroupMap, Shader, ShaderGen};
 use crate::engine::rendering::cache::AssetCache;
 use crate::engine::rendering::cache::generic_cache::CacheType;
 use crate::rendering::{RenderPassType, RenderPipelineBuilder};
@@ -13,15 +13,18 @@ pub struct RuntimeShader {
     pipeline: RenderPipeline,
     shadow_pipeline: Option<RenderPipeline>,
     pub push_constant_ranges: &'static [PushConstantRange],
+    bind_groups: BindGroupMap,
 }
 
 impl CacheType for Shader {
     type Hot = RuntimeShader;
 
     fn upload(self, device: &Device, _queue: &Queue, cache: &AssetCache) -> Self::Hot {
+        let bind_groups = self.bind_group_map();
+        let code = ShaderGen::new(&self, &bind_groups).generate();
         let module = device.create_shader_module(ShaderModuleDescriptor {
             label: Some(self.name()),
-            source: ShaderSource::Wgsl(Cow::Owned(self.gen_code())),
+            source: ShaderSource::Wgsl(Cow::Owned(code)),
         });
 
         let solid_layout = self.solid_layout(device, cache);
@@ -37,6 +40,7 @@ impl CacheType for Shader {
             pipeline,
             shadow_pipeline,
             push_constant_ranges: self.push_constant_ranges(),
+            bind_groups,
         }
     }
 }
@@ -56,17 +60,21 @@ impl RuntimeShader {
             RenderPassType::Shadow => self.shadow_pipeline.as_ref(),
         }
     }
+
+    pub fn bind_groups(&self) -> &BindGroupMap {
+        &self.bind_groups
+    }
 }
 
 #[macro_export]
 macro_rules! must_pipeline {
-    ($name:ident = $shader:expr, $pass_type:expr => $exit_strat:tt) => {
+    ($name:ident = $shader:expr, $pass_type:expr => $( $exit_strat:tt )*) => {
         let Some($name) = $shader.pipeline($pass_type) else {
             ::syrillian_utils::debug_panic!(
                 "A 3D Shader was instantiated without a Shadow Pipeline Variant"
             );
             ::log::error!("A 3D Shader was instantiated without a Shadow Pipeline Variant");
-            $exit_strat;
+            $( $exit_strat )*;
         };
     };
 }
