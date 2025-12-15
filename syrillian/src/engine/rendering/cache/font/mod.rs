@@ -235,7 +235,7 @@ fn rasterize_msdf_glyph(
     let gid = face.glyph_index(ch)?;
 
     let bbox = glyph_bounds(&face, gid);
-    let plane = plane_bounds(metrics_units_per_em, bbox);
+    let plane = plane_bounds(metrics_units_per_em, bbox, shrinkage, range);
     let (width_px, height_px) = glyph_dimensions(bbox, shrinkage, range);
     let transform = glyph_transform(bbox, shrinkage, range);
 
@@ -275,16 +275,22 @@ struct PlaneBounds {
     max: [f32; 2],
 }
 
-fn plane_bounds(units_per_em: f32, bbox: ttf_parser::Rect) -> PlaneBounds {
+fn plane_bounds(
+    units_per_em: f32,
+    bbox: ttf_parser::Rect,
+    shrinkage: f64,
+    range: f64,
+) -> PlaneBounds {
     let upm = units_per_em as f64;
     let left_em = bbox.x_min as f64 / upm;
     let right_em = bbox.x_max as f64 / upm;
     let bottom_em = bbox.y_min as f64 / upm;
     let top_em = bbox.y_max as f64 / upm;
+    let pad_em = (range * shrinkage) / upm;
 
     PlaneBounds {
-        min: [left_em as f32, bottom_em as f32],
-        max: [right_em as f32, top_em as f32],
+        min: [(left_em - pad_em) as f32, (bottom_em - pad_em) as f32],
+        max: [(right_em + pad_em) as f32, (top_em + pad_em) as f32],
     }
 }
 
