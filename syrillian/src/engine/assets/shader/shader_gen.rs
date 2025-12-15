@@ -24,13 +24,15 @@ impl<'a> ShaderGen<'a> {
         let code = shader.code();
 
         match shader.stage() {
-            PipelineStage::Default => generate_default(code, shader.is_custom()),
+            PipelineStage::Default => {
+                generate_default(code, shader.is_custom(), shader.depth_enabled())
+            }
             PipelineStage::PostProcess => generate_post_process(code),
         }
     }
 }
 
-fn generate_default(code: &ShaderCode, custom: bool) -> String {
+fn generate_default(code: &ShaderCode, custom: bool, has_depth: bool) -> String {
     let mut generated = format!("{BASE_GROUP}\n");
     let fragment_only = code.is_only_fragment_shader();
 
@@ -43,8 +45,11 @@ fn generate_default(code: &ShaderCode, custom: bool) -> String {
         generated.push('\n');
         generated.push_str(MATERIAL_GROUP);
         generated.push('\n');
-        generated.push_str(LIGHT_GROUP);
-        generated.push('\n');
+
+        if has_depth {
+            generated.push_str(LIGHT_GROUP);
+            generated.push('\n');
+        }
 
         if fragment_only {
             generated.push_str(DEFAULT_VERTEX_3D);

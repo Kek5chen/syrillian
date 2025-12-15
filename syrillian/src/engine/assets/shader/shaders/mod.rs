@@ -45,6 +45,7 @@ macro_rules! test_custom_shader {
                 vertex_buffers: &[],
                 push_constant_ranges: &[],
                 shadow_transparency: false,
+                depth_enabled: true,
             }
             .gen_code();
 

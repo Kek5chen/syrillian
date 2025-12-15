@@ -62,6 +62,7 @@ pub struct RenderPipelineBuilder<'a> {
     pub layout: &'a PipelineLayout,
     pub module: &'a ShaderModule,
     pub is_post_process: bool,
+    pub has_depth: bool,
     pub polygon_mode: PolygonMode,
     pub topology: PrimitiveTopology,
     pub vertex_buffers: &'a [VertexBufferLayout<'a>],
@@ -83,7 +84,8 @@ impl<'a> RenderPipelineBuilder<'a> {
     }
 
     pub fn desc(&'a self) -> RenderPipelineDescriptor<'a> {
-        let depth_stencil = (!self.is_post_process).then_some(DEFAULT_DEPTH_STENCIL);
+        let depth_stencil =
+            (!self.is_post_process && self.has_depth).then_some(DEFAULT_DEPTH_STENCIL);
         let cull_mode = (!self.is_custom && !self.is_post_process).then_some(Face::Back);
 
         RenderPipelineDescriptor {
@@ -116,7 +118,7 @@ impl<'a> RenderPipelineBuilder<'a> {
     }
 
     pub fn shadow_desc(&'a self) -> Option<RenderPipelineDescriptor<'a>> {
-        if self.is_post_process {
+        if self.is_post_process || !self.has_depth {
             return None;
         }
 
@@ -164,6 +166,7 @@ impl<'a> RenderPipelineBuilder<'a> {
         let is_post_process = shader.is_post_process();
         let is_custom = shader.is_custom();
         let has_shadow_transparency = shader.has_shadow_transparency();
+        let has_depth = shader.depth_enabled();
 
         debug_assert!(
             !has_shadow_transparency || !shader.needs_bgl(HBGL::SHADOW),
@@ -187,6 +190,7 @@ impl<'a> RenderPipelineBuilder<'a> {
             layout,
             module,
             is_post_process,
+            has_depth,
             is_custom,
             has_shadow_transparency,
             polygon_mode,

@@ -17,7 +17,7 @@ use crate::rendering::DebugRenderer;
 use crate::rendering::light_manager::LightManager;
 use crate::rendering::lights::LightType;
 use crate::rendering::message::RenderMsg;
-use crate::rendering::proxies::SceneProxyBinding;
+use crate::rendering::proxies::{PROXY_PRIORITY_2D, SceneProxyBinding};
 use crate::rendering::render_data::RenderUniformData;
 use crate::rendering::{GPUDrawCtx, RenderPassType, State};
 use crossbeam_channel::Receiver;
@@ -223,7 +223,7 @@ pub struct Renderer {
     window_map: HashMap<WindowId, RenderTargetId>,
     game_rx: Receiver<RenderMsg>,
     proxies: HashMap<TypedComponentId, SceneProxyBinding>,
-    sorted_proxies: Vec<TypedComponentId>,
+    sorted_proxies: Vec<(u32, TypedComponentId)>,
     start_time: Instant,
     pub(super) lights: LightManager,
 }
@@ -337,9 +337,7 @@ impl Renderer {
     }
 
     fn resort_proxies(&mut self) {
-        self.sorted_proxies.clear();
-        self.sorted_proxies
-            .extend(sorted_enabled_proxy_ids(&self.proxies, self.cache.store()));
+        self.sorted_proxies = sorted_enabled_proxy_ids(&self.proxies, self.cache.store());
     }
 
     pub fn render_frame(&mut self, viewport: &mut RenderViewport) -> bool {
@@ -432,6 +430,8 @@ impl Renderer {
     }
 
     fn prepare_shadow_map(&mut self, ctx: &mut FrameCtx, layer: u32) {
+        let split_idx = self.first_ui_proxy_index();
+
         let mut encoder = self
             .state
             .device
@@ -445,7 +445,12 @@ impl Renderer {
         let render_uniform = &self.shadow_render_data.uniform;
         pass.set_bind_group(0, render_uniform.bind_group(), &[]);
 
-        self.render_scene(ctx, pass, RenderPassType::Shadow);
+        self.render_scene(
+            ctx,
+            pass,
+            RenderPassType::Shadow,
+            &self.sorted_proxies[..split_idx],
+        );
 
         self.state.queue.submit(Some(encoder.finish()));
     }
@@ -458,20 +463,51 @@ impl Renderer {
                 label: Some("Main Encoder"),
             });
 
-        let mut pass = self.prepare_main_render_pass(&mut encoder, viewport, ctx);
-
+        let split_idx = self.first_ui_proxy_index();
         let render_uniform = &viewport.render_data.uniform;
-        pass.set_bind_group(0, render_uniform.bind_group(), &[]);
 
-        self.render_scene(ctx, pass, RenderPassType::Color);
+        {
+            let mut pass = self.prepare_main_render_pass(&mut encoder, viewport, ctx);
+            pass.set_bind_group(0, render_uniform.bind_group(), &[]);
+
+            self.render_scene(
+                ctx,
+                pass,
+                RenderPassType::Color,
+                &self.sorted_proxies[..split_idx],
+            );
+        }
+
+        if split_idx < self.sorted_proxies.len() {
+            let mut pass = self.prepare_ui_render_pass(&mut encoder, viewport, ctx);
+            pass.set_bind_group(0, render_uniform.bind_group(), &[]);
+
+            self.render_scene(
+                ctx,
+                pass,
+                RenderPassType::Color2D,
+                &self.sorted_proxies[split_idx..],
+            );
+        }
 
         self.state.queue.submit(Some(encoder.finish()));
     }
 
-    fn render_scene(&self, frame_ctx: &FrameCtx, mut pass: RenderPass, pass_type: RenderPassType) {
+    fn render_scene(
+        &self,
+        frame_ctx: &FrameCtx,
+        mut pass: RenderPass,
+        pass_type: RenderPassType,
+        proxies: &[(u32, TypedComponentId)],
+    ) {
         let light_uniform = self.lights.uniform();
 
-        pass.set_bind_group(3, light_uniform.bind_group(), &[]);
+        if pass_type != RenderPassType::Color2D {
+            pass.set_bind_group(3, light_uniform.bind_group(), &[]);
+        } else {
+            pass.set_bind_group(3, &self.lights.empty_light_bind_group, &[]);
+            pass.set_bind_group(4, &self.lights.empty_light_bind_group, &[]);
+        }
 
         if pass_type == RenderPassType::Color {
             let shadow_uniform = self.lights.shadow_uniform();
@@ -484,26 +520,27 @@ impl Renderer {
             pass_type,
         };
 
-        self.render_proxies(&draw_ctx);
+        self.render_proxies(&draw_ctx, proxies);
 
         #[cfg(debug_assertions)]
-        if DebugRenderer::light() {
+        if DebugRenderer::light() && pass_type == RenderPassType::Color {
             self.lights.render_debug_lights(self, &draw_ctx);
         }
     }
 
-    fn render_proxies(&self, ctx: &GPUDrawCtx) {
-        for proxy in self
-            .sorted_proxies
-            .iter()
-            .map(|ctid| self.proxies.get(ctid))
-        {
+    fn render_proxies(&self, ctx: &GPUDrawCtx, proxies: &[(u32, TypedComponentId)]) {
+        for proxy in proxies.iter().map(|(_, ctid)| self.proxies.get(ctid)) {
             let Some(proxy) = proxy else {
                 debug_panic!("Sorted proxy not in proxy list");
                 continue;
             };
             proxy.render(self, ctx);
         }
+    }
+
+    fn first_ui_proxy_index(&self) -> usize {
+        self.sorted_proxies
+            .partition_point(|(priority, _)| *priority < PROXY_PRIORITY_2D)
     }
 
     fn end_render(&mut self, viewport: &mut RenderViewport, mut ctx: FrameCtx) {
@@ -671,17 +708,38 @@ impl Renderer {
             ..RenderPassDescriptor::default()
         })
     }
+
+    fn prepare_ui_render_pass<'a>(
+        &self,
+        encoder: &'a mut wgpu::CommandEncoder,
+        viewport: &RenderViewport,
+        _ctx: &mut FrameCtx,
+    ) -> RenderPass<'a> {
+        encoder.begin_render_pass(&RenderPassDescriptor {
+            label: Some("UI Render Pass"),
+            color_attachments: &[Some(RenderPassColorAttachment {
+                view: viewport.offscreen_surface.view(),
+                resolve_target: None,
+                ops: Operations {
+                    load: LoadOp::Load,
+                    store: StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            ..RenderPassDescriptor::default()
+        })
+    }
 }
 
 fn sorted_enabled_proxy_ids(
     proxies: &HashMap<TypedComponentId, SceneProxyBinding>,
     store: &AssetStore,
-) -> Vec<TypedComponentId> {
+) -> Vec<(u32, TypedComponentId)> {
     proxies
         .iter()
         .filter(|(_, binding)| binding.enabled)
-        .sorted_by_key(|(_, proxy)| proxy.proxy.priority(store))
-        .map(|(tid, _)| *tid)
+        .map(|(tid, proxy)| (proxy.proxy.priority(store), *tid))
+        .sorted_by_key(|(priority, _)| *priority)
         .collect()
 }
 
@@ -728,7 +786,7 @@ mod tests {
         let id_mid = insert_proxy::<MarkerMid>(&mut proxies, 50, true);
 
         let sorted = sorted_enabled_proxy_ids(&proxies, &store);
-        assert_eq!(sorted, vec![id_low, id_mid, id_high]);
+        assert_eq!(sorted, vec![(10, id_low), (50, id_mid), (900, id_high)]);
     }
 
     #[test]
@@ -743,8 +801,8 @@ mod tests {
         let id_disabled = insert_proxy::<MarkerDisabled>(&mut proxies, 1, false);
 
         let sorted = sorted_enabled_proxy_ids(&proxies, &store);
-        assert_eq!(sorted, vec![id_enabled]);
-        assert!(!sorted.contains(&id_disabled));
+        assert_eq!(sorted, vec![(5, id_enabled)]);
+        assert!(!sorted.contains(&(1, id_disabled)));
     }
 
     fn insert_proxy<T: 'static>(

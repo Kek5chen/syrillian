@@ -14,6 +14,7 @@ pub struct FrameCtx {
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub enum RenderPassType {
     Color,
+    Color2D,
     Shadow,
 }
 

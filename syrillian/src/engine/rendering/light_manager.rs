@@ -9,8 +9,8 @@ use log::warn;
 use std::convert::TryFrom;
 use syrillian_utils::debug_panic;
 use wgpu::{
-    AddressMode, Device, FilterMode, Queue, Sampler, SamplerDescriptor, TextureUsages, TextureView,
-    TextureViewDescriptor,
+    AddressMode, BindGroup, BindGroupDescriptor, BindGroupLayoutDescriptor, Device, FilterMode,
+    Queue, Sampler, SamplerDescriptor, TextureUsages, TextureView, TextureViewDescriptor,
 };
 
 #[cfg(debug_assertions)]
@@ -24,6 +24,7 @@ pub struct LightManager {
 
     uniform: ShaderUniform<LightUniformIndex>,
     shadow_uniform: ShaderUniform<ShadowUniformIndex>,
+    pub(crate) empty_light_bind_group: BindGroup,
     pub(crate) shadow_texture: HTexture,
     pub(crate) _shadow_sampler: Sampler,
 }
@@ -200,11 +201,22 @@ impl LightManager {
             .with_sampler(&shadow_sampler)
             .build(device);
 
+        let empty_bgl = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+            label: Some("Empty Bind Group Layout"),
+            entries: &[],
+        });
+        let empty_light_bind_group = device.create_bind_group(&BindGroupDescriptor {
+            label: Some("Empty Bind Group"),
+            layout: &empty_bgl,
+            entries: &[],
+        });
+
         Self {
             proxy_owners: vec![],
             proxies: vec![],
             shadow_assignments: Vec::new(),
             uniform,
+            empty_light_bind_group,
             shadow_uniform,
             shadow_texture,
             _shadow_sampler: shadow_sampler,
