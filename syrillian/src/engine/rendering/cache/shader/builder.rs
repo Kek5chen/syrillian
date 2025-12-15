@@ -15,7 +15,7 @@ pub const DEFAULT_VBL_STEP_INSTANCE: [VertexBufferLayout; 1] = {
     [continuous]
 };
 
-const DEFAULT_COLOR_TARGET: [Option<ColorTargetState>; 1] = [Some(ColorTargetState {
+pub const DEFAULT_COLOR_TARGET: &[Option<ColorTargetState>] = &[Some(ColorTargetState {
     format: TextureFormat::Bgra8UnormSrgb,
     blend: Some(BlendState::ALPHA_BLENDING),
     write_mask: ColorWrites::all(),
@@ -68,6 +68,7 @@ pub struct RenderPipelineBuilder<'a> {
     pub vertex_buffers: &'a [VertexBufferLayout<'a>],
     pub is_custom: bool,
     pub has_shadow_transparency: bool,
+    pub color_target: &'a [Option<ColorTargetState>],
 }
 
 impl<'a> RenderPipelineBuilder<'a> {
@@ -110,7 +111,7 @@ impl<'a> RenderPipelineBuilder<'a> {
                 module: self.module,
                 entry_point: None,
                 compilation_options: PipelineCompilationOptions::default(),
-                targets: &DEFAULT_COLOR_TARGET,
+                targets: self.color_target,
             }),
             multiview: None,
             cache: None,
@@ -167,6 +168,7 @@ impl<'a> RenderPipelineBuilder<'a> {
         let is_custom = shader.is_custom();
         let has_shadow_transparency = shader.has_shadow_transparency();
         let has_depth = shader.depth_enabled();
+        let color_target = shader.color_target();
 
         debug_assert!(
             !has_shadow_transparency || !shader.needs_bgl(HBGL::SHADOW),
@@ -196,6 +198,7 @@ impl<'a> RenderPipelineBuilder<'a> {
             polygon_mode,
             topology,
             vertex_buffers,
+            color_target,
         }
     }
 }

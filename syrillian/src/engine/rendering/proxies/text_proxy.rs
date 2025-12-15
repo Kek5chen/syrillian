@@ -1,6 +1,10 @@
 use crate::assets::{AssetStore, HFont, HShader};
 use crate::components::BoneData;
-use crate::core::ModelUniform;
+use crate::core::{ModelUniform, ObjectHash};
+#[cfg(debug_assertions)]
+use crate::rendering::DebugRenderer;
+use crate::rendering::glyph::{GlyphRenderData, TextAlignment, generate_glyph_geometry_stream};
+use crate::rendering::picking::hash_to_rgba;
 use crate::rendering::proxies::mesh_proxy::MeshUniformIndex;
 use crate::rendering::proxies::{PROXY_PRIORITY_2D, PROXY_PRIORITY_TRANSPARENT, SceneProxy};
 use crate::rendering::uniform::ShaderUniform;
@@ -13,12 +17,9 @@ use std::any::Any;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::sync::RwLock;
+use syrillian_utils::debug_panic;
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::{Buffer, BufferUsages, RenderPass, ShaderStages};
-
-#[cfg(debug_assertions)]
-use crate::rendering::DebugRenderer;
-use crate::rendering::glyph::{GlyphRenderData, TextAlignment, generate_glyph_geometry_stream};
 
 #[derive(Debug)]
 pub struct TextRenderData {
@@ -419,6 +420,53 @@ impl<const D: u8, DIM: TextDim<D>> SceneProxy for TextProxy<D, DIM> {
             2 => PROXY_PRIORITY_2D.saturating_add(self.draw_order),
             _ => PROXY_PRIORITY_TRANSPARENT,
         }
+    }
+
+    fn render_picking(
+        &self,
+        renderer: &Renderer,
+        data: &dyn Any,
+        ctx: &GPUDrawCtx,
+        _local_to_world: &Matrix4<f32>,
+        object_hash: ObjectHash,
+    ) {
+        debug_assert_ne!(ctx.pass_type, RenderPassType::Shadow);
+
+        let data: &TextRenderData = proxy_data!(data);
+        if data.glyph_vbo.size() == 0 || self.text.is_empty() {
+            return;
+        }
+
+        let font = renderer.cache.font(self.font);
+        let material = renderer.cache.material(font.atlas());
+
+        let mut pass = ctx.pass.write().unwrap();
+        let shader = match D {
+            2 => renderer.cache.shader(HShader::TEXT_2D_PICKING),
+            3 => renderer.cache.shader(HShader::TEXT_3D_PICKING),
+            _ => {
+                debug_panic!("Text Proxy Dimensions out of Bounds");
+                return;
+            }
+        };
+        pass.set_pipeline(shader.solid_pipeline());
+        pass.set_vertex_buffer(0, data.glyph_vbo.slice(..));
+
+        let color = hash_to_rgba(object_hash);
+        let mut pc = self.pc;
+        pc.color = Vector3::new(color[0], color[1], color[2]);
+
+        pass.set_push_constants(ShaderStages::VERTEX_FRAGMENT, 0, bytemuck::bytes_of(&pc));
+
+        pass.set_bind_group(shader.bind_groups().render, ctx.render_bind_group, &[]);
+        if let Some(model) = shader.bind_groups().model {
+            pass.set_bind_group(model, data.uniform.bind_group(), &[]);
+        }
+        if let Some(material_id) = shader.bind_groups().material {
+            pass.set_bind_group(material_id, material.uniform.bind_group(), &[]);
+        }
+
+        pass.draw(0..self.glyph_data.len() as u32 * 6, 0..1);
     }
 }
 

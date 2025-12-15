@@ -1,5 +1,6 @@
 use crate::components::TypedComponentId;
-use crate::rendering::{GPUDrawCtx, Renderer};
+use crate::core::ObjectHash;
+use crate::rendering::{GPUDrawCtx, RenderPassType, Renderer};
 use nalgebra::{Affine3, Matrix4};
 use std::any::Any;
 use std::fmt::Debug;
@@ -66,11 +67,22 @@ pub trait SceneProxy: Send + Any + Debug {
         ctx: &GPUDrawCtx,
         local_to_world: &Matrix4<f32>,
     );
+    fn render_picking(
+        &self,
+        _renderer: &Renderer,
+        _data: &dyn Any,
+        _ctx: &GPUDrawCtx,
+        _local_to_world: &Matrix4<f32>,
+        _object_hash: ObjectHash,
+    ) {
+    }
+
     fn priority(&self, store: &AssetStore) -> u32;
 }
 
 pub struct SceneProxyBinding {
     pub component_id: TypedComponentId,
+    pub object_hash: ObjectHash,
     pub local_to_world: Affine3<f32>,
     pub proxy_data: Box<dyn Any>,
     pub proxy: Box<dyn SceneProxy>,
@@ -80,12 +92,14 @@ pub struct SceneProxyBinding {
 impl SceneProxyBinding {
     pub fn new(
         component_id: TypedComponentId,
+        object_hash: ObjectHash,
         local_to_world: Affine3<f32>,
         proxy_data: Box<dyn Any>,
         proxy: Box<dyn SceneProxy>,
     ) -> Self {
         Self {
             component_id,
+            object_hash,
             local_to_world,
             proxy_data,
             proxy,
@@ -106,11 +120,20 @@ impl SceneProxyBinding {
     }
 
     pub fn render(&self, renderer: &Renderer, ctx: &GPUDrawCtx) {
-        self.proxy.render(
-            renderer,
-            self.proxy_data.as_ref(),
-            ctx,
-            self.local_to_world.matrix(),
-        )
+        match ctx.pass_type {
+            RenderPassType::Picking | RenderPassType::PickingUi => self.proxy.render_picking(
+                renderer,
+                self.proxy_data.as_ref(),
+                ctx,
+                self.local_to_world.matrix(),
+                self.object_hash,
+            ),
+            _ => self.proxy.render(
+                renderer,
+                self.proxy_data.as_ref(),
+                ctx,
+                self.local_to_world.matrix(),
+            ),
+        }
     }
 }

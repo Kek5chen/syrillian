@@ -22,7 +22,7 @@ impl Component for MyComponent {
 
 #[test]
 fn component() {
-    let (mut world, _rx1, _rx2) = World::fresh();
+    let (mut world, _rx1, _rx2, _pick_tx) = World::fresh();
     let mut obj = world.new_object("Test");
 
     let comp = obj.add_component::<MyComponent>();
@@ -66,7 +66,7 @@ fn component() {
 
 #[test]
 fn check_typed() {
-    let (mut world, _rx1, _rx2) = World::fresh();
+    let (mut world, _rx1, _rx2, _pick_tx) = World::fresh();
     let mut obj = world.new_object("Test");
 
     let comp = obj.add_component::<MyComponent>();

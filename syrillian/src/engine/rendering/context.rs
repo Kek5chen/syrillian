@@ -11,11 +11,13 @@ pub struct FrameCtx {
     pub depth_view: TextureView,
 }
 
-#[derive(Copy, Clone, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum RenderPassType {
     Color,
     Color2D,
     Shadow,
+    Picking,
+    PickingUi,
 }
 
 pub struct GPUDrawCtx<'a> {

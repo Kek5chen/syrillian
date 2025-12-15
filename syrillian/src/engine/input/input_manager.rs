@@ -61,6 +61,10 @@ impl InputManager {
         self.active_target = target;
     }
 
+    pub fn active_target(&self) -> RenderTargetId {
+        self.active_target
+    }
+
     pub fn set_window_focus(&mut self, target: RenderTargetId, focused: bool) {
         self.focus.insert(target, focused);
     }

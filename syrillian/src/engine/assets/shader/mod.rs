@@ -7,8 +7,8 @@ mod shaders;
 use crate::assets::HBGL;
 use crate::engine::assets::generic_store::{HandleName, Store, StoreDefaults, StoreType};
 use crate::engine::assets::{H, HShader, StoreTypeFallback, StoreTypeName};
-use crate::rendering::AssetCache;
 use crate::rendering::proxies::text_proxy::TextPushConstants;
+use crate::rendering::{AssetCache, DEFAULT_COLOR_TARGET, DEFAULT_VBL, PICKING_TEXTURE_FORMAT};
 use crate::utils::sizes::VEC2_SIZE;
 use crate::{store_add_checked, store_add_checked_many};
 use std::error::Error;
@@ -16,9 +16,9 @@ use std::fs;
 use std::path::Path;
 use std::sync::Arc;
 use wgpu::{
-    BindGroupLayout, Device, PipelineLayout, PipelineLayoutDescriptor, PolygonMode,
-    PrimitiveTopology, PushConstantRange, ShaderStages, VertexAttribute, VertexBufferLayout,
-    VertexFormat, VertexStepMode,
+    BindGroupLayout, ColorTargetState, ColorWrites, Device, PipelineLayout,
+    PipelineLayoutDescriptor, PolygonMode, PrimitiveTopology, PushConstantRange, ShaderStages,
+    VertexAttribute, VertexBufferLayout, VertexFormat, VertexStepMode,
 };
 
 #[cfg(debug_assertions)]
@@ -69,6 +69,7 @@ pub enum Shader {
         polygon_mode: PolygonMode,
         topology: PrimitiveTopology,
         vertex_buffers: &'static [VertexBufferLayout<'static>],
+        color_target: &'static [Option<ColorTargetState>],
         push_constant_ranges: &'static [PushConstantRange],
         shadow_transparency: bool,
         depth_enabled: bool,
@@ -99,25 +100,29 @@ impl H<Shader> {
     pub const DIM2_ID: u32 = 1;
     pub const DIM3_ID: u32 = 2;
     pub const POST_PROCESS_ID: u32 = 3;
-    pub const TEXT_2D_ID: u32 = 4;
-    pub const TEXT_3D_ID: u32 = 5;
+    pub const DIM2_PICKER_ID: u32 = 4;
+    pub const DIM3_PICKER_ID: u32 = 5;
+    pub const TEXT_2D_ID: u32 = 6;
+    pub const TEXT_2D_PICKER_ID: u32 = 7;
+    pub const TEXT_3D_ID: u32 = 8;
+    pub const TEXT_3D_PICKER_ID: u32 = 9;
     #[cfg(not(debug_assertions))]
-    pub const MAX_BUILTIN_ID: u32 = 5;
+    pub const MAX_BUILTIN_ID: u32 = 9;
 
     #[cfg(debug_assertions)]
-    pub const DEBUG_EDGES_ID: u32 = 6;
+    pub const DEBUG_EDGES_ID: u32 = 10;
     #[cfg(debug_assertions)]
-    pub const DEBUG_VERTEX_NORMALS_ID: u32 = 7;
+    pub const DEBUG_VERTEX_NORMALS_ID: u32 = 11;
     #[cfg(debug_assertions)]
-    pub const DEBUG_LINES_ID: u32 = 8;
+    pub const DEBUG_LINES_ID: u32 = 12;
     #[cfg(debug_assertions)]
-    pub const DEBUG_TEXT2D_GEOMETRY_ID: u32 = 9;
+    pub const DEBUG_TEXT2D_GEOMETRY_ID: u32 = 13;
     #[cfg(debug_assertions)]
-    pub const DEBUG_TEXT3D_GEOMETRY_ID: u32 = 10;
+    pub const DEBUG_TEXT3D_GEOMETRY_ID: u32 = 14;
     #[cfg(debug_assertions)]
-    pub const DEBUG_LIGHT_ID: u32 = 11;
+    pub const DEBUG_LIGHT_ID: u32 = 15;
     #[cfg(debug_assertions)]
-    pub const MAX_BUILTIN_ID: u32 = 11;
+    pub const MAX_BUILTIN_ID: u32 = 15;
 
     // The fallback shader if a pipeline fails
     pub const FALLBACK: H<Shader> = H::new(Self::FALLBACK_ID);
@@ -128,14 +133,26 @@ impl H<Shader> {
     // The default 3D shader.
     pub const DIM3: H<Shader> = H::new(Self::DIM3_ID);
 
+    // The default 2D picking shader.
+    pub const DIM2_PICKING: H<Shader> = H::new(Self::DIM2_PICKER_ID);
+
+    // The default 3D picking shader.
+    pub const DIM3_PICKING: H<Shader> = H::new(Self::DIM3_PICKER_ID);
+
     // Default post-processing shader
     pub const POST_PROCESS: H<Shader> = H::new(Self::POST_PROCESS_ID);
 
     // Default 2D Text shader.
     pub const TEXT_2D: H<Shader> = H::new(Self::TEXT_2D_ID);
 
+    // Default 2D Text picking shader.
+    pub const TEXT_2D_PICKING: H<Shader> = H::new(Self::TEXT_2D_PICKER_ID);
+
     // Default 3D Text shader.
     pub const TEXT_3D: H<Shader> = H::new(Self::TEXT_3D_ID);
+
+    // Default 3D Text picking shader.
+    pub const TEXT_3D_PICKING: H<Shader> = H::new(Self::TEXT_3D_PICKER_ID);
 
     // An addon shader ID that is used for drawing debug edges on meshes
     #[cfg(debug_assertions)]
@@ -159,8 +176,12 @@ impl H<Shader> {
 const SHADER_FALLBACK3D: &str = include_str!("shaders/fallback_shader3d.wgsl");
 const SHADER_DIM2: &str = include_str!("shaders/shader2d.wgsl");
 const SHADER_DIM3: &str = include_str!("shaders/shader3d.wgsl");
+const SHADER_DIM2_PICKER: &str = include_str!("shaders/picking_ui.wgsl");
+const SHADER_DIM3_PICKER: &str = include_str!("shaders/picking_mesh.wgsl");
 const SHADER_TEXT2D: &str = include_str!("shaders/text2d.wgsl");
+const SHADER_TEXT2D_PICKER: &str = include_str!("shaders/picking_text2d.wgsl");
 const SHADER_TEXT3D: &str = include_str!("shaders/text3d.wgsl");
+const SHADER_TEXT3D_PICKER: &str = include_str!("shaders/picking_text3d.wgsl");
 const SHADER_FS_COPY: &str = include_str!("shaders/fullscreen_passthrough.wgsl");
 
 #[cfg(debug_assertions)]
@@ -180,9 +201,9 @@ impl StoreDefaults for Shader {
     fn populate(store: &mut Store<Self>) {
         store_add_checked_many!(store,
             HShader::FALLBACK_ID => Shader::new_default("Fallback", SHADER_FALLBACK3D),
-            HShader::DIM2_ID => Shader::new_default("2D Default Pipeline", SHADER_DIM2)
+            HShader::DIM2_ID => Shader::new_default("2D Default", SHADER_DIM2)
                 .with_depth_enabled(false),
-            HShader::DIM3_ID => Shader::new_fragment("3D Default Pipeline", SHADER_DIM3),
+            HShader::DIM3_ID => Shader::new_fragment("3D Default", SHADER_DIM3),
             HShader::POST_PROCESS_ID => Shader::new_post_process("Post Process", SHADER_FS_COPY),
         );
 
@@ -208,6 +229,49 @@ impl StoreDefaults for Shader {
             range: 0..size_of::<TextPushConstants>() as u32,
         }];
 
+        const PICKER_PC: &[PushConstantRange] = &[PushConstantRange {
+            stages: ShaderStages::FRAGMENT,
+            range: 0..16,
+        }];
+
+        const PICKING_COLOR_TARGET: &[Option<ColorTargetState>] = &[Some(ColorTargetState {
+            format: PICKING_TEXTURE_FORMAT,
+            blend: None,
+            write_mask: ColorWrites::all(),
+        })];
+
+        store_add_checked!(
+            store,
+            HShader::DIM2_PICKER_ID,
+            Shader::Custom {
+                name: "Default 2D Picking Shader".to_string(),
+                code: ShaderCode::Full(SHADER_DIM2_PICKER.to_string()),
+                polygon_mode: PolygonMode::Fill,
+                topology: PrimitiveTopology::TriangleList,
+                vertex_buffers: &DEFAULT_VBL,
+                push_constant_ranges: PICKER_PC,
+                shadow_transparency: false,
+                depth_enabled: false,
+                color_target: PICKING_COLOR_TARGET,
+            }
+        );
+
+        store_add_checked!(
+            store,
+            HShader::DIM3_PICKER_ID,
+            Shader::Custom {
+                name: "Default 3D Picking Shader".to_string(),
+                code: ShaderCode::Fragment(SHADER_DIM3_PICKER.to_string()),
+                polygon_mode: PolygonMode::Fill,
+                topology: PrimitiveTopology::TriangleList,
+                vertex_buffers: &DEFAULT_VBL,
+                push_constant_ranges: PICKER_PC,
+                shadow_transparency: false,
+                depth_enabled: true,
+                color_target: PICKING_COLOR_TARGET,
+            }
+        );
+
         store_add_checked!(
             store,
             HShader::TEXT_2D_ID,
@@ -220,6 +284,23 @@ impl StoreDefaults for Shader {
                 push_constant_ranges: TEXT_PC,
                 shadow_transparency: false,
                 depth_enabled: false,
+                color_target: DEFAULT_COLOR_TARGET,
+            }
+        );
+
+        store_add_checked!(
+            store,
+            HShader::TEXT_2D_PICKER_ID,
+            Shader::Custom {
+                name: "Text 2D Picking Shader".to_string(),
+                code: ShaderCode::Full(SHADER_TEXT2D_PICKER.to_string()),
+                polygon_mode: PolygonMode::Fill,
+                topology: PrimitiveTopology::TriangleList,
+                vertex_buffers: TEXT_VBL,
+                push_constant_ranges: TEXT_PC,
+                shadow_transparency: true,
+                depth_enabled: true,
+                color_target: PICKING_COLOR_TARGET,
             }
         );
 
@@ -235,6 +316,23 @@ impl StoreDefaults for Shader {
                 push_constant_ranges: TEXT_PC,
                 shadow_transparency: true,
                 depth_enabled: true,
+                color_target: DEFAULT_COLOR_TARGET,
+            }
+        );
+
+        store_add_checked!(
+            store,
+            HShader::TEXT_3D_PICKER_ID,
+            Shader::Custom {
+                name: "Text 3D Picking Shader".to_string(),
+                code: ShaderCode::Full(SHADER_TEXT3D_PICKER.to_string()),
+                polygon_mode: PolygonMode::Fill,
+                topology: PrimitiveTopology::TriangleList,
+                vertex_buffers: TEXT_VBL,
+                push_constant_ranges: TEXT_PC,
+                shadow_transparency: true,
+                depth_enabled: true,
+                color_target: PICKING_COLOR_TARGET,
             }
         );
 
@@ -259,6 +357,7 @@ impl StoreDefaults for Shader {
                     }],
                     shadow_transparency: false,
                     depth_enabled: true,
+                    color_target: DEFAULT_COLOR_TARGET,
                 }
             );
 
@@ -274,6 +373,7 @@ impl StoreDefaults for Shader {
                     push_constant_ranges: &[],
                     shadow_transparency: false,
                     depth_enabled: true,
+                    color_target: DEFAULT_COLOR_TARGET,
                 }
             );
 
@@ -316,6 +416,7 @@ impl StoreDefaults for Shader {
                     push_constant_ranges: &[],
                     shadow_transparency: false,
                     depth_enabled: true,
+                    color_target: DEFAULT_COLOR_TARGET,
                 }
             );
 
@@ -341,6 +442,7 @@ impl StoreDefaults for Shader {
                     push_constant_ranges: TEXT_PC,
                     shadow_transparency: false,
                     depth_enabled: false,
+                    color_target: DEFAULT_COLOR_TARGET,
                 }
             );
 
@@ -356,6 +458,7 @@ impl StoreDefaults for Shader {
                     push_constant_ranges: TEXT_PC,
                     shadow_transparency: false,
                     depth_enabled: true,
+                    color_target: DEFAULT_COLOR_TARGET,
                 }
             );
 
@@ -374,6 +477,7 @@ impl StoreDefaults for Shader {
                     }],
                     shadow_transparency: false,
                     depth_enabled: true,
+                    color_target: DEFAULT_COLOR_TARGET,
                 }
             );
         }
@@ -562,6 +666,13 @@ impl Shader {
                 *depth_enabled
             }
             Shader::PostProcess { .. } => false,
+        }
+    }
+
+    pub fn color_target(&self) -> &'static [Option<ColorTargetState>] {
+        match self {
+            Shader::Default { .. } | Shader::PostProcess { .. } => DEFAULT_COLOR_TARGET,
+            Shader::Custom { color_target, .. } => color_target,
         }
     }
 

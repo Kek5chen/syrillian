@@ -56,7 +56,10 @@ impl RuntimeShader {
 
     pub fn pipeline(&self, stage: RenderPassType) -> Option<&RenderPipeline> {
         match stage {
-            RenderPassType::Color | RenderPassType::Color2D => Some(&self.pipeline),
+            RenderPassType::Color
+            | RenderPassType::Color2D
+            | RenderPassType::Picking
+            | RenderPassType::PickingUi => Some(&self.pipeline),
             RenderPassType::Shadow => self.shadow_pipeline.as_ref(),
         }
     }

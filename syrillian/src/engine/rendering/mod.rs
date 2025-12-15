@@ -34,6 +34,7 @@ pub mod light_manager;
 pub mod lights;
 pub mod message;
 mod offscreen_surface;
+pub mod picking;
 mod post_process_pass;
 pub mod proxies;
 pub(crate) mod render_data;
@@ -47,6 +48,7 @@ pub mod debug_renderer;
 pub use cache::*;
 pub use context::*;
 pub use message::*;
+pub use picking::*;
 
 #[cfg(debug_assertions)]
 pub use debug_renderer::*;

@@ -1,6 +1,8 @@
 use crate::assets::{AssetStore, H, HMaterial, HMesh, HShader, Mesh, Shader};
 use crate::components::BoneData;
 use crate::core::ModelUniform;
+use crate::core::ObjectHash;
+use crate::rendering::picking::hash_to_rgba;
 use crate::rendering::proxies::{PROXY_PRIORITY_SOLID, PROXY_PRIORITY_TRANSPARENT, SceneProxy};
 use crate::rendering::uniform::ShaderUniform;
 use crate::rendering::{
@@ -11,7 +13,7 @@ use nalgebra::Matrix4;
 use std::any::Any;
 use std::sync::RwLockWriteGuard;
 use syrillian_macros::UniformIndex;
-use wgpu::{IndexFormat, RenderPass};
+use wgpu::{IndexFormat, RenderPass, ShaderStages};
 
 #[cfg(debug_assertions)]
 use crate::rendering::DebugRenderer;
@@ -140,6 +142,62 @@ impl SceneProxy for MeshSceneProxy {
             PROXY_PRIORITY_TRANSPARENT
         } else {
             PROXY_PRIORITY_SOLID
+        }
+    }
+
+    // TODO: Make shaders more modular so picking and (shadow) shaders can be generated from just a vertex shader
+    fn render_picking(
+        &self,
+        renderer: &Renderer,
+        data: &dyn Any,
+        ctx: &GPUDrawCtx,
+        _local_to_world: &Matrix4<f32>,
+        object_hash: ObjectHash,
+    ) {
+        debug_assert_eq!(ctx.pass_type, RenderPassType::Picking);
+
+        let data: &RuntimeMeshData = proxy_data!(data);
+
+        let Some(mesh) = renderer.cache.mesh(self.mesh) else {
+            return;
+        };
+
+        let Some(mesh_data) = renderer.cache.meshes.store().try_get(self.mesh) else {
+            return;
+        };
+
+        let mut pass = ctx.pass.write().unwrap();
+
+        let color = hash_to_rgba(object_hash);
+        let shader = renderer.cache.shader(HShader::DIM3_PICKING);
+
+        pass.set_pipeline(shader.solid_pipeline());
+        pass.set_bind_group(shader.bind_groups().render, ctx.render_bind_group, &[]);
+        if let Some(model) = shader.bind_groups().model {
+            pass.set_bind_group(model, data.uniform.bind_group(), &[]);
+        }
+        pass.set_push_constants(ShaderStages::FRAGMENT, 0, bytemuck::bytes_of(&color));
+
+        pass.set_vertex_buffer(0, mesh.vertex_buffer().slice(..));
+        if let Some(i_buffer) = mesh.indices_buffer() {
+            pass.set_index_buffer(i_buffer.slice(..), IndexFormat::Uint32);
+        }
+
+        if mesh_data.material_ranges.is_empty() {
+            if mesh_data.has_indices() {
+                pass.draw_indexed(0..mesh.indices_count(), 0, 0..1);
+            } else {
+                pass.draw(0..mesh.vertex_count(), 0..1);
+            }
+            return;
+        }
+
+        for range in mesh_data.material_ranges.iter() {
+            if mesh_data.has_indices() {
+                pass.draw_indexed(range.clone(), 0, 0..1);
+            } else {
+                pass.draw(range.clone(), 0..1);
+            }
         }
     }
 }
