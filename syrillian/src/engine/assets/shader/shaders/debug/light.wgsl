@@ -7,7 +7,11 @@ struct VSOut {
     @location(0) color: vec4<f32>,
 }
 
-var<push_constant> light_index: u32;
+struct PushConstants {
+    light_index: u32,
+};
+
+var<push_constant> pc: PushConstants;
 
 // Sun Light
 
@@ -105,7 +109,7 @@ fn calculate_spot_offset(light: Light, vid: u32, iid: u32) -> vec3<f32> {
 @vertex
 fn vs_main(@builtin(vertex_index) vid: u32, @builtin(instance_index) iid: u32) -> VSOut {
     var out: VSOut;
-    let light = lights[light_index];
+    let light = lights[pc.light_index];
 
     var offset: vec3<f32>;
     var alpha: f32;
