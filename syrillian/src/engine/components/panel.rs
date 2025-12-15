@@ -128,15 +128,15 @@ mod tests {
     use winit::dpi::PhysicalSize;
 
     fn world_with_viewport() -> Box<World> {
-        let (mut world, _, _) = World::fresh();
+        let (mut world, ..) = World::fresh();
         world.set_viewport_size(RenderTargetId::PRIMARY, PhysicalSize::new(800, 600));
         world
     }
 
     fn as_image_proxy(
-        proxy: &mut Box<dyn crate::rendering::proxies::SceneProxy>,
+        proxy: &mut dyn crate::rendering::proxies::SceneProxy,
     ) -> &mut ImageSceneProxy {
-        (proxy.as_mut() as &mut dyn Any)
+        (proxy as &mut dyn Any)
             .downcast_mut::<ImageSceneProxy>()
             .expect("image proxy")
     }
@@ -183,7 +183,7 @@ mod tests {
         let mut panel_image_proxy = panel_image
             .create_render_proxy(&world)
             .expect("panel image proxy");
-        assert_eq!(as_image_proxy(&mut panel_image_proxy).draw_order, 0);
+        assert_eq!(as_image_proxy(&mut *panel_image_proxy).draw_order, 0);
 
         let text_priority = panel_text
             .create_render_proxy(&world)
@@ -194,7 +194,7 @@ mod tests {
         let mut child_proxy_box = child_image
             .create_render_proxy(&world)
             .expect("child image proxy");
-        let child_proxy = as_image_proxy(&mut child_proxy_box);
+        let child_proxy = as_image_proxy(&mut *child_proxy_box);
         match child_proxy.scaling {
             ImageScalingMode::Absolute {
                 left,
@@ -212,7 +212,7 @@ mod tests {
         let mut grandchild_proxy_box = grandchild_image
             .create_render_proxy(&world)
             .expect("grandchild image proxy");
-        let grandchild_proxy = as_image_proxy(&mut grandchild_proxy_box);
+        let grandchild_proxy = as_image_proxy(&mut *grandchild_proxy_box);
         match grandchild_proxy.scaling {
             ImageScalingMode::Absolute {
                 left,
