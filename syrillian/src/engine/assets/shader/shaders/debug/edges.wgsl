@@ -1,7 +1,12 @@
 #use default_vertex
 #use model
 
-var<push_constant> color: vec4<f32>;
+
+struct PushConstants {
+    color: vec4<f32>,
+};
+
+var<push_constant> pc: PushConstants;
 
 @vertex
 fn vs_main(in: VInput) -> @builtin(position) vec4<f32> {
@@ -15,11 +20,11 @@ fn vs_main(in: VInput) -> @builtin(position) vec4<f32> {
 
 @fragment
 fn fs_main() -> @location(0) vec4<f32> {
-    return color;
+    return pc.color;
 }
 
 // this looks cool
 //@fragment
 //fn fs_main(@builtin(position) pos: vec4<f32>) -> @location(0) vec4<f32> {
-//    return vec4(color.rgb, min(1.0, 3.0 + log(pos.w / 2)));
+//    return vec4(pc.color.rgb, min(1.0, 3.0 + log(pos.w / 2)));
 //}
