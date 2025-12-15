@@ -26,6 +26,7 @@ use slotmap::{HopSlotMap, Key};
 use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
 use std::mem::swap;
+use std::path::PathBuf;
 use std::sync::Arc;
 use web_time::{Duration, Instant};
 
@@ -189,7 +190,7 @@ pub struct World {
 
     /// Flag indicating whether a shutdown has been requested
     requested_shutdown: bool,
-    channels: WorldChannels,
+    pub(crate) channels: WorldChannels,
     thread_binding: Option<WorldBinding>,
 }
 
@@ -849,6 +850,28 @@ impl World {
             .iter()
             .filter_map(|(id, o)| (o.is_alive() && o.property(key)? == value).then_some(id))
             .collect()
+    }
+
+    pub fn capture_offscreen_texture(
+        &self,
+        target: RenderTargetId,
+        path: impl Into<PathBuf>,
+    ) -> bool {
+        self.channels
+            .render_tx
+            .send(RenderMsg::CaptureOffscreenTexture(target, path.into()))
+            .is_ok()
+    }
+
+    pub fn capture_picking_texture(
+        &self,
+        target: RenderTargetId,
+        path: impl Into<PathBuf>,
+    ) -> bool {
+        self.channels
+            .render_tx
+            .send(RenderMsg::CapturePickingTexture(target, path.into()))
+            .is_ok()
     }
 
     /// Prints information about all game objects in the world to the log

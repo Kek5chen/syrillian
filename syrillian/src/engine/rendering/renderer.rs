@@ -6,9 +6,9 @@
 
 use super::error::*;
 use crate::components::TypedComponentId;
-use crate::engine::assets::AssetStore;
+use crate::engine::assets::{AssetStore, HTexture};
 use crate::engine::rendering::FrameCtx;
-use crate::engine::rendering::cache::AssetCache;
+use crate::engine::rendering::cache::{AssetCache, GpuTexture};
 use crate::engine::rendering::offscreen_surface::OffscreenSurface;
 use crate::engine::rendering::post_process_pass::PostProcessData;
 use crate::game_thread::RenderTargetId;
@@ -20,6 +20,7 @@ use crate::rendering::message::RenderMsg;
 use crate::rendering::picking::{PickRequest, PickResult, color_bytes_to_hash};
 use crate::rendering::proxies::{PROXY_PRIORITY_2D, SceneProxyBinding};
 use crate::rendering::render_data::RenderUniformData;
+use crate::rendering::texture_export::{TextureExportError, save_texture_to_png};
 use crate::rendering::{GPUDrawCtx, RenderPassType, State};
 use crossbeam_channel::{Receiver, Sender};
 use itertools::Itertools;
@@ -338,6 +339,82 @@ impl Renderer {
         self.viewports
             .get_mut(&viewport)
             .map(RenderViewport::window_mut)
+    }
+
+    /// Export the offscreen render target for a viewport as a PNG image.
+    pub fn export_offscreen_png(
+        &self,
+        target: RenderTargetId,
+        path: impl AsRef<std::path::Path>,
+    ) -> Result<(), TextureExportError> {
+        let viewport = self
+            .viewports
+            .get(&target)
+            .ok_or(TextureExportError::Unavailable {
+                reason: "render target not found",
+            })?;
+
+        save_texture_to_png(
+            &self.state.device,
+            &self.state.queue,
+            viewport.offscreen_surface.texture(),
+            viewport.config.format,
+            viewport.config.width,
+            viewport.config.height,
+            path,
+        )
+    }
+
+    /// Export the picking buffer for a viewport as a PNG image.
+    pub fn export_picking_png(
+        &self,
+        target: RenderTargetId,
+        path: impl AsRef<std::path::Path>,
+    ) -> Result<(), TextureExportError> {
+        let viewport = self
+            .viewports
+            .get(&target)
+            .ok_or(TextureExportError::Unavailable {
+                reason: "render target not found",
+            })?;
+
+        save_texture_to_png(
+            &self.state.device,
+            &self.state.queue,
+            viewport.picking_surface.texture(),
+            PICKING_TEXTURE_FORMAT,
+            viewport.config.width,
+            viewport.config.height,
+            path,
+        )
+    }
+
+    /// Export any GPU texture to a PNG image.
+    pub fn export_texture_png(
+        &self,
+        texture: &GpuTexture,
+        path: impl AsRef<std::path::Path>,
+    ) -> Result<(), TextureExportError> {
+        let size = texture.size;
+        save_texture_to_png(
+            &self.state.device,
+            &self.state.queue,
+            &texture.texture,
+            texture.format,
+            size.width,
+            size.height,
+            path,
+        )
+    }
+
+    /// Export a cached texture handle to a PNG image.
+    pub fn export_cached_texture_png(
+        &self,
+        texture: HTexture,
+        path: impl AsRef<std::path::Path>,
+    ) -> Result<(), TextureExportError> {
+        let gpu_tex = self.cache.texture(texture);
+        self.export_texture_png(&gpu_tex, path)
     }
 
     pub fn start_time(&self) -> Instant {
@@ -851,6 +928,21 @@ impl Renderer {
             RenderMsg::CommandBatch(batch) => {
                 for message in batch {
                     self.handle_message(message);
+                }
+            }
+            RenderMsg::CaptureOffscreenTexture(target, path) => {
+                if let Err(e) = self.export_offscreen_png(target, &path) {
+                    warn!("Couldn't capture offscreen texture: {e}");
+                }
+            }
+            RenderMsg::CapturePickingTexture(target, path) => {
+                if let Err(e) = self.export_picking_png(target, &path) {
+                    warn!("Couldn't capture picking texture: {e}");
+                }
+            }
+            RenderMsg::CaptureTexture(texture, path) => {
+                if let Err(e) = self.export_cached_texture_png(texture, &path) {
+                    warn!("Couldn't capture picking texture: {e}");
                 }
             }
         }

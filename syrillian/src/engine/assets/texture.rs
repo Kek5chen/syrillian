@@ -1,8 +1,10 @@
 use crate::engine::assets::generic_store::{HandleName, Store, StoreDefaults, StoreType};
 use crate::engine::assets::{H, HTexture, StoreTypeFallback};
-use crate::store_add_checked;
+use crate::rendering::RenderMsg;
+use crate::{World, store_add_checked};
 use std::error::Error;
 use std::fs;
+use std::path::PathBuf;
 use wgpu::{
     AddressMode, Extent3d, FilterMode, TextureDescriptor, TextureDimension, TextureFormat,
     TextureUsages,
@@ -29,6 +31,14 @@ impl H<Texture> {
     pub const FALLBACK_DIFFUSE: H<Texture> = H::new(Self::FALLBACK_DIFFUSE_ID);
     pub const FALLBACK_NORMAL: H<Texture> = H::new(Self::FALLBACK_NORMAL_ID);
     pub const FALLBACK_ROUGHNESS: H<Texture> = H::new(Self::FALLBACK_SHININESS_ID);
+
+    pub fn export_screenshot(self, path: impl Into<PathBuf>, world: &World) -> bool {
+        world
+            .channels
+            .render_tx
+            .send(RenderMsg::CaptureTexture(self, path.into()))
+            .is_ok()
+    }
 }
 
 impl Texture {
@@ -61,14 +71,10 @@ impl Texture {
 
     pub(crate) fn desc(&self) -> TextureDescriptor<'_> {
         let layers = self.array_layers.max(1);
-        let usage = if layers > 1 {
-            TextureUsages::TEXTURE_BINDING
-                | TextureUsages::RENDER_ATTACHMENT
-                | TextureUsages::COPY_SRC
-                | TextureUsages::COPY_DST
-        } else {
-            TextureUsages::TEXTURE_BINDING | TextureUsages::RENDER_ATTACHMENT
-        };
+        let usage = TextureUsages::TEXTURE_BINDING
+            | TextureUsages::RENDER_ATTACHMENT
+            | TextureUsages::COPY_SRC
+            | TextureUsages::COPY_DST;
 
         TextureDescriptor {
             label: None,
