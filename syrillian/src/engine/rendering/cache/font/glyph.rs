@@ -112,6 +112,29 @@ fn align_lines(glyphs: &mut [GlyphRenderData], alignment: TextAlignment, rows: &
     }
 }
 
+fn normalize_top_left_origin(glyphs: &mut [GlyphRenderData]) {
+    let mut min_x = f32::INFINITY;
+    let mut max_y = f32::NEG_INFINITY;
+
+    for glyph in glyphs.iter() {
+        for v in glyph.vertices() {
+            min_x = min_x.min(v.pos[0]);
+            max_y = max_y.max(v.pos[1]);
+        }
+    }
+
+    if !min_x.is_finite() || !max_y.is_finite() {
+        return;
+    }
+
+    for glyph in glyphs.iter_mut() {
+        for v in glyph.vertices_mut() {
+            v.pos[0] -= min_x;
+            v.pos[1] -= max_y;
+        }
+    }
+}
+
 pub fn generate_glyph_geometry_stream(
     text: &str,
     atlas: &FontAtlas,
@@ -136,6 +159,7 @@ pub fn generate_glyph_geometry_stream(
         letter_spacing_em,
     );
     align_lines(&mut quads, alignment, &row_data);
+    normalize_top_left_origin(&mut quads);
 
     quads
 }
