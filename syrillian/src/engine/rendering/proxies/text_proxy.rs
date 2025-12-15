@@ -68,6 +68,9 @@ pub struct TextProxy<const D: u8, DIM: TextDim<D>> {
     constants_dirty: bool,
     translation: ModelUniform,
 
+    draw_order: u32,
+    order_dirty: bool,
+
     _dim: PhantomData<DIM>,
 }
 
@@ -94,8 +97,23 @@ impl<const D: u8, DIM: TextDim<D>> TextProxy<D, DIM> {
             constants_dirty: false,
             translation: ModelUniform::empty(),
 
+            draw_order: 0,
+            order_dirty: false,
+
             _dim: PhantomData,
         }
+    }
+
+    pub fn set_draw_order(&mut self, order: u32) {
+        if self.draw_order == order {
+            return;
+        }
+        self.draw_order = order;
+        self.order_dirty = true;
+    }
+
+    pub fn size(&self) -> f32 {
+        self.pc.em_scale
     }
 
     pub fn update_game_thread(&mut self, mut ctx: CPUDrawCtx) {
@@ -109,6 +127,15 @@ impl<const D: u8, DIM: TextDim<D>> TextProxy<D, DIM> {
                 proxy.rainbow_mode = rainbow_mode;
             });
             self.constants_dirty = false;
+        }
+
+        if self.order_dirty {
+            let order = self.draw_order;
+            ctx.send_proxy_update(move |proxy| {
+                let proxy: &mut Self = proxy_data_mut!(proxy);
+                proxy.draw_order = order;
+            });
+            self.order_dirty = false;
         }
 
         if self.text_dirty {
@@ -374,10 +401,9 @@ impl<const D: u8, DIM: TextDim<D>> SceneProxy for TextProxy<D, DIM> {
     }
 
     fn priority(&self, _store: &AssetStore) -> u32 {
-        if D == 2 {
-            PROXY_PRIORITY_2D
-        } else {
-            PROXY_PRIORITY_TRANSPARENT
+        match D {
+            2 => PROXY_PRIORITY_2D.saturating_add(self.draw_order),
+            _ => PROXY_PRIORITY_TRANSPARENT,
         }
     }
 }

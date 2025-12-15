@@ -47,6 +47,7 @@ pub mod gravity;
 pub mod image;
 pub mod light;
 pub mod mesh_renderer;
+pub mod panel;
 pub mod rigid_body;
 pub mod rope;
 pub mod rotate;
@@ -68,6 +69,7 @@ pub use gravity::*;
 pub use image::*;
 pub use light::*;
 pub use mesh_renderer::*;
+pub use panel::*;
 pub use rigid_body::*;
 pub use rope::*;
 pub use rotate::*;
@@ -416,15 +418,5 @@ pub trait NewComponent: Component {
 impl<D: Default + Component> NewComponent for D {
     fn new(_parent: GameObjectId) -> Self {
         Self::default()
-    }
-}
-
-pub(crate) trait InternalComponentDeletion {
-    fn delete_internal(&mut self, world: &mut World);
-}
-
-impl InternalComponentDeletion for dyn Component {
-    fn delete_internal(&mut self, world: &mut World) {
-        self.delete(world);
     }
 }
