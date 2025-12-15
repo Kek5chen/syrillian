@@ -1,6 +1,8 @@
 use crate::components::TypedComponentId;
+use crate::core::ObjectHash;
 use crate::game_thread::RenderTargetId;
 use crate::rendering::lights::LightProxy;
+use crate::rendering::picking::PickRequest;
 use crate::rendering::proxies::SceneProxy;
 use crate::rendering::render_data::CameraUniform;
 use nalgebra::Affine3;
@@ -11,7 +13,12 @@ pub type LightProxyCommand = Box<dyn FnOnce(&mut LightProxy) + Send>;
 pub type CameraUpdateCommand = Box<dyn FnOnce(&mut CameraUniform) + Send>;
 
 pub enum RenderMsg {
-    RegisterProxy(TypedComponentId, Box<dyn SceneProxy>, Affine3<f32>),
+    RegisterProxy(
+        TypedComponentId,
+        ObjectHash,
+        Box<dyn SceneProxy>,
+        Affine3<f32>,
+    ),
     RegisterLightProxy(TypedComponentId, Box<LightProxy>),
     RemoveProxy(TypedComponentId),
     UpdateTransform(TypedComponentId, Affine3<f32>),
@@ -19,6 +26,7 @@ pub enum RenderMsg {
     LightProxyUpdate(TypedComponentId, LightProxyCommand),
     UpdateActiveCamera(RenderTargetId, CameraUpdateCommand),
     ProxyState(TypedComponentId, bool), // enabled
+    PickRequest(PickRequest),
     CommandBatch(Vec<RenderMsg>),
 }
 
@@ -33,6 +41,7 @@ impl Debug for RenderMsg {
             RenderMsg::LightProxyUpdate(..) => "Light Proxy Update",
             RenderMsg::UpdateActiveCamera(..) => "Update Active Camera",
             RenderMsg::ProxyState(_, enable) => &format!("Proxy Enabled: {enable}"),
+            RenderMsg::PickRequest(..) => "Pick Request",
             RenderMsg::CommandBatch(inner) => &format!("Command Batch {inner:?}"),
         };
 

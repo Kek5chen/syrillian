@@ -86,6 +86,11 @@ fn generate_default(
         generated.push('\n');
     }
 
+    if fragment_only {
+        generated.push_str(DEFAULT_VERTEX_3D);
+        generated.push('\n');
+    }
+
     rewrite_bind_groups(generated, map)
 }
 

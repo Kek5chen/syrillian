@@ -14,6 +14,43 @@ use std::ptr::null_mut;
 
 use crate::core::Transform;
 
+#[derive(Copy, Clone, Eq, PartialEq, Debug, Default)]
+pub struct EventType(u32);
+
+impl EventType {
+    pub const CLICK: EventType = EventType(0b1);
+
+    pub const fn empty() -> Self {
+        EventType(0)
+    }
+
+    pub fn contains(self, other: EventType) -> bool {
+        self.0 & other.0 != 0
+    }
+
+    pub fn toggle(self, other: EventType) -> EventType {
+        EventType(self.0 ^ other.0)
+    }
+
+    pub fn insert(self, other: EventType) -> EventType {
+        EventType(self.0 | other.0)
+    }
+
+    pub fn remove(self, other: EventType) -> EventType {
+        EventType(self.0 & !other.0)
+    }
+
+    pub const fn bits(self) -> u32 {
+        self.0
+    }
+
+    pub const fn is_empty(self) -> bool {
+        self.0 == 0
+    }
+}
+
+pub type ObjectHash = u32;
+
 new_key_type! {
     /// Uniquely identifies a game object within the world.
     pub struct GameObjectId;
@@ -272,12 +309,42 @@ pub struct GameObject {
     pub(crate) components: HashSet<CRef<dyn Component>>,
     /// Custom Property Data (Keys & Values)
     pub(crate) custom_properties: HashMap<String, serde_json::Value>,
+    /// Events this object is registered for.
+    pub(crate) event_mask: Cell<EventType>,
+    /// Unique hash used for picking and lookup.
+    pub(crate) hash: ObjectHash,
 }
 
 impl GameObject {
     /// Returns whether this object is still alive inside the world.
     pub fn is_alive(&self) -> bool {
         self.alive.get()
+    }
+
+    pub fn object_hash(&self) -> ObjectHash {
+        self.hash
+    }
+
+    pub fn event_mask(&self) -> EventType {
+        self.event_mask.get()
+    }
+
+    pub fn is_notified_for(&self, event: EventType) -> bool {
+        self.event_mask().contains(event)
+    }
+
+    pub fn notify_for(&self, world: &mut World, event: EventType) {
+        let current = self.event_mask();
+        let new_mask = current.insert(event);
+        self.event_mask.set(new_mask);
+        world.update_event_registration(self.id, current, new_mask);
+    }
+
+    pub fn stop_notify_for(&self, world: &mut World, event: EventType) {
+        let current = self.event_mask();
+        let new_mask = current.remove(event);
+        self.event_mask.set(new_mask);
+        world.update_event_registration(self.id, current, new_mask);
     }
 
     pub(crate) fn mark_dead(&self) {

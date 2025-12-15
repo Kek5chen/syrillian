@@ -5,8 +5,10 @@ use nalgebra::Vector3;
 use rapier3d::prelude::QueryFilter;
 use std::error::Error;
 use syrillian::assets::{Material, StoreType, Texture};
-use syrillian::components::{Collider3D, Image, ImageScalingMode, RotateComponent};
-use syrillian::core::{GameObjectExt, GameObjectId};
+use syrillian::components::{
+    Collider3D, Component, Image, ImageScalingMode, NewComponent, RotateComponent,
+};
+use syrillian::core::{EventType, GOComponentExt, GameObject, GameObjectExt, GameObjectId};
 use syrillian::prefabs::CubePrefab;
 use syrillian::{AppState, World};
 use syrillian_macros::SyrillianApp;
@@ -51,6 +53,7 @@ impl AppState for NecoArc {
             .build_component::<Collider3D>();
 
         let mut image_obj = world.new_object("Image");
+        image_obj.add_component::<ClickComponent>();
         let mut image = image_obj.add_component::<Image>();
         image.set_scaling_mode(ImageScalingMode::RelativeStretch {
             left: 0.0,
@@ -62,6 +65,7 @@ impl AppState for NecoArc {
         world.add_child(image_obj);
 
         let mut image_obj = world.new_object("Image 2");
+        image_obj.add_component::<ClickComponent>();
         let mut image = image_obj.add_component::<Image>();
         image.set_scaling_mode(ImageScalingMode::RelativeStretch {
             left: 0.0,
@@ -122,5 +126,34 @@ impl NecoArc {
                 .transform
                 .set_position_vec(new_pos - self.drag_offset);
         }
+    }
+}
+
+#[derive(Debug)]
+struct ClickComponent {
+    parent: GameObjectId,
+}
+
+impl NewComponent for ClickComponent {
+    fn new(parent: GameObjectId) -> Self {
+        Self { parent }
+    }
+}
+
+impl Component for ClickComponent {
+    fn init(&mut self, world: &mut World) {
+        self.parent.notify_for(world, EventType::CLICK);
+    }
+    fn on_click(&mut self, _world: &mut World) {
+        let name = &self.parent.name;
+        info!("Hi I, {name:?} was clicked");
+    }
+}
+
+impl<'a> GOComponentExt<'a> for ClickComponent {
+    type Outer = GameObjectId;
+
+    fn build_component(&'a mut self, obj: &'a mut GameObject) -> Self::Outer {
+        obj.id
     }
 }

@@ -406,6 +406,8 @@ pub trait Component: Any + Send + Sync {
 
     fn update_proxy(&mut self, world: &World, draw_ctx: CPUDrawCtx) {}
 
+    fn on_click(&mut self, _world: &mut World) {}
+
     // Gets called when the component is about to be deleted
     fn delete(&mut self, world: &mut World) {}
 }

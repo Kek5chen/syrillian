@@ -82,6 +82,7 @@ impl<S: AppState> App<S> {
 
         let (render_state_tx, render_state_rx) = unbounded();
         let (game_event_tx, game_event_rx) = unbounded();
+        let (pick_result_tx, pick_result_rx) = unbounded();
 
         let main_window = event_loop
             .create_window(self.main_window_attributes.clone())
@@ -102,7 +103,12 @@ impl<S: AppState> App<S> {
 
         trace!("Created render surface");
 
-        let renderer = match Renderer::new(render_state_rx, main_window, asset_store.clone()) {
+        let renderer = match Renderer::new(
+            render_state_rx,
+            pick_result_tx,
+            main_window,
+            asset_store.clone(),
+        ) {
             Ok(r) => r,
             Err(err) => {
                 error!("Couldn't create renderer: {err}");
@@ -114,7 +120,7 @@ impl<S: AppState> App<S> {
         trace!("Created Renderer");
 
         let state = self.state.take().expect("app state already initialized");
-        let channels = WorldChannels::new(render_state_tx, game_event_tx);
+        let channels = WorldChannels::new(render_state_tx, game_event_tx, pick_result_rx);
         let game_thread = GameThread::new(state, asset_store.clone(), channels, game_event_rx);
 
         if !game_thread.init() {

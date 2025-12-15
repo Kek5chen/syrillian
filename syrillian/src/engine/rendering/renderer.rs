@@ -17,10 +17,11 @@ use crate::rendering::DebugRenderer;
 use crate::rendering::light_manager::LightManager;
 use crate::rendering::lights::LightType;
 use crate::rendering::message::RenderMsg;
+use crate::rendering::picking::{PickRequest, PickResult, color_bytes_to_hash};
 use crate::rendering::proxies::{PROXY_PRIORITY_2D, SceneProxyBinding};
 use crate::rendering::render_data::RenderUniformData;
 use crate::rendering::{GPUDrawCtx, RenderPassType, State};
-use crossbeam_channel::Receiver;
+use crossbeam_channel::{Receiver, Sender};
 use itertools::Itertools;
 use log::{error, trace, warn};
 use nalgebra::Vector2;
@@ -31,21 +32,59 @@ use std::mem;
 use std::sync::{Arc, RwLock};
 use syrillian_utils::debug_panic;
 use web_time::{Duration, Instant};
-use wgpu::{
-    Color, CommandEncoderDescriptor, LoadOp, Operations, RenderPass, RenderPassColorAttachment,
-    RenderPassDepthStencilAttachment, RenderPassDescriptor, StoreOp, Surface, SurfaceConfiguration,
-    SurfaceError, TextureDescriptor, TextureDimension, TextureUsages, TextureView,
-    TextureViewDescriptor,
-};
+use wgpu::*;
 use winit::dpi::PhysicalSize;
 use winit::window::{Window, WindowId};
+
+pub const PICKING_TEXTURE_FORMAT: TextureFormat = TextureFormat::Rgba8Unorm;
+const PICKING_ROW_PITCH: u32 = 256;
+
+struct PickingSurface {
+    texture: Texture,
+    view: TextureView,
+}
+
+impl PickingSurface {
+    fn new(device: &Device, config: &SurfaceConfiguration) -> Self {
+        let texture = device.create_texture(&TextureDescriptor {
+            label: Some("Picking Texture"),
+            size: Extent3d {
+                width: config.width.max(1),
+                height: config.height.max(1),
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: TextureDimension::D2,
+            format: PICKING_TEXTURE_FORMAT,
+            usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_SRC,
+            view_formats: &[],
+        });
+        let view = texture.create_view(&TextureViewDescriptor::default());
+
+        Self { texture, view }
+    }
+
+    fn recreate(&mut self, device: &Device, config: &SurfaceConfiguration) {
+        *self = Self::new(device, config);
+    }
+
+    fn view(&self) -> &TextureView {
+        &self.view
+    }
+
+    fn texture(&self) -> &Texture {
+        &self.texture
+    }
+}
 
 pub struct RenderViewport {
     window: Window,
     surface: Surface<'static>,
     config: SurfaceConfiguration,
-    depth_texture: wgpu::Texture,
+    depth_texture: Texture,
     offscreen_surface: OffscreenSurface,
+    picking_surface: PickingSurface,
     post_process_data: PostProcessData,
     render_data: RenderUniformData,
     start_time: Instant,
@@ -71,6 +110,7 @@ impl RenderViewport {
         let offscreen_surface = OffscreenSurface::new(&state.device, &config);
         let depth_texture = Self::create_depth_texture(&state.device, &config);
         let depth_view = depth_texture.create_view(&TextureViewDescriptor::default());
+        let picking_surface = PickingSurface::new(&state.device, &config);
 
         let post_process_data = PostProcessData::new(
             &state.device,
@@ -87,6 +127,7 @@ impl RenderViewport {
             config,
             depth_texture,
             offscreen_surface,
+            picking_surface,
             post_process_data,
             render_data,
             start_time: Instant::now(),
@@ -119,6 +160,7 @@ impl RenderViewport {
 
         self.offscreen_surface.recreate(&state.device, &self.config);
         self.depth_texture = Self::create_depth_texture(&state.device, &self.config);
+        self.picking_surface.recreate(&state.device, &self.config);
         let pp_bgl = cache.bgl_post_process();
         let depth_view = self
             .depth_texture
@@ -131,10 +173,10 @@ impl RenderViewport {
         );
     }
 
-    fn create_depth_texture(device: &wgpu::Device, config: &SurfaceConfiguration) -> wgpu::Texture {
+    fn create_depth_texture(device: &Device, config: &SurfaceConfiguration) -> Texture {
         device.create_texture(&TextureDescriptor {
             label: Some("Depth Texture"),
-            size: wgpu::Extent3d {
+            size: Extent3d {
                 width: config.width.max(1),
                 height: config.height.max(1),
                 depth_or_array_layers: 1,
@@ -142,7 +184,7 @@ impl RenderViewport {
             mip_level_count: 1,
             sample_count: 1,
             dimension: TextureDimension::D2,
-            format: wgpu::TextureFormat::Depth32Float,
+            format: TextureFormat::Depth32Float,
             usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
         })
@@ -172,15 +214,15 @@ impl RenderViewport {
         })
     }
 
-    fn update_render_data(&mut self, queue: &wgpu::Queue) {
+    fn update_render_data(&mut self, queue: &Queue) {
         self.update_system_data(queue);
     }
 
-    fn update_view_camera_data(&mut self, queue: &wgpu::Queue) {
+    fn update_view_camera_data(&mut self, queue: &Queue) {
         self.render_data.upload_camera_data(queue);
     }
 
-    fn update_system_data(&mut self, queue: &wgpu::Queue) {
+    fn update_system_data(&mut self, queue: &Queue) {
         let window_size = self.window.inner_size();
         let window_size = Vector2::new(window_size.width.max(1), window_size.height.max(1));
 
@@ -225,12 +267,15 @@ pub struct Renderer {
     proxies: HashMap<TypedComponentId, SceneProxyBinding>,
     sorted_proxies: Vec<(u32, TypedComponentId)>,
     start_time: Instant,
+    pick_result_tx: Sender<PickResult>,
+    pending_pick_requests: Vec<PickRequest>,
     pub(super) lights: LightManager,
 }
 
 impl Renderer {
     pub fn new(
         game_rx: Receiver<RenderMsg>,
+        pick_result_tx: Sender<PickResult>,
         main_window: Window,
         store: Arc<AssetStore>,
     ) -> Result<Self> {
@@ -263,8 +308,22 @@ impl Renderer {
             start_time,
             proxies: HashMap::new(),
             sorted_proxies: Vec::new(),
+            pick_result_tx,
+            pending_pick_requests: Vec::new(),
             lights,
         })
+    }
+
+    fn take_pick_request(&mut self, target: RenderTargetId) -> Option<PickRequest> {
+        if let Some(idx) = self
+            .pending_pick_requests
+            .iter()
+            .rposition(|r| r.target == target)
+        {
+            Some(self.pending_pick_requests.swap_remove(idx))
+        } else {
+            None
+        }
     }
 
     pub fn find_render_target_id(&self, window_id: &WindowId) -> Option<RenderTargetId> {
@@ -312,7 +371,7 @@ impl Renderer {
         };
 
         viewport.tick_delta_time();
-        let rendered = self.render_frame(&mut viewport);
+        let rendered = self.render_frame(target_id, &mut viewport);
 
         self.viewports.insert(target_id, viewport);
 
@@ -340,7 +399,11 @@ impl Renderer {
         self.sorted_proxies = sorted_enabled_proxy_ids(&self.proxies, self.cache.store());
     }
 
-    pub fn render_frame(&mut self, viewport: &mut RenderViewport) -> bool {
+    pub fn render_frame(
+        &mut self,
+        target_id: RenderTargetId,
+        viewport: &mut RenderViewport,
+    ) -> bool {
         let mut ctx = match viewport.begin_render(&self.state) {
             Ok(ctx) => ctx,
             Err(RenderError::Surface {
@@ -362,10 +425,157 @@ impl Renderer {
             }
         };
 
+        if let Some(request) = self.take_pick_request(target_id) {
+            self.picking_pass(viewport, &mut ctx, request);
+        }
+
         self.render(viewport, &mut ctx);
         self.end_render(viewport, ctx);
 
         true
+    }
+
+    fn picking_pass(
+        &mut self,
+        viewport: &RenderViewport,
+        ctx: &mut FrameCtx,
+        request: PickRequest,
+    ) {
+        let split_idx = self.first_ui_proxy_index();
+
+        let mut encoder = self
+            .state
+            .device
+            .create_command_encoder(&CommandEncoderDescriptor {
+                label: Some("Picking Encoder"),
+            });
+
+        {
+            let pass = encoder.begin_render_pass(&RenderPassDescriptor {
+                label: Some("Picking Pass"),
+                color_attachments: &[Some(RenderPassColorAttachment {
+                    view: viewport.picking_surface.view(),
+                    resolve_target: None,
+                    ops: Operations {
+                        load: LoadOp::Clear(Color {
+                            r: 0.0,
+                            g: 0.0,
+                            b: 0.0,
+                            a: 0.0,
+                        }),
+                        store: StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
+                    view: &ctx.depth_view,
+                    depth_ops: Some(Operations {
+                        load: LoadOp::Clear(1.0),
+                        store: StoreOp::Store,
+                    }),
+                    stencil_ops: None,
+                }),
+                ..RenderPassDescriptor::default()
+            });
+
+            self.render_scene(
+                ctx,
+                pass,
+                RenderPassType::Picking,
+                &self.sorted_proxies[..split_idx],
+                &viewport.render_data,
+            );
+        }
+
+        if split_idx < self.sorted_proxies.len() {
+            let pass = encoder.begin_render_pass(&RenderPassDescriptor {
+                label: Some("Picking UI Pass"),
+                color_attachments: &[Some(RenderPassColorAttachment {
+                    view: viewport.picking_surface.view(),
+                    resolve_target: None,
+                    ops: Operations {
+                        load: LoadOp::Load,
+                        store: StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                ..RenderPassDescriptor::default()
+            });
+
+            self.render_scene(
+                ctx,
+                pass,
+                RenderPassType::PickingUi,
+                &self.sorted_proxies[split_idx..],
+                &viewport.render_data,
+            );
+        }
+
+        let read_buffer = self.state.device.create_buffer(&BufferDescriptor {
+            label: Some("Picking Readback Buffer"),
+            size: PICKING_ROW_PITCH as u64,
+            usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        });
+
+        encoder.copy_texture_to_buffer(
+            TexelCopyTextureInfo {
+                texture: viewport.picking_surface.texture(),
+                mip_level: 0,
+                origin: Origin3d {
+                    x: request.position.0,
+                    y: request.position.1,
+                    z: 0,
+                },
+                aspect: TextureAspect::All,
+            },
+            TexelCopyBufferInfo {
+                buffer: &read_buffer,
+                layout: TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(PICKING_ROW_PITCH),
+                    rows_per_image: Some(1),
+                },
+            },
+            Extent3d {
+                width: 1,
+                height: 1,
+                depth_or_array_layers: 1,
+            },
+        );
+
+        self.state.queue.submit(Some(encoder.finish()));
+
+        if let Some(result) = self.resolve_pick_buffer(read_buffer, request) {
+            let _ = self.pick_result_tx.send(result);
+        }
+    }
+
+    fn resolve_pick_buffer(&self, buffer: Buffer, request: PickRequest) -> Option<PickResult> {
+        let slice = buffer.slice(0..4);
+        let (tx, rx) = crossbeam_channel::bounded(1);
+        slice.map_async(MapMode::Read, move |res| {
+            let _ = tx.send(res);
+        });
+        let _ = self.state.device.poll(PollType::Wait);
+
+        if rx.recv().ok().and_then(Result::ok).is_none() {
+            buffer.unmap();
+            return None;
+        }
+
+        let data = slice.get_mapped_range();
+        let mut bytes = [0u8; 4];
+        bytes.copy_from_slice(&data[..4]);
+        drop(data);
+        buffer.unmap();
+
+        let hash = color_bytes_to_hash(bytes);
+
+        Some(PickResult {
+            id: request.id,
+            target: request.target,
+            hash,
+        })
     }
 
     fn render(&mut self, viewport: &RenderViewport, ctx: &mut FrameCtx) {
@@ -501,6 +711,9 @@ impl Renderer {
         let shadow_bind_group = match pass_type {
             RenderPassType::Color | RenderPassType::Color2D => self.lights.shadow_uniform(),
             RenderPassType::Shadow => self.lights.placeholder_shadow_uniform(),
+            RenderPassType::Picking | RenderPassType::PickingUi => {
+                self.lights.placeholder_shadow_uniform()
+            }
         }
         .bind_group();
 
@@ -592,10 +805,10 @@ impl Renderer {
 
     fn handle_message(&mut self, msg: RenderMsg) {
         match msg {
-            RenderMsg::RegisterProxy(cid, mut proxy, local_to_world) => {
+            RenderMsg::RegisterProxy(cid, object_hash, mut proxy, local_to_world) => {
                 trace!("Registered Proxy for #{:?}", cid.0);
                 let data = proxy.setup_render(self, local_to_world.matrix());
-                let binding = SceneProxyBinding::new(cid, local_to_world, data, proxy);
+                let binding = SceneProxyBinding::new(cid, object_hash, local_to_world, data, proxy);
                 self.proxies.insert(cid, binding);
             }
             RenderMsg::RegisterLightProxy(cid, proxy) => {
@@ -628,6 +841,11 @@ impl Renderer {
             RenderMsg::ProxyState(cid, enabled) => {
                 if let Some(binding) = self.proxies.get_mut(&cid) {
                     binding.enabled = enabled;
+                }
+            }
+            RenderMsg::PickRequest(request) => {
+                if self.viewports.contains_key(&request.target) {
+                    self.pending_pick_requests.push(request);
                 }
             }
             RenderMsg::CommandBatch(batch) => {
@@ -663,7 +881,7 @@ impl Renderer {
 
     fn prepare_shadow_pass<'a>(
         &self,
-        encoder: &'a mut wgpu::CommandEncoder,
+        encoder: &'a mut CommandEncoder,
         shadow_map: &TextureView,
     ) -> RenderPass<'a> {
         encoder.begin_render_pass(&RenderPassDescriptor {
@@ -683,7 +901,7 @@ impl Renderer {
 
     fn prepare_main_render_pass<'a>(
         &self,
-        encoder: &'a mut wgpu::CommandEncoder,
+        encoder: &'a mut CommandEncoder,
         viewport: &RenderViewport,
         ctx: &mut FrameCtx,
     ) -> RenderPass<'a> {
@@ -711,7 +929,7 @@ impl Renderer {
 
     fn prepare_ui_render_pass<'a>(
         &self,
-        encoder: &'a mut wgpu::CommandEncoder,
+        encoder: &'a mut CommandEncoder,
         viewport: &RenderViewport,
         _ctx: &mut FrameCtx,
     ) -> RenderPass<'a> {
@@ -813,6 +1031,7 @@ mod tests {
         let tid = TypedComponentId(TypeId::of::<T>(), ComponentId::null());
         let mut binding = SceneProxyBinding::new(
             tid,
+            1,
             Affine3::identity(),
             Box::new(()),
             Box::new(TestProxy { priority }),

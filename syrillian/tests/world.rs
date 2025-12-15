@@ -1,9 +1,10 @@
 use syrillian::World;
+use syrillian::core::EventType;
 use web_time::Duration;
 
 #[test]
 fn new_object_add_find_delete() {
-    let (mut world, _rx1, _rx2) = World::fresh();
+    let (mut world, _rx1, _rx2, _pick_tx) = World::fresh();
     let id = world.new_object("TestObject");
     world.add_child(id);
     assert!(world.find_object_by_name("TestObject").is_some());
@@ -16,7 +17,7 @@ fn new_object_add_find_delete() {
 
 #[test]
 fn delta_time_advances() {
-    let (mut world, _rx1, _rx2) = World::fresh();
+    let (mut world, _rx1, _rx2, _pick_tx) = World::fresh();
     std::thread::sleep(Duration::from_millis(1));
     world.update();
     world.next_frame();
@@ -25,7 +26,7 @@ fn delta_time_advances() {
 
 #[test]
 fn strong_refs_keep_objects_alive_until_drop() {
-    let (mut world, _rx1, _rx2) = World::fresh();
+    let (mut world, _rx1, _rx2, _pick_tx) = World::fresh();
     let id = world.new_object("KeepAlive");
     let handle = world.get_object_ref(id).expect("object should exist");
 
@@ -46,7 +47,7 @@ fn strong_refs_keep_objects_alive_until_drop() {
 
 #[test]
 fn weak_refs_upgrade_only_when_alive() {
-    let (mut world, _rx1, _rx2) = World::fresh();
+    let (mut world, _rx1, _rx2, _pick_tx) = World::fresh();
     let id = world.new_object("WeakSubject");
     let weak = id.downgrade();
 
@@ -60,11 +61,34 @@ fn weak_refs_upgrade_only_when_alive() {
 
 #[test]
 fn shutdown_cleans_world_state() {
-    let (mut world, _rx1, _rx2) = World::fresh();
+    let (mut world, _rx1, _rx2, _pick_tx) = World::fresh();
     let id = world.new_object("ToDelete");
     world.add_child(id);
     world.shutdown();
 
     assert!(world.objects.is_empty());
     assert!(world.children.is_empty());
+}
+
+#[test]
+fn objects_have_unique_hashes() {
+    let (mut world, ..) = World::fresh();
+    let a = world.new_object("A");
+    let b = world.new_object("B");
+
+    assert_ne!(a.object_hash(), 0);
+    assert_ne!(b.object_hash(), 0);
+    assert_ne!(a.object_hash(), b.object_hash());
+}
+
+#[test]
+fn click_registration_toggles() {
+    let (mut world, ..) = World::fresh();
+    let obj = world.new_object("Clickable");
+
+    assert!(!world.is_listening_for(obj, EventType::CLICK));
+    obj.notify_for(&mut world, EventType::CLICK);
+    assert!(world.is_listening_for(obj, EventType::CLICK));
+    obj.stop_notify_for(&mut world, EventType::CLICK);
+    assert!(!world.is_listening_for(obj, EventType::CLICK));
 }

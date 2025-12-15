@@ -46,6 +46,7 @@ macro_rules! test_custom_shader {
                 push_constant_ranges: &[],
                 shadow_transparency: false,
                 depth_enabled: true,
+                color_target: crate::rendering::DEFAULT_COLOR_TARGET,
             }
             .gen_code();
 

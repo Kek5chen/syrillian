@@ -8,7 +8,7 @@ use crate::assets::{BGL, Material, Mesh, Shader, Sound, Store, Texture};
 use crate::audio::AudioScene;
 use crate::components::{CRef, CWeak, CameraComponent, Component};
 use crate::core::component_storage::ComponentStorage;
-use crate::core::{GameObject, GameObjectId, GameObjectRef, Transform};
+use crate::core::{EventType, GameObject, GameObjectId, GameObjectRef, ObjectHash, Transform};
 use crate::engine::assets::AssetStore;
 use crate::engine::prefabs::prefab::Prefab;
 use crate::game_thread::GameAppEvent;
@@ -17,6 +17,8 @@ use crate::physics::PhysicsManager;
 use crate::prefabs::CameraPrefab;
 use crate::rendering::CPUDrawCtx;
 use crate::rendering::message::RenderMsg;
+use crate::rendering::picking::PickRequest;
+use crate::rendering::picking::PickResult;
 use crate::windowing::game_thread::RenderTargetId;
 use log::info;
 use nalgebra::Matrix4;
@@ -30,6 +32,7 @@ use web_time::{Duration, Instant};
 use crossbeam_channel::unbounded;
 use crossbeam_channel::{Receiver, Sender};
 use winit::dpi::PhysicalSize;
+use winit::event::MouseButton;
 
 thread_local! {
     static CURRENT_WORLD: Cell<*mut World> = const { Cell::new(std::ptr::null_mut()) };
@@ -71,12 +74,17 @@ pub struct RenderTargets {
 pub struct WorldChannels {
     pub render_tx: Sender<RenderMsg>,
     pub game_event_tx: Sender<GameAppEvent>,
+    pub pick_result_rx: Receiver<PickResult>,
     targets: HashMap<RenderTargetId, RenderTargets>,
     next_target_id: u64,
 }
 
 impl WorldChannels {
-    pub fn new(render_tx: Sender<RenderMsg>, game_event_tx: Sender<GameAppEvent>) -> Self {
+    pub fn new(
+        render_tx: Sender<RenderMsg>,
+        game_event_tx: Sender<GameAppEvent>,
+        pick_result_rx: Receiver<PickResult>,
+    ) -> Self {
         let mut targets = HashMap::new();
         targets.insert(
             RenderTargetId::PRIMARY,
@@ -89,6 +97,7 @@ impl WorldChannels {
         Self {
             render_tx,
             game_event_tx,
+            pick_result_rx,
             targets,
             next_target_id: RenderTargetId::PRIMARY.get() + 1,
         }
@@ -154,6 +163,10 @@ pub struct World {
     object_ref_counts: HashMap<GameObjectId, usize>,
     /// Objects that are awaiting final removal once all references drop
     pending_deletions: HashSet<GameObjectId>,
+    /// Objects registered for click notifications
+    click_listeners: HashSet<GameObjectId>,
+    /// Allocated hashes to keep them unique per object
+    object_hashes: HashSet<ObjectHash>,
     /// The currently active camera used for rendering
     main_active_camera: CWeak<CameraComponent>,
     /// Physics simulation system
@@ -171,6 +184,8 @@ pub struct World {
     delta_time: Duration,
     /// Time when the last frame started
     last_frame_time: Instant,
+    /// Sequence id for picking requests
+    next_pick_request_id: u64,
 
     /// Flag indicating whether a shutdown has been requested
     requested_shutdown: bool,
@@ -187,6 +202,8 @@ impl World {
             children: vec![],
             object_ref_counts: HashMap::new(),
             pending_deletions: HashSet::new(),
+            click_listeners: HashSet::new(),
+            object_hashes: HashSet::new(),
             main_active_camera: CWeak::null(),
             physics: PhysicsManager::default(),
             input: InputManager::new(channels.game_event_tx.clone()),
@@ -196,6 +213,7 @@ impl World {
             start_time: Instant::now(),
             delta_time: Duration::default(),
             last_frame_time: Instant::now(),
+            next_pick_request_id: 0,
 
             requested_shutdown: false,
             channels,
@@ -208,8 +226,9 @@ impl World {
         assets: Arc<AssetStore>,
         render_tx: Sender<RenderMsg>,
         game_event_tx: Sender<GameAppEvent>,
+        pick_result_rx: Receiver<PickResult>,
     ) -> Box<World> {
-        let channels = WorldChannels::new(render_tx, game_event_tx);
+        let channels = WorldChannels::new(render_tx, game_event_tx, pick_result_rx);
         World::new_with_channels(assets, channels)
     }
 
@@ -221,12 +240,18 @@ impl World {
 
     /// View [`World::new`]. This function will just set up data structures around the world
     /// needed for initialization. Mostly useful for tests.
-    pub fn fresh() -> (Box<World>, Receiver<RenderMsg>, Receiver<GameAppEvent>) {
+    pub fn fresh() -> (
+        Box<World>,
+        Receiver<RenderMsg>,
+        Receiver<GameAppEvent>,
+        Sender<PickResult>,
+    ) {
         let (tx1, rx1) = unbounded();
         let (tx2, rx2) = unbounded();
+        let (pick_tx, pick_rx) = unbounded();
         let store = AssetStore::new();
-        let world = World::new(store, tx1, tx2);
-        (world, rx1, rx2)
+        let world = World::new(store, tx1, tx2, pick_rx);
+        (world, rx1, rx2, pick_tx)
     }
 
     /// Returns a mutable reference to the global [`World`] instance.
@@ -322,6 +347,10 @@ impl World {
     fn finalize_object_removal(&mut self, obj: GameObjectId) {
         self.pending_deletions.remove(&obj);
         self.object_ref_counts.remove(&obj);
+        if let Some(existing) = self.objects.get(obj) {
+            self.click_listeners.remove(&obj);
+            self.release_object_hash(existing.hash);
+        }
         self.detach_relationships(obj);
         self.objects.remove(obj);
     }
@@ -353,6 +382,44 @@ impl World {
         }
     }
 
+    pub(crate) fn update_event_registration(
+        &mut self,
+        obj: GameObjectId,
+        old: EventType,
+        new: EventType,
+    ) {
+        if old.contains(EventType::CLICK) && !new.contains(EventType::CLICK) {
+            self.click_listeners.remove(&obj);
+        }
+
+        if !old.contains(EventType::CLICK) && new.contains(EventType::CLICK) {
+            self.click_listeners.insert(obj);
+        }
+    }
+
+    fn allocate_object_hash(&mut self, id: GameObjectId) -> ObjectHash {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::Hasher;
+
+        let mut seed = id.as_ffi();
+        loop {
+            let mut hasher = DefaultHasher::new();
+            hasher.write_u64(seed);
+            let candidate = (hasher.finish() & 0xffff_ffff) as ObjectHash;
+            let hash = if candidate == 0 { 1 } else { candidate };
+
+            if self.object_hashes.insert(hash) {
+                return hash;
+            }
+
+            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
+        }
+    }
+
+    fn release_object_hash(&mut self, hash: ObjectHash) {
+        self.object_hashes.remove(&hash);
+    }
+
     /// Creates a new game object with the given name
     pub fn new_object<S: Into<String>>(&mut self, name: S) -> GameObjectId {
         let obj = GameObject {
@@ -365,9 +432,12 @@ impl World {
             transform: Transform::new(GameObjectId::null()),
             components: HashSet::new(),
             custom_properties: HashMap::new(),
+            event_mask: Cell::new(EventType::empty()),
+            hash: 0,
         };
 
         let id = self.objects.insert(Box::new(obj));
+        let hash = self.allocate_object_hash(id);
 
         let entry = self
             .objects
@@ -375,6 +445,7 @@ impl World {
             .expect("object was just inserted and must exist");
         entry.id = id;
         entry.transform.owner = id;
+        entry.hash = hash;
 
         id
     }
@@ -450,6 +521,76 @@ impl World {
         self.main_active_camera
     }
 
+    pub fn is_listening_for(&self, obj: GameObjectId, event: EventType) -> bool {
+        match event {
+            EventType::CLICK => self.click_listeners.contains(&obj),
+            _ => false,
+        }
+    }
+
+    fn process_pick_results(&mut self) {
+        while let Ok(result) = self.channels.pick_result_rx.try_recv() {
+            let Some(obj_hash) = result.hash else {
+                continue;
+            };
+
+            let Some((obj, _)) = self
+                .objects
+                .iter()
+                .find(|(_, o)| o.object_hash() == obj_hash)
+            else {
+                continue;
+            };
+
+            if !obj.is_alive() || !obj.is_notified_for(EventType::CLICK) {
+                continue;
+            }
+
+            let components: Vec<_> = obj.components.iter().cloned().collect();
+            let world = self as *mut World;
+
+            for mut comp in components {
+                unsafe { comp.on_click(&mut *world) }
+            }
+        }
+    }
+
+    fn maybe_request_pick(&mut self) {
+        if self.click_listeners.is_empty() || self.input.is_cursor_locked() {
+            return;
+        }
+
+        if !self.input.is_button_down(MouseButton::Left) {
+            return;
+        }
+
+        let target = self.input.active_target();
+        let Some(size) = self.viewport_size(target) else {
+            return;
+        };
+        if size.width == 0 || size.height == 0 {
+            return;
+        }
+
+        let pos = self.input.mouse_position();
+        let x = pos.x.max(0.0).floor() as u32;
+        let y = pos.y.max(0.0).floor() as u32;
+        let clamped_x = x.min(size.width.saturating_sub(1));
+        let clamped_y = y.min(size.height.saturating_sub(1));
+
+        let request = PickRequest {
+            id: self.next_pick_request_id,
+            target,
+            position: (clamped_x, clamped_y),
+        };
+        self.next_pick_request_id = self.next_pick_request_id.wrapping_add(1);
+
+        let _ = self
+            .channels
+            .render_tx
+            .send(RenderMsg::PickRequest(request));
+    }
+
     /// Adds a game object as a child of the world (root level)
     ///
     /// This removes any existing parent relationship the object might have.
@@ -496,6 +637,8 @@ impl World {
     /// If you're using the App runtime, this will be handled for you. Only call this function
     /// if you are trying to use a detached world context.
     pub fn update(&mut self) {
+        self.process_pick_results();
+        self.maybe_request_pick();
         self.execute_component_func(Component::update);
         self.execute_component_func(Component::late_update);
     }
@@ -617,7 +760,12 @@ impl World {
             if let Some(proxy) = comp.create_render_proxy(self) {
                 self.channels
                     .render_tx
-                    .send(RenderMsg::RegisterProxy(cid, proxy, local_to_world))
+                    .send(RenderMsg::RegisterProxy(
+                        cid,
+                        comp.parent().object_hash(),
+                        proxy,
+                        local_to_world,
+                    ))
                     .unwrap();
             }
             if let Some(proxy) = comp.create_light_proxy(self) {
@@ -812,6 +960,9 @@ impl World {
         self.children.clear();
         self.objects.clear();
         self.components = ComponentStorage::default();
+        self.click_listeners.clear();
+        self.object_hashes.clear();
+        self.next_pick_request_id = 0;
         self.pending_deletions.clear();
     }
 }
