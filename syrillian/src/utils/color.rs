@@ -16,3 +16,35 @@ pub fn hsv_to_rgb(h: f32, s: f32, v: f32) -> Vector3<f32> {
     };
     Vector3::new(r1, g1, b1)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn hsv_wraps_and_maps_primary_colors() {
+        // Red at full saturation/value
+        let red = hsv_to_rgb(0.0, 1.0, 1.0);
+        assert!((red - Vector3::new(1.0, 0.0, 0.0)).abs().max() < 1e-6);
+
+        // Green via hue wrap
+        let green = hsv_to_rgb(120.0, 1.0, 1.0);
+        assert!((green - Vector3::new(0.0, 1.0, 0.0)).abs().max() < 1e-6);
+
+        // Blue with negative hue wrapping correctly
+        let blue = hsv_to_rgb(-120.0, 1.0, 1.0);
+        assert!((blue - Vector3::new(0.0, 0.0, 1.0)).abs().max() < 1e-6);
+    }
+
+    #[test]
+    fn hsv_handles_partial_saturation() {
+        let color = hsv_to_rgb(60.0, 0.5, 0.5);
+        // Expect non-zero red/green, zero blue
+        assert!(color.x > 0.0 && color.y > 0.0);
+        assert!(color.z.abs() < 1e-6);
+        assert!(
+            (color.x - color.y).abs() < 1e-6,
+            "yellow components should match"
+        );
+    }
+}
