@@ -208,13 +208,17 @@ impl DebugSceneProxy {
             };
 
             let shader = cache.shader(HShader::DEBUG_EDGES);
+            let groups = shader.bind_groups();
             must_pipeline!(pipeline = shader, ctx.pass_type => return);
 
             let mut pass = ctx.pass.write().unwrap();
 
             pass.set_pipeline(pipeline);
             pass.set_push_constants(ShaderStages::FRAGMENT, 0, bytemuck::bytes_of(&self.color));
-            pass.set_bind_group(1, data.uniform.bind_group(), &[]);
+            pass.set_bind_group(groups.render, ctx.render_bind_group, &[]);
+            if let Some(idx) = groups.model {
+                pass.set_bind_group(idx, data.uniform.bind_group(), &[]);
+            }
 
             pass.set_vertex_buffer(0, runtime_mesh.vertex_buffer().slice(..));
             if let Some(idx_buf) = &runtime_mesh.indices_buffer() {

@@ -3,8 +3,10 @@ use crate::components::BoneData;
 use crate::core::ModelUniform;
 use crate::rendering::proxies::{PROXY_PRIORITY_SOLID, PROXY_PRIORITY_TRANSPARENT, SceneProxy};
 use crate::rendering::uniform::ShaderUniform;
-use crate::rendering::{AssetCache, GPUDrawCtx, RenderPassType, Renderer, RuntimeMesh};
-use crate::{must_pipeline, proxy_data, proxy_data_mut};
+use crate::rendering::{
+    AssetCache, GPUDrawCtx, RenderPassType, Renderer, RuntimeMesh, RuntimeShader,
+};
+use crate::{proxy_data, proxy_data_mut};
 use nalgebra::Matrix4;
 use std::any::Any;
 use std::sync::RwLockWriteGuard;
@@ -35,6 +37,34 @@ pub struct MeshSceneProxy {
     pub materials: Vec<HMaterial>,
     pub bone_data: BoneData,
     pub bones_dirty: bool,
+}
+
+impl RuntimeMeshData {
+    pub fn activate_shader(
+        &self,
+        shader: &RuntimeShader,
+        ctx: &GPUDrawCtx,
+        pass: &mut RenderPass,
+    ) -> bool {
+        crate::must_pipeline!(pipeline = shader, ctx.pass_type => return false);
+
+        pass.set_pipeline(pipeline);
+        pass.set_bind_group(shader.bind_groups().render, ctx.render_bind_group, &[]);
+
+        if let Some(idx) = shader.bind_groups().model {
+            pass.set_bind_group(idx, self.uniform.bind_group(), &[]);
+        }
+
+        if let Some(idx) = shader.bind_groups().light {
+            pass.set_bind_group(idx, ctx.light_bind_group, &[]);
+        }
+
+        if let Some(idx) = shader.bind_groups().shadow {
+            pass.set_bind_group(idx, ctx.shadow_bind_group, &[]);
+        }
+
+        true
+    }
 }
 
 impl SceneProxy for MeshSceneProxy {
@@ -89,18 +119,16 @@ impl SceneProxy for MeshSceneProxy {
 
         let mut pass = ctx.pass.write().unwrap();
 
-        pass.set_bind_group(1, data.uniform.bind_group(), &[]);
-
-        self.draw_mesh(ctx, &renderer.cache, &mesh, &mesh_data, &mut pass);
+        self.draw_mesh(ctx, &renderer.cache, &mesh, &mesh_data, data, &mut pass);
 
         #[cfg(debug_assertions)]
         if DebugRenderer::mesh_edges() {
-            draw_edges(ctx, &renderer.cache, &mesh, &mut pass);
+            draw_edges(ctx, &renderer.cache, &mesh, data, &mut pass);
         }
 
         #[cfg(debug_assertions)]
         if DebugRenderer::mesh_vertex_normals() {
-            draw_vertex_normals(ctx, &renderer.cache, &mesh, &mut pass);
+            draw_vertex_normals(ctx, &renderer.cache, &mesh, data, &mut pass);
         }
     }
 
@@ -123,21 +151,22 @@ impl MeshSceneProxy {
         cache: &AssetCache,
         mesh: &RuntimeMesh,
         mesh_data: &Mesh,
+        runtime: &RuntimeMeshData,
         pass: &mut RwLockWriteGuard<RenderPass>,
     ) {
         let current_shader = HShader::DIM3;
         let shader = cache.shader_3d();
 
-        must_pipeline!(pipeline = shader, ctx.pass_type => return);
-
-        pass.set_pipeline(pipeline);
+        if !runtime.activate_shader(&shader, ctx, pass) {
+            return;
+        }
 
         pass.set_vertex_buffer(0, mesh.vertex_buffer().slice(..));
         if let Some(i_buffer) = mesh.indices_buffer() {
             pass.set_index_buffer(i_buffer.slice(..), IndexFormat::Uint32);
         }
 
-        self.draw_materials(ctx, cache, mesh_data, pass, current_shader);
+        self.draw_materials(ctx, cache, mesh_data, runtime, pass, current_shader);
     }
 
     fn draw_materials(
@@ -145,6 +174,7 @@ impl MeshSceneProxy {
         ctx: &GPUDrawCtx,
         cache: &AssetCache,
         mesh_data: &Mesh,
+        runtime: &RuntimeMeshData,
         pass: &mut RwLockWriteGuard<RenderPass>,
         current_shader: H<Shader>,
     ) {
@@ -162,12 +192,14 @@ impl MeshSceneProxy {
 
             if material.shader != current_shader {
                 let shader = cache.shader(material.shader);
-                must_pipeline!(pipeline = shader, ctx.pass_type => continue);
-
-                pass.set_pipeline(pipeline);
+                if !runtime.activate_shader(&shader, ctx, pass) {
+                    return;
+                }
             }
 
-            pass.set_bind_group(2, material.uniform.bind_group(), &[]);
+            if let Some(idx) = cache.shader(material.shader).bind_groups().material {
+                pass.set_bind_group(idx, material.uniform.bind_group(), &[]);
+            }
 
             if mesh_data.has_indices() {
                 pass.draw_indexed(range.clone(), 0, 0..1);
@@ -200,6 +232,7 @@ fn draw_edges(
     ctx: &GPUDrawCtx,
     cache: &AssetCache,
     mesh: &RuntimeMesh,
+    runtime: &RuntimeMeshData,
     pass: &mut RwLockWriteGuard<RenderPass>,
 ) {
     use nalgebra::Vector4;
@@ -208,9 +241,10 @@ fn draw_edges(
     const COLOR: Vector4<f32> = Vector4::new(1.0, 0.0, 1.0, 1.0);
 
     let shader = cache.shader(HShader::DEBUG_EDGES);
-    must_pipeline!(pipeline = shader, ctx.pass_type => return);
+    if !runtime.activate_shader(&shader, ctx, pass) {
+        return;
+    }
 
-    pass.set_pipeline(pipeline);
     pass.set_vertex_buffer(0, mesh.vertex_buffer().slice(..));
     pass.set_push_constants(ShaderStages::FRAGMENT, 0, bytemuck::bytes_of(&COLOR));
 
@@ -227,14 +261,15 @@ fn draw_vertex_normals(
     ctx: &GPUDrawCtx,
     cache: &AssetCache,
     mesh: &RuntimeMesh,
+    runtime: &RuntimeMeshData,
     pass: &mut RwLockWriteGuard<RenderPass>,
 ) {
-    pass.set_vertex_buffer(0, mesh.vertex_buffer().slice(..));
-
     let shader = cache.shader(HShader::DEBUG_VERTEX_NORMALS);
-    must_pipeline!(pipeline = shader, ctx.pass_type => return);
+    if !runtime.activate_shader(&shader, ctx, pass) {
+        return;
+    }
 
-    pass.set_pipeline(pipeline);
+    pass.set_vertex_buffer(0, mesh.vertex_buffer().slice(..));
 
     if let Some(i_buffer) = mesh.indices_buffer().as_ref() {
         pass.set_index_buffer(i_buffer.slice(..), IndexFormat::Uint32);

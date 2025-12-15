@@ -230,6 +230,7 @@ impl<const D: u8, DIM: TextDim<D>> TextProxy<D, DIM> {
 
         let shader = cache.shader(DIM::shader());
         let material = cache.material(font.atlas());
+        let groups = shader.bind_groups();
 
         let mut pass = pass.write().unwrap();
         must_pipeline!(pipeline = shader, ctx.pass_type => return);
@@ -241,14 +242,19 @@ impl<const D: u8, DIM: TextDim<D>> TextProxy<D, DIM> {
             0,
             bytemuck::bytes_of(&self.pc),
         );
-        pass.set_bind_group(1, data.uniform.bind_group(), &[]);
-        pass.set_bind_group(2, material.uniform.bind_group(), &[]);
+        pass.set_bind_group(groups.render, ctx.render_bind_group, &[]);
+        if let Some(idx) = groups.model {
+            pass.set_bind_group(idx, data.uniform.bind_group(), &[]);
+        }
+        if let Some(idx) = groups.material {
+            pass.set_bind_group(idx, material.uniform.bind_group(), &[]);
+        }
 
         pass.draw(0..self.glyph_data.len() as u32 * 6, 0..1);
 
         #[cfg(debug_assertions)]
         if DebugRenderer::text_geometry() {
-            self.draw_debug_edges(cache, &mut pass, ctx.pass_type);
+            self.draw_debug_edges(cache, &mut pass, ctx.pass_type, ctx, &data.uniform);
         }
     }
 
@@ -258,10 +264,18 @@ impl<const D: u8, DIM: TextDim<D>> TextProxy<D, DIM> {
         cache: &AssetCache,
         pass: &mut RenderPass,
         pass_type: RenderPassType,
+        ctx: &GPUDrawCtx,
+        uniform: &ShaderUniform<MeshUniformIndex>,
     ) {
         let shader = cache.shader(DIM::debug_shader());
+        let groups = shader.bind_groups();
         must_pipeline!(pipeline = shader, pass_type => return);
+
         pass.set_pipeline(pipeline);
+        pass.set_bind_group(groups.render, ctx.render_bind_group, &[]);
+        if let Some(idx) = groups.model {
+            pass.set_bind_group(idx, uniform.bind_group(), &[]);
+        }
 
         pass.set_push_constants(
             ShaderStages::VERTEX_FRAGMENT,

@@ -75,6 +75,7 @@ impl SceneProxy for ImageSceneProxy {
         let unit_square_runtime = renderer.cache.mesh_unit_square();
         let material = renderer.cache.material(self.material);
         let shader = renderer.cache.shader_2d();
+        let groups = shader.bind_groups();
 
         let mut pass = ctx.pass.write().unwrap();
 
@@ -85,8 +86,13 @@ impl SceneProxy for ImageSceneProxy {
         let vertices_count = unit_square_runtime.vertex_count();
 
         pass.set_vertex_buffer(0, vertex_buf_slice);
-        pass.set_bind_group(1, data.uniform.bind_group(), &[]);
-        pass.set_bind_group(2, material_bind_group, &[]);
+        pass.set_bind_group(groups.render, ctx.render_bind_group, &[]);
+        if let Some(idx) = groups.model {
+            pass.set_bind_group(idx, data.uniform.bind_group(), &[]);
+        }
+        if let Some(idx) = groups.material {
+            pass.set_bind_group(idx, material_bind_group, &[]);
+        }
         pass.draw(0..vertices_count, 0..1)
     }
 
