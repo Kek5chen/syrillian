@@ -6,7 +6,7 @@
 
 use crate::assets::{BGL, Material, Mesh, Shader, Sound, Store, Texture};
 use crate::audio::AudioScene;
-use crate::components::{CRef, CWeak, CameraComponent, Component, InternalComponentDeletion};
+use crate::components::{CRef, CWeak, CameraComponent, Component};
 use crate::core::component_storage::ComponentStorage;
 use crate::core::{GameObject, GameObjectId, GameObjectRef, Transform};
 use crate::engine::assets::AssetStore;
@@ -800,7 +800,7 @@ impl World {
                 obj.parent = None;
 
                 for mut comp in comps {
-                    comp.delete_internal(self);
+                    comp.delete(self);
                     self.components.remove(&comp);
                 }
             }

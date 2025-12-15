@@ -12,7 +12,6 @@ use std::hash::{Hash, Hasher};
 use std::ops::{Deref, DerefMut};
 use std::ptr::null_mut;
 
-use crate::components::InternalComponentDeletion;
 use crate::core::Transform;
 
 new_key_type! {
@@ -473,7 +472,7 @@ impl GameObject {
 
         let world = self.world();
         for mut comp in self.components.drain() {
-            comp.delete_internal(world);
+            comp.delete(world);
             world.components.remove(&comp);
         }
 
