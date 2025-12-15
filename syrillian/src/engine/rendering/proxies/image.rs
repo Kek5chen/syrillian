@@ -17,6 +17,7 @@ pub struct ImageSceneProxy {
     pub material: HMaterial,
     pub scaling: ImageScalingMode,
     pub dirty: bool,
+    pub draw_order: u32,
     pub render_target: RenderTargetId,
 }
 
@@ -90,7 +91,7 @@ impl SceneProxy for ImageSceneProxy {
     }
 
     fn priority(&self, _store: &AssetStore) -> u32 {
-        PROXY_PRIORITY_2D
+        PROXY_PRIORITY_2D.saturating_add(self.draw_order)
     }
 }
 

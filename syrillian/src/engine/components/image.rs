@@ -8,7 +8,7 @@ use crate::rendering::proxies::image::ImageSceneProxy;
 use crate::{World, proxy_data_mut};
 use nalgebra::Matrix4;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ImageScalingMode {
     Absolute {
         left: u32,
@@ -42,6 +42,8 @@ pub struct Image {
     scaling: ImageScalingMode,
     translation: Matrix4<f32>,
     dirty: bool,
+    draw_order: u32,
+    order_dirty: bool,
     pub parent: GameObjectId,
     render_target: RenderTargetId,
 }
@@ -79,6 +81,14 @@ impl Image {
         self.translation = translation;
         self.dirty = true;
     }
+
+    pub fn set_draw_order(&mut self, order: u32) {
+        if self.draw_order == order {
+            return;
+        }
+        self.draw_order = order;
+        self.order_dirty = true;
+    }
 }
 
 impl NewComponent for Image {
@@ -95,6 +105,8 @@ impl NewComponent for Image {
             },
             translation: Matrix4::identity(),
             dirty: false,
+            draw_order: 0,
+            order_dirty: false,
             render_target: RenderTargetId::PRIMARY,
         }
     }
@@ -107,28 +119,38 @@ impl Component for Image {
             scaling: self.scaling,
             translation: self.translation,
             dirty: false,
+            draw_order: self.draw_order,
             render_target: self.render_target,
         }))
     }
 
     fn update_proxy(&mut self, _world: &World, mut ctx: CPUDrawCtx) {
-        if !self.dirty {
-            return;
+        if self.order_dirty {
+            let order = self.draw_order;
+            ctx.send_proxy_update(move |proxy| {
+                let proxy: &mut ImageSceneProxy = proxy_data_mut!(proxy);
+
+                proxy.draw_order = order;
+                proxy.dirty = true;
+            });
+            self.order_dirty = false;
         }
 
-        let scaling = self.scaling;
-        let material = self.material;
-        let translation = self.translation;
-        let target = self.render_target;
-        ctx.send_proxy_update(move |proxy| {
-            let proxy: &mut ImageSceneProxy = proxy_data_mut!(proxy);
+        if self.dirty {
+            let scaling = self.scaling;
+            let material = self.material;
+            let translation = self.translation;
+            let target = self.render_target;
+            ctx.send_proxy_update(move |proxy| {
+                let proxy: &mut ImageSceneProxy = proxy_data_mut!(proxy);
 
-            proxy.scaling = scaling;
-            proxy.material = material;
-            proxy.translation = translation;
-            proxy.render_target = target;
-            proxy.dirty = true;
-        });
-        self.dirty = false;
+                proxy.scaling = scaling;
+                proxy.material = material;
+                proxy.translation = translation;
+                proxy.render_target = target;
+                proxy.dirty = true;
+            });
+            self.dirty = false;
+        }
     }
 }
