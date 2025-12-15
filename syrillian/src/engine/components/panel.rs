@@ -38,7 +38,7 @@ impl NewComponent for Panel {
     fn new(parent: GameObjectId) -> Self {
         Panel {
             parent,
-            padding: Vector2::new(12.0, 20.0),
+            padding: Vector2::new(5.0, 5.0),
             content_depth_bias: 0.01,
             draw_step: 1,
             depth_step: 0.0001,
@@ -52,9 +52,11 @@ impl Component for Panel {
             return;
         };
 
-        let Some(container_layout) = rect.layout(world) else {
+        let Some(mut container_layout) = rect.layout(world) else {
             return;
         };
+
+        container_layout.top_left_px += self.padding;
 
         let mut order: u32 = 0;
 
@@ -200,7 +202,7 @@ mod tests {
                 top,
                 bottom,
             } => {
-                assert_eq!((left, right, top, bottom), (65, 165, 570, 520));
+                assert_eq!((left, right, top, bottom), (70, 170, 565, 515));
             }
             _ => panic!("expected absolute scaling for child"),
         }
@@ -218,7 +220,7 @@ mod tests {
                 top,
                 bottom,
             } => {
-                assert_eq!((left, right, top, bottom), (65, 165, 570, 470));
+                assert_eq!((left, right, top, bottom), (70, 170, 565, 465));
             }
             _ => panic!("expected absolute scaling for grandchild"),
         }
