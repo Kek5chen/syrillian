@@ -19,7 +19,7 @@ use syrillian::components::audio::AudioEmitter;
 use syrillian::components::{
     CRef, CameraComponent, Collider3D, FirstPersonCameraController, FreecamController,
     PointLightComponent, RigidBodyComponent, RopeComponent, RotateComponent, SpotLightComponent,
-    SpringComponent, Text2D, Text3D,
+    SpringComponent, Text3D,
 };
 use syrillian::core::{GameObjectExt, GameObjectId, GameObjectRef};
 use syrillian::game_thread::RenderTargetId;
@@ -34,6 +34,7 @@ use syrillian::utils::frame_counter::FrameCounter;
 use syrillian::{AppRuntime, AppState, World};
 use winit::event::MouseButton;
 use winit::keyboard::KeyCode;
+
 // const NECO_IMAGE: &[u8; 1293] = include_bytes!("assets/neco.jpg");
 
 const SHADER1: &str = include_str!("dynamic_shader/shader.wgsl");
