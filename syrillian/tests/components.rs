@@ -1,5 +1,4 @@
 use nalgebra::Vector3;
-use serial_test::serial;
 use std::any::TypeId;
 use syrillian::World;
 use syrillian::components::{Component, NewComponent};
@@ -22,7 +21,6 @@ impl Component for MyComponent {
 }
 
 #[test]
-#[serial]
 fn component() {
     let (mut world, _rx1, _rx2) = World::fresh();
     let mut obj = world.new_object("Test");
@@ -67,7 +65,6 @@ fn component() {
 }
 
 #[test]
-#[serial]
 fn check_typed() {
     let (mut world, _rx1, _rx2) = World::fresh();
     let mut obj = world.new_object("Test");

@@ -1,9 +1,7 @@
-use serial_test::serial;
 use syrillian::World;
 use web_time::Duration;
 
 #[test]
-#[serial]
 fn new_object_add_find_delete() {
     let (mut world, _rx1, _rx2) = World::fresh();
     let id = world.new_object("TestObject");
@@ -17,7 +15,6 @@ fn new_object_add_find_delete() {
 }
 
 #[test]
-#[serial]
 fn delta_time_advances() {
     let (mut world, _rx1, _rx2) = World::fresh();
     std::thread::sleep(Duration::from_millis(1));
@@ -27,7 +24,6 @@ fn delta_time_advances() {
 }
 
 #[test]
-#[serial]
 fn strong_refs_keep_objects_alive_until_drop() {
     let (mut world, _rx1, _rx2) = World::fresh();
     let id = world.new_object("KeepAlive");
@@ -49,7 +45,6 @@ fn strong_refs_keep_objects_alive_until_drop() {
 }
 
 #[test]
-#[serial]
 fn weak_refs_upgrade_only_when_alive() {
     let (mut world, _rx1, _rx2) = World::fresh();
     let id = world.new_object("WeakSubject");
@@ -64,7 +59,6 @@ fn weak_refs_upgrade_only_when_alive() {
 }
 
 #[test]
-#[serial]
 fn shutdown_cleans_world_state() {
     let (mut world, _rx1, _rx2) = World::fresh();
     let id = world.new_object("ToDelete");
