@@ -1,14 +1,14 @@
 use crate::assets::{AssetStore, H, HMaterial, HMesh, HShader, Mesh, Shader};
 use crate::components::BoneData;
-use crate::core::ModelUniform;
 use crate::core::ObjectHash;
+use crate::core::{BoundingSphere, ModelUniform};
 use crate::rendering::picking::hash_to_rgba;
 use crate::rendering::proxies::{PROXY_PRIORITY_SOLID, PROXY_PRIORITY_TRANSPARENT, SceneProxy};
 use crate::rendering::uniform::ShaderUniform;
 use crate::rendering::{
     AssetCache, GPUDrawCtx, RenderPassType, Renderer, RuntimeMesh, RuntimeShader,
 };
-use crate::{proxy_data, proxy_data_mut};
+use crate::{proxy_data, proxy_data_mut, try_activate_shader};
 use nalgebra::Matrix4;
 use std::any::Any;
 use std::sync::RwLockWriteGuard;
@@ -48,21 +48,10 @@ impl RuntimeMeshData {
         ctx: &GPUDrawCtx,
         pass: &mut RenderPass,
     ) -> bool {
-        crate::must_pipeline!(pipeline = shader, ctx.pass_type => return false);
-
-        pass.set_pipeline(pipeline);
-        pass.set_bind_group(shader.bind_groups().render, ctx.render_bind_group, &[]);
+        try_activate_shader!(shader, pass, ctx => return false);
 
         if let Some(idx) = shader.bind_groups().model {
             pass.set_bind_group(idx, self.uniform.bind_group(), &[]);
-        }
-
-        if let Some(idx) = shader.bind_groups().light {
-            pass.set_bind_group(idx, ctx.light_bind_group, &[]);
-        }
-
-        if let Some(idx) = shader.bind_groups().shadow {
-            pass.set_bind_group(idx, ctx.shadow_bind_group, &[]);
         }
 
         true
@@ -154,7 +143,7 @@ impl SceneProxy for MeshSceneProxy {
         _local_to_world: &Matrix4<f32>,
         object_hash: ObjectHash,
     ) {
-        debug_assert_eq!(ctx.pass_type, RenderPassType::Picking);
+        debug_assert_ne!(ctx.pass_type, RenderPassType::Shadow);
 
         let data: &RuntimeMeshData = proxy_data!(data);
 
@@ -167,15 +156,14 @@ impl SceneProxy for MeshSceneProxy {
         };
 
         let mut pass = ctx.pass.write().unwrap();
-
-        let color = hash_to_rgba(object_hash);
         let shader = renderer.cache.shader(HShader::DIM3_PICKING);
+        try_activate_shader!(shader, &mut pass, ctx => return);
 
-        pass.set_pipeline(shader.solid_pipeline());
-        pass.set_bind_group(shader.bind_groups().render, ctx.render_bind_group, &[]);
         if let Some(model) = shader.bind_groups().model {
             pass.set_bind_group(model, data.uniform.bind_group(), &[]);
         }
+
+        let color = hash_to_rgba(object_hash);
         pass.set_push_constants(ShaderStages::FRAGMENT, 0, bytemuck::bytes_of(&color));
 
         pass.set_vertex_buffer(0, mesh.vertex_buffer().slice(..));

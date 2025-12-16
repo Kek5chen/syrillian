@@ -10,7 +10,7 @@ use crate::rendering::proxies::{PROXY_PRIORITY_2D, PROXY_PRIORITY_TRANSPARENT, S
 use crate::rendering::uniform::ShaderUniform;
 use crate::rendering::{AssetCache, CPUDrawCtx, GPUDrawCtx, RenderPassType, Renderer};
 use crate::utils::hsv_to_rgb;
-use crate::{ensure_aligned, must_pipeline, proxy_data, proxy_data_mut};
+use crate::{ensure_aligned, must_pipeline, proxy_data, proxy_data_mut, try_activate_shader};
 use etagere::euclid::approxeq::ApproxEq;
 use nalgebra::{Matrix4, Vector2, Vector3};
 use std::any::Any;
@@ -437,10 +437,6 @@ impl<const D: u8, DIM: TextDim<D>> SceneProxy for TextProxy<D, DIM> {
             return;
         }
 
-        let font = renderer.cache.font(self.font);
-        let material = renderer.cache.material(font.atlas());
-
-        let mut pass = ctx.pass.write().unwrap();
         let shader = match D {
             2 => renderer.cache.shader(HShader::TEXT_2D_PICKING),
             3 => renderer.cache.shader(HShader::TEXT_3D_PICKING),
@@ -449,16 +445,13 @@ impl<const D: u8, DIM: TextDim<D>> SceneProxy for TextProxy<D, DIM> {
                 return;
             }
         };
-        pass.set_pipeline(shader.solid_pipeline());
-        pass.set_vertex_buffer(0, data.glyph_vbo.slice(..));
 
-        let color = hash_to_rgba(object_hash);
-        let mut pc = self.pc;
-        pc.color = Vector3::new(color[0], color[1], color[2]);
+        let mut pass = ctx.pass.write().unwrap();
+        try_activate_shader!(shader, &mut pass, ctx => return);
 
-        pass.set_push_constants(ShaderStages::VERTEX_FRAGMENT, 0, bytemuck::bytes_of(&pc));
+        let font = renderer.cache.font(self.font);
+        let material = renderer.cache.material(font.atlas());
 
-        pass.set_bind_group(shader.bind_groups().render, ctx.render_bind_group, &[]);
         if let Some(model) = shader.bind_groups().model {
             pass.set_bind_group(model, data.uniform.bind_group(), &[]);
         }
@@ -466,6 +459,12 @@ impl<const D: u8, DIM: TextDim<D>> SceneProxy for TextProxy<D, DIM> {
             pass.set_bind_group(material_id, material.uniform.bind_group(), &[]);
         }
 
+        let color = hash_to_rgba(object_hash);
+        let mut pc = self.pc;
+        pc.color = Vector3::new(color[0], color[1], color[2]);
+
+        pass.set_push_constants(ShaderStages::VERTEX_FRAGMENT, 0, bytemuck::bytes_of(&pc));
+        pass.set_vertex_buffer(0, data.glyph_vbo.slice(..));
         pass.draw(0..self.glyph_data.len() as u32 * 6, 0..1);
     }
 }

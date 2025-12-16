@@ -1,9 +1,12 @@
 use crate::assets::{HTexture, Ref, Store, StoreType, Texture};
 use crate::components::TypedComponentId;
 use crate::rendering::AssetCache;
+#[cfg(debug_assertions)]
+use crate::rendering::Renderer;
 use crate::rendering::lights::{LightProxy, LightType, LightUniformIndex, ShadowUniformIndex};
 use crate::rendering::message::LightProxyCommand;
 use crate::rendering::uniform::ShaderUniform;
+use crate::try_activate_shader;
 use itertools::Itertools;
 use log::warn;
 use std::convert::TryFrom;
@@ -13,8 +16,6 @@ use wgpu::{
     TextureViewDescriptor,
 };
 
-#[cfg(debug_assertions)]
-use crate::rendering::Renderer;
 const DUMMY_POINT_LIGHT: LightProxy = LightProxy::dummy();
 
 pub struct LightManager {
@@ -253,9 +254,7 @@ impl LightManager {
         let mut pass = ctx.pass.write().unwrap();
 
         let shader = renderer.cache.shader(HShader::DEBUG_LIGHT);
-        crate::must_pipeline!(pipeline = shader, ctx.pass_type => return);
-
-        pass.set_pipeline(pipeline);
+        try_activate_shader!(shader, &mut pass, ctx => return);
 
         let lights = self.proxies.as_slice();
         for (i, proxy) in lights.iter().enumerate().take(self.proxies.len()) {

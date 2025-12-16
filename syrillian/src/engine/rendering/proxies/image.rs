@@ -6,7 +6,7 @@ use crate::rendering::proxies::mesh_proxy::{MeshUniformIndex, RuntimeMeshData};
 use crate::rendering::proxies::{PROXY_PRIORITY_2D, SceneProxy};
 use crate::rendering::uniform::ShaderUniform;
 use crate::rendering::{GPUDrawCtx, RenderPassType, Renderer, hash_to_rgba};
-use crate::{proxy_data, proxy_data_mut};
+use crate::{proxy_data, proxy_data_mut, try_activate_shader};
 use log::warn;
 use nalgebra::{Matrix4, Scale3, Translation3};
 use std::any::Any;
@@ -73,27 +73,23 @@ impl SceneProxy for ImageSceneProxy {
 
         let data: &RuntimeMeshData = proxy_data!(data);
 
+        let mut pass = ctx.pass.write().unwrap();
+        let shader = renderer.cache.shader_2d();
+        try_activate_shader!(shader, &mut pass, ctx => return);
+
         let unit_square_runtime = renderer.cache.mesh_unit_square();
         let material = renderer.cache.material(self.material);
-        let shader = renderer.cache.shader_2d();
-        let groups = shader.bind_groups();
-
-        let mut pass = ctx.pass.write().unwrap();
-
-        pass.set_pipeline(shader.solid_pipeline());
-
         let vertex_buf_slice = unit_square_runtime.vertex_buffer().slice(..);
-        let material_bind_group = material.uniform.bind_group();
         let vertices_count = unit_square_runtime.vertex_count();
 
-        pass.set_vertex_buffer(0, vertex_buf_slice);
-        pass.set_bind_group(groups.render, ctx.render_bind_group, &[]);
-        if let Some(idx) = groups.model {
+        if let Some(idx) = shader.bind_groups().model {
             pass.set_bind_group(idx, data.uniform.bind_group(), &[]);
         }
-        if let Some(idx) = groups.material {
-            pass.set_bind_group(idx, material_bind_group, &[]);
+        if let Some(idx) = shader.bind_groups().material {
+            pass.set_bind_group(idx, material.uniform.bind_group(), &[]);
         }
+
+        pass.set_vertex_buffer(0, vertex_buf_slice);
         pass.draw(0..vertices_count, 0..1)
     }
 
@@ -105,23 +101,22 @@ impl SceneProxy for ImageSceneProxy {
         _local_to_world: &Matrix4<f32>,
         object_hash: ObjectHash,
     ) {
-        if ctx.pass_type == RenderPassType::Shadow {
-            return;
-        }
+        debug_assert_ne!(ctx.pass_type, RenderPassType::Shadow);
 
         let data: &RuntimeMeshData = proxy_data!(data);
-        let unit_square_runtime = renderer.cache.mesh_unit_square();
 
         let mut pass = ctx.pass.write().unwrap();
         let shader = renderer.cache.shader(HShader::DIM2_PICKING);
-        pass.set_pipeline(shader.solid_pipeline());
-        pass.set_bind_group(shader.bind_groups().render, ctx.render_bind_group, &[]);
-        if let Some(model) = shader.bind_groups().model {
-            pass.set_bind_group(model, data.uniform.bind_group(), &[]);
-        }
-        pass.set_vertex_buffer(0, unit_square_runtime.vertex_buffer().slice(..));
+        try_activate_shader!(shader, &mut pass, ctx => return);
 
+        if let Some(idx) = shader.bind_groups().model {
+            pass.set_bind_group(idx, data.uniform.bind_group(), &[]);
+        }
+
+        let unit_square_runtime = renderer.cache.mesh_unit_square();
         let color = hash_to_rgba(object_hash);
+
+        pass.set_vertex_buffer(0, unit_square_runtime.vertex_buffer().slice(..));
         pass.set_push_constants(ShaderStages::FRAGMENT, 0, bytemuck::bytes_of(&color));
 
         if let Some(i_buffer) = unit_square_runtime.indices_buffer() {

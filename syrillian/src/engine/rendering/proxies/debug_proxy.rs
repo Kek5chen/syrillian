@@ -5,7 +5,7 @@ use crate::rendering::proxies::mesh_proxy::{MeshUniformIndex, RuntimeMeshData};
 use crate::rendering::proxies::{PROXY_PRIORITY_SOLID, SceneProxy};
 use crate::rendering::uniform::ShaderUniform;
 use crate::rendering::{AssetCache, GPUDrawCtx, Renderer};
-use crate::{must_pipeline, proxy_data, proxy_data_mut};
+use crate::{must_pipeline, proxy_data, proxy_data_mut, try_activate_shader};
 use log::warn;
 use nalgebra::{Matrix4, Point3, Vector4};
 use std::any::Any;
@@ -180,14 +180,10 @@ impl DebugSceneProxy {
         };
 
         let mut pass = ctx.pass.write().unwrap();
+        let shader = cache.shader(HShader::DEBUG_LINES);
+        try_activate_shader!(shader, &mut pass, ctx => return);
 
         pass.set_vertex_buffer(0, line_buffer.slice(..));
-
-        let shader = cache.shader(HShader::DEBUG_LINES);
-        must_pipeline!(pipeline = shader, ctx.pass_type => return);
-
-        pass.set_pipeline(pipeline);
-
         pass.draw(0..2, 0..self.lines.len() as u32);
     }
 

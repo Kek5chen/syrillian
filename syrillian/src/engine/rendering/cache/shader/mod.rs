@@ -1,7 +1,7 @@
 use crate::engine::assets::{BindGroupMap, Shader, ShaderGen};
 use crate::engine::rendering::cache::AssetCache;
 use crate::engine::rendering::cache::generic_cache::CacheType;
-use crate::rendering::{RenderPassType, RenderPipelineBuilder};
+use crate::rendering::{GPUDrawCtx, RenderPassType, RenderPipelineBuilder};
 use std::borrow::Cow;
 use wgpu::*;
 
@@ -9,6 +9,7 @@ pub mod builder;
 
 #[derive(Debug, Clone)]
 pub struct RuntimeShader {
+    name: String,
     pub module: ShaderModule,
     pipeline: RenderPipeline,
     shadow_pipeline: Option<RenderPipeline>,
@@ -26,6 +27,7 @@ impl CacheType for Shader {
             label: Some(self.name()),
             source: ShaderSource::Wgsl(Cow::Owned(code)),
         });
+        let name = self.name().to_string();
 
         let solid_layout = self.solid_layout(device, cache);
         let solid_builder = RenderPipelineBuilder::builder(&self, &solid_layout, &module);
@@ -36,6 +38,7 @@ impl CacheType for Shader {
         });
 
         RuntimeShader {
+            name,
             module,
             pipeline,
             shadow_pipeline,
@@ -67,6 +70,48 @@ impl RuntimeShader {
     pub fn bind_groups(&self) -> &BindGroupMap {
         &self.bind_groups
     }
+
+    pub fn activate(&self, pass: &mut RenderPass, ctx: &GPUDrawCtx) -> bool {
+        crate::must_pipeline!(pipeline = self, ctx.pass_type => return false);
+
+        pass.set_pipeline(pipeline);
+        pass.set_bind_group(self.bind_groups.render, ctx.render_bind_group, &[]);
+        if let Some(light) = self.bind_groups.light {
+            pass.set_bind_group(light, ctx.light_bind_group, &[]);
+        }
+        if let Some(shadow) = self.bind_groups.shadow {
+            pass.set_bind_group(shadow, ctx.shadow_bind_group, &[]);
+        }
+
+        true
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+}
+
+#[macro_export]
+macro_rules! activate_shader {
+    ($shader:expr, $pass:expr, $ctx:expr => $( $exit_strat:tt )*) => {
+        if !$shader.activate($pass, $ctx) {
+            ::syrillian_utils::debug_panic!(
+                "Invalid pipeline for specified shader. Cannot activate shader."
+            );
+            ::log::error!("A pipeline for the specified shader could not be found for the current render pass");
+            $( $exit_strat )*;
+        };
+    };
+}
+
+#[macro_export]
+macro_rules! try_activate_shader {
+    ($shader:expr, $pass:expr, $ctx:expr => $( $exit_strat:tt )*) => {
+        if !$shader.activate($pass, $ctx) {
+            ::log::debug!("Tried to activate shader {:?}, but pipeline was not found for the specified render pass of type {:?}", $shader.name(), $ctx.pass_type);
+            $( $exit_strat )*;
+        };
+    };
 }
 
 #[macro_export]
