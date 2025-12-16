@@ -415,13 +415,6 @@ impl<const D: u8, DIM: TextDim<D>> SceneProxy for TextProxy<D, DIM> {
         self.render(renderer, data, ctx);
     }
 
-    fn priority(&self, _store: &AssetStore) -> u32 {
-        match D {
-            2 => PROXY_PRIORITY_2D.saturating_add(self.draw_order),
-            _ => PROXY_PRIORITY_TRANSPARENT,
-        }
-    }
-
     fn render_picking(
         &self,
         renderer: &Renderer,
@@ -466,6 +459,13 @@ impl<const D: u8, DIM: TextDim<D>> SceneProxy for TextProxy<D, DIM> {
         pass.set_push_constants(ShaderStages::VERTEX_FRAGMENT, 0, bytemuck::bytes_of(&pc));
         pass.set_vertex_buffer(0, data.glyph_vbo.slice(..));
         pass.draw(0..self.glyph_data.len() as u32 * 6, 0..1);
+    }
+
+    fn priority(&self, _store: &AssetStore) -> u32 {
+        match D {
+            2 => PROXY_PRIORITY_2D.saturating_add(self.draw_order),
+            _ => PROXY_PRIORITY_TRANSPARENT,
+        }
     }
 }
 

@@ -129,17 +129,6 @@ impl SceneProxy for MeshSceneProxy {
         }
     }
 
-    fn priority(&self, store: &AssetStore) -> u32 {
-        if self.materials.iter().any(|m| {
-            let material = store.materials.get(*m);
-            material.is_transparent()
-        }) {
-            PROXY_PRIORITY_TRANSPARENT
-        } else {
-            PROXY_PRIORITY_SOLID
-        }
-    }
-
     // TODO: Make shaders more modular so picking and (shadow) shaders can be generated from just a vertex shader
     fn render_picking(
         &self,
@@ -192,6 +181,17 @@ impl SceneProxy for MeshSceneProxy {
             } else {
                 pass.draw(range.clone(), 0..1);
             }
+        }
+    }
+
+    fn priority(&self, store: &AssetStore) -> u32 {
+        if self.materials.iter().any(|m| {
+            let material = store.materials.get(*m);
+            material.is_transparent()
+        }) {
+            PROXY_PRIORITY_TRANSPARENT
+        } else {
+            PROXY_PRIORITY_SOLID
         }
     }
 
