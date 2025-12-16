@@ -6,6 +6,7 @@ use crate::engine::rendering::CPUDrawCtx;
 use crate::rendering::proxies::SceneProxy;
 use crate::rendering::proxies::mesh_proxy::MeshSceneProxy;
 use crate::{MAX_BONES, World, proxy_data_mut};
+use log::warn;
 use nalgebra::{Matrix4, Vector3};
 
 #[derive(Debug, Default, Clone)]
@@ -80,13 +81,21 @@ impl NewComponent for MeshRenderer {
 }
 
 impl Component for MeshRenderer {
-    fn create_render_proxy(&mut self, _world: &World) -> Option<Box<dyn SceneProxy>> {
+    fn create_render_proxy(&mut self, world: &World) -> Option<Box<dyn SceneProxy>> {
+        let Some(mesh) = world.assets.meshes.try_get(self.mesh) else {
+            warn!(
+                "Mesh Renderer couldn't create its proxy because the mesh wasn't found in the asset store"
+            );
+            return None;
+        };
+
         Some(Box::new(MeshSceneProxy {
             mesh: self.mesh,
             materials: self.materials.clone(),
+            material_ranges: mesh.material_ranges.clone(),
             bone_data: BoneData::new_full_identity(),
             bones_dirty: false,
-            bounding: None,
+            bounding: mesh.bounding_sphere,
         }))
     }
 
@@ -104,22 +113,35 @@ impl Component for MeshRenderer {
             });
         }
 
+        if !self.dirty_mesh && !self.dirty_materials {
+            return;
+        }
+
+        let Some(mesh) = world.assets.meshes.try_get(self.mesh) else {
+            warn!(
+                "Mesh Renderer couldn't update its proxy because the mesh wasn't found in the asset store"
+            );
+            return;
+        };
+
         if self.dirty_mesh {
-            let mesh = self.mesh;
-            let bounds = world.assets.meshes.try_get(mesh).map(|m| m.bounding_sphere);
+            let h_mesh = self.mesh;
+            let bounds = mesh.bounding_sphere;
             ctx.send_proxy_update(move |sc| {
                 let data: &mut MeshSceneProxy = proxy_data_mut!(sc);
-                data.mesh = mesh;
+                data.mesh = h_mesh;
                 data.bounding = bounds;
             })
         }
 
         if self.dirty_materials {
             let materials = self.materials.clone();
+            let material_ranges = mesh.material_ranges.clone();
             ctx.send_proxy_update(move |sc| {
                 let data: &mut MeshSceneProxy = proxy_data_mut!(sc);
                 data.materials = materials;
-            })
+                data.material_ranges = material_ranges;
+            });
         }
     }
 }

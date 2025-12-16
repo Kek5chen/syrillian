@@ -40,6 +40,10 @@ impl RuntimeMesh {
     pub fn indices_buffer(&self) -> Option<&wgpu::Buffer> {
         self.indices_buf.as_ref()
     }
+
+    pub fn has_indices(&self) -> bool {
+        self.indices_buf.is_some()
+    }
 }
 
 impl CacheType for Mesh {

@@ -1,4 +1,4 @@
-use crate::assets::{AssetStore, H, HMaterial, HMesh, HShader, Mesh, Shader};
+use crate::assets::{AssetStore, H, HMaterial, HMesh, HShader, Shader};
 use crate::components::BoneData;
 use crate::core::ObjectHash;
 use crate::core::{BoundingSphere, ModelUniform};
@@ -11,6 +11,7 @@ use crate::rendering::{
 use crate::{proxy_data, proxy_data_mut, try_activate_shader};
 use nalgebra::Matrix4;
 use std::any::Any;
+use std::ops::Range;
 use std::sync::RwLockWriteGuard;
 use syrillian_macros::UniformIndex;
 use wgpu::{IndexFormat, RenderPass, ShaderStages};
@@ -37,9 +38,10 @@ pub struct RuntimeMeshData {
 pub struct MeshSceneProxy {
     pub mesh: HMesh,
     pub materials: Vec<HMaterial>,
+    pub material_ranges: Vec<Range<u32>>,
     pub bone_data: BoneData,
     pub bones_dirty: bool,
-    pub bounding: Option<BoundingSphere>,
+    pub bounding: BoundingSphere,
 }
 
 impl RuntimeMeshData {
@@ -61,11 +63,6 @@ impl RuntimeMeshData {
 
 impl SceneProxy for MeshSceneProxy {
     fn setup_render(&mut self, renderer: &Renderer, local_to_world: &Matrix4<f32>) -> Box<dyn Any> {
-        if self.bounding.is_none() {
-            let store = renderer.cache.meshes.store();
-            self.bounding = store.try_get(self.mesh).map(|m| m.bounding_sphere);
-        }
-
         Box::new(self.setup_mesh_data(renderer, local_to_world))
     }
 
@@ -110,13 +107,8 @@ impl SceneProxy for MeshSceneProxy {
             return;
         };
 
-        let Some(mesh_data) = renderer.cache.meshes.store().try_get(self.mesh) else {
-            return;
-        };
-
         let mut pass = ctx.pass.write().unwrap();
-
-        self.draw_mesh(ctx, &renderer.cache, &mesh, &mesh_data, data, &mut pass);
+        self.draw_mesh(ctx, &renderer.cache, &mesh, data, &mut pass);
 
         #[cfg(debug_assertions)]
         if DebugRenderer::mesh_edges() {
@@ -195,9 +187,8 @@ impl SceneProxy for MeshSceneProxy {
         }
     }
 
-    fn bounds(&self, local_to_world: &Matrix4<f32>) -> Option<crate::core::BoundingSphere> {
-        self.bounding
-            .map(|sphere| (sphere * 5.0).transformed(local_to_world))
+    fn bounds(&self, local_to_world: &Matrix4<f32>) -> Option<BoundingSphere> {
+        Some((self.bounding * 5.0).transformed(local_to_world))
     }
 }
 
@@ -207,7 +198,6 @@ impl MeshSceneProxy {
         ctx: &GPUDrawCtx,
         cache: &AssetCache,
         mesh: &RuntimeMesh,
-        mesh_data: &Mesh,
         runtime: &RuntimeMeshData,
         pass: &mut RwLockWriteGuard<RenderPass>,
     ) {
@@ -223,19 +213,26 @@ impl MeshSceneProxy {
             pass.set_index_buffer(i_buffer.slice(..), IndexFormat::Uint32);
         }
 
-        self.draw_materials(ctx, cache, mesh_data, runtime, pass, current_shader);
+        self.draw_materials(
+            ctx,
+            cache,
+            mesh.has_indices(),
+            runtime,
+            pass,
+            current_shader,
+        );
     }
 
     fn draw_materials(
         &self,
         ctx: &GPUDrawCtx,
         cache: &AssetCache,
-        mesh_data: &Mesh,
+        indexed: bool,
         runtime: &RuntimeMeshData,
         pass: &mut RwLockWriteGuard<RenderPass>,
         current_shader: H<Shader>,
     ) {
-        for (i, range) in mesh_data.material_ranges.iter().enumerate() {
+        for (i, range) in self.material_ranges.iter().enumerate() {
             let h_mat = self
                 .materials
                 .get(i)
@@ -258,7 +255,7 @@ impl MeshSceneProxy {
                 pass.set_bind_group(idx, material.uniform.bind_group(), &[]);
             }
 
-            if mesh_data.has_indices() {
+            if indexed {
                 pass.draw_indexed(range.clone(), 0, 0..1);
             } else {
                 pass.draw(range.clone(), 0..1);

@@ -6,6 +6,7 @@ use crate::rendering::Renderer;
 use crate::rendering::lights::{LightProxy, LightType, LightUniformIndex, ShadowUniformIndex};
 use crate::rendering::message::LightProxyCommand;
 use crate::rendering::uniform::ShaderUniform;
+#[cfg(debug_assertions)]
 use crate::try_activate_shader;
 use itertools::Itertools;
 use log::warn;

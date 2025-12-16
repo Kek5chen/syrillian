@@ -2,7 +2,7 @@ use crate::engine::assets::generic_store::{Store, StoreType};
 use crate::engine::assets::{AssetKey, H, StoreTypeFallback};
 use crate::engine::rendering::cache::AssetCache;
 use dashmap::DashMap;
-use log::warn;
+use log::{trace, warn};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use wgpu::{Device, Queue};
@@ -36,6 +36,8 @@ impl<T: CacheType + StoreTypeFallback> Cache<T> {
 
         let misses = self.cache_misses.load(Ordering::Acquire) + 1;
         self.cache_misses.fetch_add(1, Ordering::Relaxed);
+
+        trace!("Refreshing {} Cache Handle {}", T::name(), h.ident_fmt());
 
         if misses.is_multiple_of(1000) {
             warn!(

@@ -934,6 +934,8 @@ impl Renderer {
             RenderMsg::PickRequest(request) => {
                 if self.viewports.contains_key(&request.target) {
                     self.pending_pick_requests.push(request);
+                } else {
+                    debug_panic!("Picking Request contained invalid viewport target");
                 }
             }
             RenderMsg::CommandBatch(batch) => {
