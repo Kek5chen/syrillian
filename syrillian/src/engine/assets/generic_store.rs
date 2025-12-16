@@ -5,12 +5,104 @@ use dashmap::iter::{Iter, IterMut};
 use dashmap::mapref::one::Ref as MapRef;
 use dashmap::mapref::one::RefMut as MapRefMut;
 use log::{trace, warn};
+#[cfg(debug_assertions)]
+use std::backtrace::Backtrace;
 use std::fmt::{Debug, Display, Formatter};
 use std::mem;
+use std::ops::{Deref, DerefMut};
 use std::sync::RwLock;
+#[cfg(debug_assertions)]
+use std::time::Duration;
+#[cfg(debug_assertions)]
+use web_time::Instant;
 
-pub type Ref<'a, T> = MapRef<'a, AssetKey, T>;
-pub type RefMut<'a, T> = MapRefMut<'a, AssetKey, T>;
+#[cfg(not(debug_assertions))]
+pub struct Ref<'a, T>(MapRef<'a, AssetKey, T>);
+#[cfg(not(debug_assertions))]
+pub struct RefMut<'a, T>(MapRefMut<'a, AssetKey, T>);
+
+#[cfg(not(debug_assertions))]
+impl<'a, T> From<MapRef<'a, AssetKey, T>> for Ref<'a, T> {
+    fn from(other: MapRef<'a, AssetKey, T>) -> Ref<'a, T> {
+        Ref(other)
+    }
+}
+
+#[cfg(not(debug_assertions))]
+impl<'a, T> From<MapRefMut<'a, AssetKey, T>> for RefMut<'a, T> {
+    fn from(other: MapRefMut<'a, AssetKey, T>) -> RefMut<'a, T> {
+        RefMut(other)
+    }
+}
+
+#[cfg(debug_assertions)]
+pub struct Ref<'a, T: StoreType>(MapRef<'a, AssetKey, T>, Instant);
+#[cfg(debug_assertions)]
+pub struct RefMut<'a, T: StoreType>(MapRefMut<'a, AssetKey, T>, Instant);
+
+#[cfg(debug_assertions)]
+impl<'a, T: StoreType> From<MapRef<'a, AssetKey, T>> for Ref<'a, T> {
+    fn from(other: MapRef<'a, AssetKey, T>) -> Ref<'a, T> {
+        Ref(other, Instant::now())
+    }
+}
+
+#[cfg(debug_assertions)]
+impl<'a, T: StoreType> From<MapRefMut<'a, AssetKey, T>> for RefMut<'a, T> {
+    fn from(other: MapRefMut<'a, AssetKey, T>) -> RefMut<'a, T> {
+        RefMut(other, Instant::now())
+    }
+}
+
+#[cfg(debug_assertions)]
+impl<'a, T: StoreType> Drop for Ref<'a, T> {
+    fn drop(&mut self) {
+        if self.1.elapsed() > Duration::from_secs_f32(1.0 / 60.0) {
+            warn!(
+                "Access to a {:?} Asset Store Object took {}s",
+                T::name(),
+                self.1.elapsed().as_secs_f32()
+            );
+            println!("{}", Backtrace::capture());
+        }
+    }
+}
+
+#[cfg(debug_assertions)]
+impl<'a, T: StoreType> Drop for RefMut<'a, T> {
+    fn drop(&mut self) {
+        if self.1.elapsed() > Duration::from_secs(1) {
+            warn!(
+                "Mutable Access to a {:?} Asset Store Object took {}s",
+                T::name(),
+                self.1.elapsed().as_secs_f32()
+            );
+            println!("{}", Backtrace::capture());
+        }
+    }
+}
+
+impl<'a, T: StoreType> Deref for Ref<'a, T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        self.0.deref()
+    }
+}
+
+impl<'a, T: StoreType> Deref for RefMut<'a, T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        self.0.deref()
+    }
+}
+
+impl<'a, T: StoreType> DerefMut for RefMut<'a, T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.0.deref_mut()
+    }
+}
 
 pub struct Store<T: StoreType> {
     data: DashMap<AssetKey, T>,
@@ -100,14 +192,17 @@ impl<T: StoreType> Store<T> {
     }
 
     pub fn try_get(&self, h: H<T>) -> Option<Ref<'_, T>> {
-        self.data.get(&h.into()).or_else(|| {
-            warn!(
-                "[{} Store] Invalid Reference: h={} not found",
-                T::name(),
-                T::ident_fmt(h)
-            );
-            None
-        })
+        self.data
+            .get(&h.into())
+            .or_else(|| {
+                warn!(
+                    "[{} Store] Invalid Reference: h={} not found",
+                    T::name(),
+                    T::ident_fmt(h)
+                );
+                None
+            })
+            .map(|i| i.into())
     }
 
     pub fn try_get_mut(&self, h: H<T>) -> Option<RefMut<'_, T>> {
@@ -124,7 +219,7 @@ impl<T: StoreType> Store<T> {
             self.set_dirty(h.into());
         }
 
-        reference
+        reference.map(|i| i.into())
     }
 
     fn set_dirty(&self, h: AssetKey) {
@@ -173,7 +268,7 @@ impl<T: StoreTypeFallback> Store<T> {
         } else {
             let data = self.data.get(&h.into());
             match data {
-                Some(elem) => elem,
+                Some(elem) => elem.into(),
                 None => unreachable!("Item was checked previously"),
             }
         }
@@ -190,7 +285,7 @@ impl<T: StoreTypeFallback> Store<T> {
             let data = self.data.get_mut(&h.into());
             self.set_dirty(h.into());
             match data {
-                Some(elem) => elem,
+                Some(elem) => elem.into(),
                 None => unreachable!("Item was checked previously"),
             }
         }
