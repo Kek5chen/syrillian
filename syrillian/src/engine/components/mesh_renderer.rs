@@ -86,10 +86,11 @@ impl Component for MeshRenderer {
             materials: self.materials.clone(),
             bone_data: BoneData::new_full_identity(),
             bones_dirty: false,
+            bounding: None,
         }))
     }
 
-    fn update_proxy(&mut self, _world: &World, mut ctx: CPUDrawCtx) {
+    fn update_proxy(&mut self, world: &World, mut ctx: CPUDrawCtx) {
         if let Some(mut skel) = self.parent.get_component::<SkeletalComponent>()
             && skel.update_palette()
         {
@@ -105,9 +106,11 @@ impl Component for MeshRenderer {
 
         if self.dirty_mesh {
             let mesh = self.mesh;
+            let bounds = world.assets.meshes.try_get(mesh).map(|m| m.bounding_sphere);
             ctx.send_proxy_update(move |sc| {
                 let data: &mut MeshSceneProxy = proxy_data_mut!(sc);
                 data.mesh = mesh;
+                data.bounding = bounds;
             })
         }
 

@@ -1,5 +1,3 @@
-#use model
-#use material
 #use light
 
 struct VSOut {

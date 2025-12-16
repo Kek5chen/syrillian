@@ -6,6 +6,7 @@
 
 use super::error::*;
 use crate::components::TypedComponentId;
+use crate::core::BoundingSphere;
 use crate::engine::assets::{AssetStore, HTexture};
 use crate::engine::rendering::FrameCtx;
 use crate::engine::rendering::cache::{AssetCache, GpuTexture};
@@ -25,7 +26,7 @@ use crate::rendering::{GPUDrawCtx, RenderPassType, State};
 use crossbeam_channel::{Receiver, Sender};
 use itertools::Itertools;
 use log::{error, trace, warn};
-use nalgebra::Vector2;
+use nalgebra::{Matrix4, Vector2, Vector3, Vector4};
 use snafu::ResultExt;
 use std::collections::HashMap;
 use std::convert::TryFrom;
@@ -473,7 +474,13 @@ impl Renderer {
     }
 
     fn resort_proxies(&mut self) {
-        self.sorted_proxies = sorted_enabled_proxy_ids(&self.proxies, self.cache.store());
+        let frustum = self
+            .viewports
+            .get(&RenderTargetId::PRIMARY)
+            .map(|vp| Frustum::from_matrix(&vp.render_data.camera_data.proj_view_mat));
+
+        self.sorted_proxies =
+            sorted_enabled_proxy_ids(&self.proxies, self.cache.store(), frustum.as_ref());
     }
 
     pub fn render_frame(
@@ -501,6 +508,10 @@ impl Renderer {
                 return false;
             }
         };
+
+        let frustum = Frustum::from_matrix(&viewport.render_data.camera_data.proj_view_mat);
+        self.sorted_proxies =
+            sorted_enabled_proxy_ids(&self.proxies, self.cache.store(), Some(&frustum));
 
         if let Some(request) = self.take_pick_request(target_id) {
             self.picking_pass(viewport, &mut ctx, request);
@@ -1044,13 +1055,78 @@ impl Renderer {
 fn sorted_enabled_proxy_ids(
     proxies: &HashMap<TypedComponentId, SceneProxyBinding>,
     store: &AssetStore,
+    frustum: Option<&Frustum>,
 ) -> Vec<(u32, TypedComponentId)> {
     proxies
         .iter()
         .filter(|(_, binding)| binding.enabled)
+        .filter(|(_, binding)| {
+            if let Some(f) = frustum
+                && let Some(bounds) = binding.bounds()
+            {
+                return f.intersects_sphere(&bounds);
+            }
+            true
+        })
         .map(|(tid, proxy)| (proxy.proxy.priority(store), *tid))
         .sorted_by_key(|(priority, _)| *priority)
         .collect()
+}
+
+#[derive(Debug, Clone, Copy)]
+struct FrustumPlane {
+    normal: Vector3<f32>,
+    d: f32,
+}
+
+impl FrustumPlane {
+    fn distance_to(&self, sphere: &BoundingSphere) -> f32 {
+        self.normal.dot(&sphere.center) + self.d
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct Frustum {
+    planes: [FrustumPlane; 6],
+}
+
+impl Frustum {
+    fn from_matrix(m: &Matrix4<f32>) -> Self {
+        let row0 = m.row(0).transpose();
+        let row1 = m.row(1).transpose();
+        let row2 = m.row(2).transpose();
+        let row3 = m.row(3).transpose();
+
+        let plane_from = |v: Vector4<f32>| {
+            let normal = Vector3::new(v.x, v.y, v.z);
+            let len = normal.norm();
+            if len > 0.0 {
+                FrustumPlane {
+                    normal: normal / len,
+                    d: v.w / len,
+                }
+            } else {
+                FrustumPlane { normal, d: v.w }
+            }
+        };
+
+        let planes = [
+            plane_from(row3 + row0), // left
+            plane_from(row3 - row0), // right
+            plane_from(row3 + row1), // bottom
+            plane_from(row3 - row1), // top
+            plane_from(row3 + row2), // near
+            plane_from(row3 - row2), // far
+        ];
+
+        Frustum { planes }
+    }
+
+    fn intersects_sphere(&self, sphere: &BoundingSphere) -> bool {
+        self.planes
+            .iter()
+            .all(|p| p.distance_to(sphere) >= -sphere.radius)
+    }
 }
 
 #[cfg(test)]
@@ -1095,7 +1171,7 @@ mod tests {
         let id_low = insert_proxy::<MarkerLow>(&mut proxies, 10, true);
         let id_mid = insert_proxy::<MarkerMid>(&mut proxies, 50, true);
 
-        let sorted = sorted_enabled_proxy_ids(&proxies, &store);
+        let sorted = sorted_enabled_proxy_ids(&proxies, &store, None);
         assert_eq!(sorted, vec![(10, id_low), (50, id_mid), (900, id_high)]);
     }
 
@@ -1110,7 +1186,7 @@ mod tests {
         let id_enabled = insert_proxy::<MarkerEnabled>(&mut proxies, 5, true);
         let id_disabled = insert_proxy::<MarkerDisabled>(&mut proxies, 1, false);
 
-        let sorted = sorted_enabled_proxy_ids(&proxies, &store);
+        let sorted = sorted_enabled_proxy_ids(&proxies, &store, None);
         assert_eq!(sorted, vec![(5, id_enabled)]);
         assert!(!sorted.contains(&(1, id_disabled)));
     }

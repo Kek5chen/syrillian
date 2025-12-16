@@ -1,7 +1,7 @@
 mod builder;
 
 use crate::assets::mesh::builder::MeshBuilder;
-use crate::core::{Bones, Vertex3D};
+use crate::core::{Bones, BoundingSphere, Vertex3D};
 use crate::engine::assets::generic_store::{HandleName, Store, StoreDefaults, StoreType};
 use crate::engine::assets::{H, HMesh};
 use crate::store_add_checked;
@@ -35,6 +35,7 @@ pub struct Mesh {
     pub(crate) data: Arc<MeshVertexData<Vertex3D>>,
     pub material_ranges: Vec<Range<u32>>,
     pub bones: Bones,
+    pub bounding_sphere: BoundingSphere,
 }
 
 #[derive(Debug, Clone)]
@@ -120,12 +121,14 @@ impl Mesh {
 
         let vertices = izip!(vertices, uvs, normals)
             .map(|(v, u, n)| Vertex3D::basic(v, u, n))
-            .collect();
+            .collect::<Vec<_>>();
+        let bounding_sphere = bounding_sphere_from_vertices(&vertices);
 
         Ok(Mesh {
             data: Arc::new(MeshVertexData::new(vertices, None)),
             material_ranges,
             bones: Bones::none(),
+            bounding_sphere,
         })
     }
 }
@@ -199,4 +202,31 @@ impl StoreType for Mesh {
     fn is_builtin(handle: H<Self>) -> bool {
         handle.id() <= H::<Self>::MAX_BUILTIN_ID
     }
+}
+
+pub(crate) fn bounding_sphere_from_vertices(vertices: &[Vertex3D]) -> BoundingSphere {
+    if vertices.is_empty() {
+        return BoundingSphere::empty();
+    }
+
+    let mut min = vertices[0].position;
+    let mut max = vertices[0].position;
+
+    for v in vertices.iter().skip(1) {
+        let p = v.position;
+        min.x = min.x.min(p.x);
+        min.y = min.y.min(p.y);
+        min.z = min.z.min(p.z);
+        max.x = max.x.max(p.x);
+        max.y = max.y.max(p.y);
+        max.z = max.z.max(p.z);
+    }
+
+    let center = (min + max) * 0.5;
+    let mut radius = 0.0f32;
+    for v in vertices {
+        radius = radius.max((v.position - center).norm());
+    }
+
+    BoundingSphere { center, radius }
 }

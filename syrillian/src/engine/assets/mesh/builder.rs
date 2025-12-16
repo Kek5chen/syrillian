@@ -1,3 +1,4 @@
+use crate::assets::mesh::bounding_sphere_from_vertices;
 use crate::assets::{Mesh, MeshVertexData};
 use crate::core::{Bones, Vertex3D};
 use std::ops::Range;
@@ -33,10 +34,13 @@ impl MeshBuilder {
             material_ranges.push(0u32..vert_count as u32);
         }
 
+        let bounding_sphere = bounding_sphere_from_vertices(&self.vertices);
+
         Mesh {
             data: Arc::new(MeshVertexData::new(self.vertices, self.indices)),
             material_ranges,
             bones: self.bones.unwrap_or_default(),
+            bounding_sphere,
         }
     }
 

@@ -4,6 +4,7 @@
 //! rendering.
 
 pub mod bone;
+pub mod bounds;
 pub mod component_storage;
 pub mod object;
 pub mod object_extensions;
@@ -11,6 +12,7 @@ pub mod transform;
 pub mod vertex;
 
 pub use bone::*;
+pub use bounds::*;
 pub use object::*;
 pub use object_extensions::*;
 pub use transform::*;

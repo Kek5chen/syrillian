@@ -1,4 +1,5 @@
 use crate::components::TypedComponentId;
+use crate::core::BoundingSphere;
 use crate::core::ObjectHash;
 use crate::rendering::{GPUDrawCtx, RenderPassType, Renderer};
 use nalgebra::{Affine3, Matrix4};
@@ -78,6 +79,10 @@ pub trait SceneProxy: Send + Any + Debug {
     }
 
     fn priority(&self, store: &AssetStore) -> u32;
+
+    fn bounds(&self, _local_to_world: &Matrix4<f32>) -> Option<BoundingSphere> {
+        None
+    }
 }
 
 pub struct SceneProxyBinding {
@@ -117,6 +122,10 @@ impl SceneProxyBinding {
             self.proxy_data.as_mut(),
             self.local_to_world.matrix(),
         );
+    }
+
+    pub fn bounds(&self) -> Option<BoundingSphere> {
+        self.proxy.bounds(self.local_to_world.matrix())
     }
 
     pub fn render(&self, renderer: &Renderer, ctx: &GPUDrawCtx) {

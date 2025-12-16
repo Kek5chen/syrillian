@@ -39,6 +39,7 @@ pub struct MeshSceneProxy {
     pub materials: Vec<HMaterial>,
     pub bone_data: BoneData,
     pub bones_dirty: bool,
+    pub bounding: Option<BoundingSphere>,
 }
 
 impl RuntimeMeshData {
@@ -60,6 +61,11 @@ impl RuntimeMeshData {
 
 impl SceneProxy for MeshSceneProxy {
     fn setup_render(&mut self, renderer: &Renderer, local_to_world: &Matrix4<f32>) -> Box<dyn Any> {
+        if self.bounding.is_none() {
+            let store = renderer.cache.meshes.store();
+            self.bounding = store.try_get(self.mesh).map(|m| m.bounding_sphere);
+        }
+
         Box::new(self.setup_mesh_data(renderer, local_to_world))
     }
 
@@ -187,6 +193,11 @@ impl SceneProxy for MeshSceneProxy {
                 pass.draw(range.clone(), 0..1);
             }
         }
+    }
+
+    fn bounds(&self, local_to_world: &Matrix4<f32>) -> Option<crate::core::BoundingSphere> {
+        self.bounding
+            .map(|sphere| (sphere * 5.0).transformed(local_to_world))
     }
 }
 
