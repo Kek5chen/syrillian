@@ -90,23 +90,9 @@ impl Transform {
         self.owner
     }
 
-    /// Collects the list of parents up to the root.
-    fn parent_list(&self) -> Vec<GameObjectId> {
-        let mut parents = vec![];
-        let mut parent_opt = Some(self.owner());
-
-        while let Some(parent) = parent_opt {
-            parents.push(parent);
-            parent_opt = *parent.parent();
-        }
-        parents.reverse();
-
-        parents
-    }
-
     pub fn global_transform_matrix_ext(&self, include_self: bool) -> Affine3<f32> {
         let mut mat = Affine3::identity();
-        let mut parents = self.parent_list();
+        let mut parents = self.owner().parents();
 
         if !include_self {
             parents.pop();
@@ -138,7 +124,7 @@ impl Transform {
     /// Calculates the global rotation, optionally excluding this transform.
     pub fn global_rotation_ext(&self, include_self: bool) -> UnitQuaternion<f32> {
         let mut global_rotation = UnitQuaternion::identity();
-        let mut parents = self.parent_list();
+        let mut parents = self.owner().parents();
 
         if !include_self {
             parents.pop();
@@ -153,7 +139,7 @@ impl Transform {
     /// Calculates the global scale matrix, optionally excluding this transform.
     pub fn global_scale_matrix_ext(&self, include_self: bool) -> Scale3<f32> {
         let mut mat = Scale3::identity();
-        let mut parents = self.parent_list();
+        let mut parents = self.owner().parents();
 
         if !include_self {
             parents.pop();

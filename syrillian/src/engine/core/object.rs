@@ -540,6 +540,20 @@ impl GameObject {
         &self.parent
     }
 
+    /// Collects the list of parents up to the root.
+    pub fn parents(&self) -> Vec<GameObjectId> {
+        let mut parents = vec![];
+        let mut parent_opt = Some(self.id);
+
+        while let Some(parent) = parent_opt {
+            parents.push(parent);
+            parent_opt = *parent.parent();
+        }
+        parents.reverse();
+
+        parents
+    }
+
     /// Returns an immutable slice of this game object's child IDs.
     pub fn children(&self) -> &[GameObjectId] {
         &self.children
