@@ -1,7 +1,7 @@
 //! Built-in components that can be attached to [`GameObject`](crate::core::GameObject).
 //!
 //! Components implement behavior ranging from camera control to physics. If it's dynamic,
-//! it's probably a component. (Only Rendering is done in [`Drawable`](crate::drawables::Drawable)s)
+//! it's probably a component.
 //!
 //! To make a component:
 //! ```rust
