@@ -4,7 +4,7 @@ use crate::components::{
     RigidBodyComponent,
 };
 use crate::core::GameObjectId;
-use crate::game_thread::RenderTargetId;
+use crate::windowing::RenderTargetId;
 use gilrs::Axis;
 use log::warn;
 use nalgebra::Vector3;

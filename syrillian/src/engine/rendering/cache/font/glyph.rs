@@ -1,5 +1,6 @@
 use crate::rendering::FontAtlas;
 use crate::rendering::msdf_atlas::{FontLineMetrics, GlyphAtlasEntry};
+use crate::rendering::strobe::TextAlignment;
 use nalgebra::Vector2;
 use static_assertions::{const_assert, const_assert_eq};
 use ttf_parser::Face;
@@ -32,13 +33,6 @@ const_assert_eq!(
     size_of::<GlyphVertex>() * GlyphRenderData::VERTEX_COUNT
 );
 const_assert!(size_of::<GlyphRenderData>().is_multiple_of(16));
-
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub enum TextAlignment {
-    Left,
-    Right,
-    Center,
-}
 
 #[derive(Clone)]
 pub struct GlyphBitmap {

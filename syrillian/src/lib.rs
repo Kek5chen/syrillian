@@ -3,6 +3,7 @@ pub mod utils;
 pub mod windowing;
 
 pub use engine::*;
+pub use rendering::strobe;
 pub use windowing::*;
 
 pub use ::gilrs;

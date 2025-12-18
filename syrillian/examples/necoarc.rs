@@ -5,11 +5,10 @@ use nalgebra::Vector3;
 use rapier3d::prelude::QueryFilter;
 use std::error::Error;
 use syrillian::assets::{Material, StoreType, Texture};
-use syrillian::components::{
-    Collider3D, Component, Image, ImageScalingMode, NewComponent, RotateComponent,
-};
+use syrillian::components::{Collider3D, Component, Image, NewComponent, RotateComponent};
 use syrillian::core::{EventType, GOComponentExt, GameObject, GameObjectExt, GameObjectId};
 use syrillian::prefabs::CubePrefab;
+use syrillian::strobe::ImageScalingMode;
 use syrillian::{AppState, World};
 use syrillian_macros::SyrillianApp;
 use winit::event::MouseButton;

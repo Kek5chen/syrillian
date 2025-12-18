@@ -299,7 +299,7 @@ impl StoreDefaults for Shader {
                 vertex_buffers: TEXT_VBL,
                 push_constant_ranges: TEXT_PC,
                 shadow_transparency: true,
-                depth_enabled: true,
+                depth_enabled: false,
                 color_target: PICKING_COLOR_TARGET,
             }
         );

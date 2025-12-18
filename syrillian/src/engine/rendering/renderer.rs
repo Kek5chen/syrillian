@@ -5,6 +5,7 @@
 //! It also provides debug drawing and post-processing utilities.
 
 use super::error::*;
+use crate::RenderTargetId;
 use crate::components::TypedComponentId;
 use crate::core::BoundingSphere;
 use crate::engine::assets::{AssetStore, HTexture};
@@ -12,15 +13,15 @@ use crate::engine::rendering::FrameCtx;
 use crate::engine::rendering::cache::{AssetCache, GpuTexture};
 use crate::engine::rendering::offscreen_surface::OffscreenSurface;
 use crate::engine::rendering::post_process_pass::PostProcessData;
-use crate::game_thread::RenderTargetId;
 #[cfg(debug_assertions)]
 use crate::rendering::DebugRenderer;
 use crate::rendering::light_manager::LightManager;
 use crate::rendering::lights::LightType;
 use crate::rendering::message::RenderMsg;
 use crate::rendering::picking::{PickRequest, PickResult, color_bytes_to_hash};
-use crate::rendering::proxies::{PROXY_PRIORITY_2D, SceneProxyBinding};
+use crate::rendering::proxies::SceneProxyBinding;
 use crate::rendering::render_data::RenderUniformData;
+use crate::rendering::strobe::StrobeRenderer;
 use crate::rendering::texture_export::{TextureExportError, save_texture_to_png};
 use crate::rendering::{GPUDrawCtx, RenderPassType, State};
 use crossbeam_channel::{Receiver, Sender};
@@ -28,6 +29,7 @@ use itertools::Itertools;
 use log::{error, trace, warn};
 use nalgebra::{Matrix4, Vector2, Vector3, Vector4};
 use snafu::ResultExt;
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::mem;
@@ -268,6 +270,7 @@ pub struct Renderer {
     game_rx: Receiver<RenderMsg>,
     proxies: HashMap<TypedComponentId, SceneProxyBinding>,
     sorted_proxies: Vec<(u32, TypedComponentId)>,
+    strobe: RefCell<StrobeRenderer>,
     start_time: Instant,
     pick_result_tx: Sender<PickResult>,
     pending_pick_requests: Vec<PickRequest>,
@@ -310,6 +313,7 @@ impl Renderer {
             start_time,
             proxies: HashMap::new(),
             sorted_proxies: Vec::new(),
+            strobe: RefCell::new(StrobeRenderer::default()),
             pick_result_tx,
             pending_pick_requests: Vec::new(),
             lights,
@@ -517,7 +521,7 @@ impl Renderer {
             self.picking_pass(viewport, &mut ctx, request);
         }
 
-        self.render(viewport, &mut ctx);
+        self.render(target_id, viewport, &mut ctx);
         self.end_render(viewport, ctx);
 
         true
@@ -529,8 +533,6 @@ impl Renderer {
         ctx: &mut FrameCtx,
         request: PickRequest,
     ) {
-        let split_idx = self.first_ui_proxy_index();
-
         let mut encoder = self
             .state
             .device
@@ -569,12 +571,13 @@ impl Renderer {
                 ctx,
                 pass,
                 RenderPassType::Picking,
-                &self.sorted_proxies[..split_idx],
+                &self.sorted_proxies,
                 &viewport.render_data,
             );
         }
 
-        if split_idx < self.sorted_proxies.len() {
+        let render_ui = self.strobe.borrow().has_draws(request.target);
+        if render_ui {
             let pass = encoder.begin_render_pass(&RenderPassDescriptor {
                 label: Some("Picking UI Pass"),
                 color_attachments: &[Some(RenderPassColorAttachment {
@@ -589,12 +592,23 @@ impl Renderer {
                 ..RenderPassDescriptor::default()
             });
 
-            self.render_scene(
-                ctx,
-                pass,
-                RenderPassType::PickingUi,
-                &self.sorted_proxies[split_idx..],
-                &viewport.render_data,
+            let draw_ctx = GPUDrawCtx {
+                frame: ctx,
+                pass: RwLock::new(pass),
+                pass_type: RenderPassType::PickingUi,
+                render_bind_group: viewport.render_data.uniform.bind_group(),
+                light_bind_group: self.lights.uniform().bind_group(),
+                shadow_bind_group: self.lights.placeholder_shadow_uniform().bind_group(),
+            };
+            let mut strobe = self.strobe.borrow_mut();
+
+            strobe.render(
+                &draw_ctx,
+                &self.cache,
+                &self.state,
+                request.target,
+                self.start_time,
+                viewport.size(),
             );
         }
 
@@ -666,9 +680,9 @@ impl Renderer {
         })
     }
 
-    fn render(&mut self, viewport: &RenderViewport, ctx: &mut FrameCtx) {
+    fn render(&mut self, target_id: RenderTargetId, viewport: &RenderViewport, ctx: &mut FrameCtx) {
         self.shadow_pass(ctx);
-        self.main_pass(viewport, ctx);
+        self.main_pass(target_id, viewport, ctx);
     }
 
     fn shadow_pass(&mut self, ctx: &mut FrameCtx) {
@@ -728,8 +742,6 @@ impl Renderer {
     }
 
     fn prepare_shadow_map(&mut self, ctx: &mut FrameCtx, layer: u32) {
-        let split_idx = self.first_ui_proxy_index();
-
         let mut encoder = self
             .state
             .device
@@ -744,22 +756,25 @@ impl Renderer {
             ctx,
             pass,
             RenderPassType::Shadow,
-            &self.sorted_proxies[..split_idx],
+            &self.sorted_proxies,
             &self.shadow_render_data,
         );
 
         self.state.queue.submit(Some(encoder.finish()));
     }
 
-    fn main_pass(&mut self, viewport: &RenderViewport, ctx: &mut FrameCtx) {
+    fn main_pass(
+        &mut self,
+        target_id: RenderTargetId,
+        viewport: &RenderViewport,
+        ctx: &mut FrameCtx,
+    ) {
         let mut encoder = self
             .state
             .device
             .create_command_encoder(&CommandEncoderDescriptor {
                 label: Some("Main Encoder"),
             });
-
-        let split_idx = self.first_ui_proxy_index();
 
         {
             let pass = self.prepare_main_render_pass(&mut encoder, viewport, ctx);
@@ -768,20 +783,31 @@ impl Renderer {
                 ctx,
                 pass,
                 RenderPassType::Color,
-                &self.sorted_proxies[..split_idx],
+                &self.sorted_proxies,
                 &viewport.render_data,
             );
         }
 
-        if split_idx < self.sorted_proxies.len() {
+        let render_ui = self.strobe.borrow().has_draws(target_id);
+        if render_ui {
             let pass = self.prepare_ui_render_pass(&mut encoder, viewport, ctx);
 
-            self.render_scene(
-                ctx,
-                pass,
-                RenderPassType::Color2D,
-                &self.sorted_proxies[split_idx..],
-                &viewport.render_data,
+            let draw_ctx = GPUDrawCtx {
+                frame: ctx,
+                pass: RwLock::new(pass),
+                pass_type: RenderPassType::Color2D,
+                render_bind_group: viewport.render_data.uniform.bind_group(),
+                light_bind_group: self.lights.uniform().bind_group(),
+                shadow_bind_group: self.lights.placeholder_shadow_uniform().bind_group(),
+            };
+
+            self.strobe.borrow_mut().render(
+                &draw_ctx,
+                &self.cache,
+                &self.state,
+                target_id,
+                self.start_time,
+                viewport.size(),
             );
         }
 
@@ -830,11 +856,6 @@ impl Renderer {
             };
             proxy.render(self, ctx);
         }
-    }
-
-    fn first_ui_proxy_index(&self) -> usize {
-        self.sorted_proxies
-            .partition_point(|(priority, _)| *priority < PROXY_PRIORITY_2D)
     }
 
     fn end_render(&mut self, viewport: &mut RenderViewport, mut ctx: FrameCtx) {
@@ -957,6 +978,9 @@ impl Renderer {
                 if let Err(e) = self.export_cached_texture_png(texture, &path) {
                     warn!("Couldn't capture picking texture: {e}");
                 }
+            }
+            RenderMsg::UpdateStrobe(frame) => {
+                self.strobe.borrow_mut().update_frame(frame);
             }
         }
     }

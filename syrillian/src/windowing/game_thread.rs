@@ -1,6 +1,6 @@
-use crate::AppState;
 use crate::assets::AssetStore;
 use crate::world::{World, WorldChannels};
+use crate::{AppState, RenderTargetId};
 use crossbeam_channel::{Receiver, SendError, Sender, TryRecvError, unbounded};
 use log::{error, info};
 use std::sync::Arc;
@@ -11,21 +11,6 @@ use winit::event::{DeviceEvent, DeviceId, WindowEvent};
 use std::marker::PhantomData;
 #[cfg(not(target_arch = "wasm32"))]
 use std::thread::JoinHandle;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct RenderTargetId(pub u64);
-
-impl RenderTargetId {
-    pub const PRIMARY: Self = Self(0);
-
-    pub const fn get(self) -> u64 {
-        self.0
-    }
-
-    pub const fn is_primary(self) -> bool {
-        self.get() == Self::PRIMARY.get()
-    }
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RenderEventTarget {

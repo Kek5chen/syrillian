@@ -15,16 +15,18 @@ use crate::game_thread::GameAppEvent;
 use crate::input::InputManager;
 use crate::physics::PhysicsManager;
 use crate::prefabs::CameraPrefab;
-use crate::rendering::CPUDrawCtx;
 use crate::rendering::message::RenderMsg;
 use crate::rendering::picking::PickRequest;
 use crate::rendering::picking::PickResult;
-use crate::windowing::game_thread::RenderTargetId;
+use crate::rendering::strobe::StrobeFrame;
+use crate::rendering::{CPUDrawCtx, UiContext};
+use crate::windowing::RenderTargetId;
 use log::info;
 use nalgebra::Matrix4;
 use slotmap::{HopSlotMap, Key};
 use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
+use std::mem;
 use std::mem::swap;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -192,6 +194,7 @@ pub struct World {
     requested_shutdown: bool,
     pub(crate) channels: WorldChannels,
     thread_binding: Option<WorldBinding>,
+    pub strobe: StrobeFrame,
 }
 
 impl World {
@@ -219,6 +222,7 @@ impl World {
             requested_shutdown: false,
             channels,
             thread_binding: None,
+            strobe: StrobeFrame::default(),
         })
     }
 
@@ -649,7 +653,16 @@ impl World {
     /// If you're using the App runtime, this will be handled for you. Only call this function
     /// if you are trying to use a detached world context.
     pub fn post_update(&mut self) {
+        let world = self as *mut World;
         self.execute_component_func(Component::post_update);
+
+        for mut comp in self.components.iter_refs() {
+            let ctx = UiContext::new(comp.ctx.parent.hash, comp.ctx.tid);
+            unsafe {
+                comp.on_gui(&mut *world, ctx);
+            }
+        }
+
         self.sync_fresh_components();
         self.sync_removed_components();
 
@@ -666,7 +679,6 @@ impl World {
                 ));
             }
         }
-        let world = self as *mut World;
         for (ctid, comp) in self.components.iter_mut() {
             let ctx = CPUDrawCtx::new(ctid, &mut command_batch);
             unsafe {
@@ -680,10 +692,17 @@ impl World {
             }
         }
 
+        self.strobe.sort();
+
         self.channels
             .render_tx
             .send(RenderMsg::CommandBatch(command_batch))
             .unwrap();
+
+        let _ = self
+            .channels
+            .render_tx
+            .send(RenderMsg::UpdateStrobe(mem::take(&mut self.strobe)));
     }
 
     fn push_camera_updates(

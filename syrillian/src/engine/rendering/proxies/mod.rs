@@ -6,14 +6,12 @@ use nalgebra::{Affine3, Matrix4};
 use std::any::Any;
 use std::fmt::Debug;
 
-pub mod image;
 pub mod mesh_proxy;
 pub mod text_proxy;
 
 #[cfg(debug_assertions)]
 pub mod debug_proxy;
 
-pub use image::*;
 pub use mesh_proxy::*;
 pub use text_proxy::*;
 
@@ -51,7 +49,6 @@ macro_rules! proxy_data {
 
 pub const PROXY_PRIORITY_SOLID: u32 = 99;
 pub const PROXY_PRIORITY_TRANSPARENT: u32 = 999;
-pub const PROXY_PRIORITY_2D: u32 = 9999;
 
 pub trait SceneProxy: Send + Any + Debug {
     fn setup_render(&mut self, renderer: &Renderer, local_to_world: &Matrix4<f32>) -> Box<dyn Any>;

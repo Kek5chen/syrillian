@@ -415,7 +415,7 @@ impl GameObject {
 
         let new_comp = world.components.add(comp, self.id);
         let new_comp2 = new_comp.clone();
-        self.components.insert(new_comp.into_dyn());
+        self.components.insert(new_comp.as_dyn());
         new_comp2
     }
 

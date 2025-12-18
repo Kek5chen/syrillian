@@ -1,5 +1,5 @@
 use crate::core::ObjectHash;
-use crate::windowing::game_thread::RenderTargetId;
+use crate::windowing::RenderTargetId;
 
 #[derive(Debug, Clone)]
 pub struct PickRequest {

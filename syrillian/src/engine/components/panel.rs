@@ -119,26 +119,15 @@ impl Panel {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::components::{ImageScalingMode, UiSize};
-    use crate::engine::rendering::proxies::PROXY_PRIORITY_2D;
-    use crate::engine::rendering::proxies::image::ImageSceneProxy;
-    use crate::windowing::game_thread::RenderTargetId;
+    use crate::components::UiSize;
+    use crate::windowing::RenderTargetId;
     use nalgebra::Vector2;
-    use std::any::Any;
     use winit::dpi::PhysicalSize;
 
     fn world_with_viewport() -> Box<World> {
         let (mut world, ..) = World::fresh();
         world.set_viewport_size(RenderTargetId::PRIMARY, PhysicalSize::new(800, 600));
         world
-    }
-
-    fn as_image_proxy(
-        proxy: &mut dyn crate::rendering::proxies::SceneProxy,
-    ) -> &mut ImageSceneProxy {
-        (proxy as &mut dyn Any)
-            .downcast_mut::<ImageSceneProxy>()
-            .expect("image proxy")
     }
 
     #[test]
@@ -156,8 +145,8 @@ mod tests {
         });
         panel_rect.set_depth(0.2);
 
-        let mut panel_image = panel.add_component::<Image>();
-        let mut panel_text = panel.add_component::<Text2D>();
+        let panel_image = panel.add_component::<Image>();
+        let panel_text = panel.add_component::<Text2D>();
         let mut panel_comp = panel.add_component::<Panel>();
 
         let mut child = world.new_object("child");
@@ -169,62 +158,42 @@ mod tests {
             height: 0.5,
         });
         child_rect.set_offset(Vector2::new(10.0, -5.0));
-        let mut child_image = child.add_component::<Image>();
+        let child_image = child.add_component::<Image>();
 
         let mut grandchild = world.new_object("grandchild");
         let _grandchild_rect = grandchild.add_component::<UiRect>();
-        let mut grandchild_image = grandchild.add_component::<Image>();
+        let grandchild_image = grandchild.add_component::<Image>();
 
         panel.add_child(child);
         child.add_child(grandchild);
 
         panel_comp.update(&mut world);
 
-        let mut panel_image_proxy = panel_image
-            .create_render_proxy(&world)
-            .expect("panel image proxy");
-        assert_eq!(as_image_proxy(&mut *panel_image_proxy).draw_order, 0);
+        assert_eq!(panel_image.draw_order(), 0);
+        assert_eq!(panel_text.draw_order(), 1);
 
-        let text_priority = panel_text
-            .create_render_proxy(&world)
-            .expect("text proxy")
-            .priority(world.assets.as_ref());
-        assert_eq!(text_priority, PROXY_PRIORITY_2D + 1);
-
-        let mut child_proxy_box = child_image
-            .create_render_proxy(&world)
-            .expect("child image proxy");
-        let child_proxy = as_image_proxy(&mut *child_proxy_box);
-        match child_proxy.scaling {
-            ImageScalingMode::Absolute {
+        match child_image.scaling_mode() {
+            crate::rendering::strobe::ImageScalingMode::Absolute {
                 left,
                 right,
                 top,
                 bottom,
-            } => {
-                assert_eq!((left, right, top, bottom), (70, 170, 565, 515));
-            }
-            _ => panic!("expected absolute scaling for child"),
+            } => assert_eq!((left, right, top, bottom), (70, 170, 565, 515)),
+            other => panic!("expected absolute scaling for child, got {other:?}"),
         }
-        assert_eq!(child_proxy.draw_order, 2);
-        assert!((child_proxy.translation[(2, 3)] - 0.1898).abs() < 1e-6);
+        assert_eq!(child_image.draw_order(), 2);
+        assert!((child_image.translation()[(2, 3)] - 0.1898).abs() < 1e-6);
 
-        let mut grandchild_proxy_box = grandchild_image
-            .create_render_proxy(&world)
-            .expect("grandchild image proxy");
-        let grandchild_proxy = as_image_proxy(&mut *grandchild_proxy_box);
-        match grandchild_proxy.scaling {
-            ImageScalingMode::Absolute {
+        match grandchild_image.scaling_mode() {
+            crate::rendering::strobe::ImageScalingMode::Absolute {
                 left,
                 right,
                 top,
                 bottom,
-            } => {
-                assert_eq!((left, right, top, bottom), (70, 170, 565, 465));
-            }
-            _ => panic!("expected absolute scaling for grandchild"),
+            } => assert_eq!((left, right, top, bottom), (70, 170, 565, 465)),
+            other => panic!("expected absolute scaling for grandchild, got {other:?}"),
         }
-        assert_eq!(grandchild_proxy.draw_order, 3);
-        assert!((grandchild_proxy.translation[(2, 3)] - 0.1795).abs() < 1e-6);
+        assert_eq!(grandchild_image.draw_order(), 3);
+        assert!((grandchild_image.translation()[(2, 3)] - 0.1795).abs() < 1e-6);
     }
 }

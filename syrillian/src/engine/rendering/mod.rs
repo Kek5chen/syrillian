@@ -45,6 +45,7 @@ pub(crate) mod uniform;
 
 #[cfg(debug_assertions)]
 pub mod debug_renderer;
+pub mod strobe;
 
 pub use cache::*;
 pub use context::*;

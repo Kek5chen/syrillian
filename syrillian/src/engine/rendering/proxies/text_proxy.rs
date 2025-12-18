@@ -3,14 +3,17 @@ use crate::components::BoneData;
 use crate::core::{ModelUniform, ObjectHash};
 #[cfg(debug_assertions)]
 use crate::rendering::DebugRenderer;
-use crate::rendering::glyph::{GlyphRenderData, TextAlignment, generate_glyph_geometry_stream};
+use crate::rendering::glyph::{GlyphRenderData, generate_glyph_geometry_stream};
 use crate::rendering::picking::hash_to_rgba;
 use crate::rendering::proxies::mesh_proxy::MeshUniformIndex;
-use crate::rendering::proxies::{PROXY_PRIORITY_2D, PROXY_PRIORITY_TRANSPARENT, SceneProxy};
+use crate::rendering::proxies::{PROXY_PRIORITY_TRANSPARENT, SceneProxy};
+use crate::rendering::strobe::TextAlignment;
 use crate::rendering::uniform::ShaderUniform;
 use crate::rendering::{AssetCache, CPUDrawCtx, GPUDrawCtx, RenderPassType, Renderer};
 use crate::utils::hsv_to_rgb;
+use crate::windowing::RenderTargetId;
 use crate::{ensure_aligned, must_pipeline, proxy_data, proxy_data_mut, try_activate_shader};
+use delegate::delegate;
 use etagere::euclid::approxeq::ApproxEq;
 use nalgebra::{Matrix4, Vector2, Vector3};
 use std::any::Any;
@@ -21,20 +24,20 @@ use syrillian_utils::debug_panic;
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::{Buffer, BufferUsages, RenderPass, ShaderStages};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TextRenderData {
-    uniform: ShaderUniform<MeshUniformIndex>,
-    glyph_vbo: Buffer,
+    pub uniform: ShaderUniform<MeshUniformIndex>,
+    pub glyph_vbo: Buffer,
 }
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct TextPushConstants {
-    position: Vector2<f32>,
-    em_scale: f32,
-    msdf_range_px: f32,
-    color: Vector3<f32>,
-    padding: u32,
+    pub position: Vector2<f32>,
+    pub em_scale: f32,
+    pub msdf_range_px: f32,
+    pub color: Vector3<f32>,
+    pub padding: u32,
 }
 
 ensure_aligned!(TextPushConstants { position, color }, align <= 16 * 2 => size);
@@ -72,6 +75,8 @@ pub struct TextProxy<const D: u8, DIM: TextDim<D>> {
     draw_order: u32,
     order_dirty: bool,
 
+    render_target: RenderTargetId,
+
     _dim: PhantomData<DIM>,
 }
 
@@ -101,6 +106,8 @@ impl<const D: u8, DIM: TextDim<D>> TextProxy<D, DIM> {
             draw_order: 0,
             order_dirty: false,
 
+            render_target: RenderTargetId::PRIMARY,
+
             _dim: PhantomData,
         }
     }
@@ -113,8 +120,40 @@ impl<const D: u8, DIM: TextDim<D>> TextProxy<D, DIM> {
         self.order_dirty = true;
     }
 
-    pub fn size(&self) -> f32 {
-        self.pc.em_scale
+    pub fn set_render_target(&mut self, target: RenderTargetId) {
+        if self.render_target == target {
+            return;
+        }
+        self.render_target = target;
+        self.constants_dirty = true;
+    }
+
+    delegate! {
+        to self {
+            #[field]
+            pub fn draw_order(&self) -> u32;
+            #[field]
+            pub fn render_target(&self) -> RenderTargetId;
+            #[field(&)]
+            pub fn text(&self) -> &str;
+            #[field]
+            pub fn font(&self) -> HFont;
+            #[field]
+            pub fn alignment(&self) -> TextAlignment;
+            #[field(letter_spacing_em)]
+            pub fn letter_spacing(&self) -> f32;
+            #[field]
+            pub fn rainbow_mode(&self) -> bool;
+        }
+
+        to self.pc {
+            #[field(em_scale)]
+            pub fn size(&self) -> f32;
+            #[field]
+            pub fn color(&self) -> Vector3<f32>;
+            #[field]
+            pub fn position(&self) -> Vector2<f32>;
+        }
     }
 
     pub fn update_game_thread(&mut self, mut ctx: CPUDrawCtx) {
@@ -463,7 +502,7 @@ impl<const D: u8, DIM: TextDim<D>> SceneProxy for TextProxy<D, DIM> {
 
     fn priority(&self, _store: &AssetStore) -> u32 {
         match D {
-            2 => PROXY_PRIORITY_2D.saturating_add(self.draw_order),
+            2 => self.draw_order,
             _ => PROXY_PRIORITY_TRANSPARENT,
         }
     }

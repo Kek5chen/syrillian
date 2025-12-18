@@ -83,9 +83,9 @@ pub use camera_debug::*;
 
 use crate::World;
 use crate::core::GameObjectId;
-use crate::rendering::CPUDrawCtx;
 use crate::rendering::lights::LightProxy;
 use crate::rendering::proxies::SceneProxy;
+use crate::rendering::{CPUDrawCtx, UiContext};
 use delegate::delegate;
 use slotmap::{Key, new_key_type};
 use std::any::{Any, TypeId};
@@ -176,7 +176,7 @@ impl<C: Component> CRef<C> {
         self.into()
     }
 
-    pub fn into_dyn(self) -> CRef<dyn Component> {
+    pub fn as_dyn(&self) -> CRef<dyn Component> {
         unsafe {
             CRef {
                 data: Some(self.data.as_ref().unwrap_unchecked().clone() as Arc<dyn Component>),
@@ -407,6 +407,8 @@ pub trait Component: Any + Send + Sync {
     fn update_proxy(&mut self, world: &World, draw_ctx: CPUDrawCtx) {}
 
     fn on_click(&mut self, _world: &mut World) {}
+
+    fn on_gui(&mut self, world: &mut World, ctx: UiContext) {}
 
     // Gets called when the component is about to be deleted
     fn delete(&mut self, world: &mut World) {}

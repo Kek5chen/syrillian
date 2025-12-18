@@ -15,6 +15,7 @@ where
 {
     fn as_dyn(&self) -> &dyn Any;
     fn as_dyn_mut(&mut self) -> &mut dyn Any;
+    fn iter_refs<'a>(&'a self) -> Box<(dyn Iterator<Item = CRef<dyn Component>> + 'a)>;
     fn iter_comps<'a>(&'a self) -> Box<dyn Iterator<Item = &'a dyn Component> + 'a>;
     fn iter_comps_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item = &'a mut dyn Component> + 'a>;
     fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = (K, &'a dyn Component)> + 'a>;
@@ -37,6 +38,10 @@ where
         self
     }
 
+    fn iter_refs<'a>(&'a self) -> Box<dyn Iterator<Item = CRef<dyn Component>> + 'a> {
+        Box::new(self.values().map(|v| v.as_dyn()))
+    }
+
     fn iter_comps<'a>(&'a self) -> Box<dyn Iterator<Item = &'a dyn Component> + 'a> {
         Box::new(self.values().map(|v| &**v as &dyn Component))
     }
@@ -57,15 +62,15 @@ where
     }
 
     fn get(&self, key: K) -> Option<CRef<dyn Component>> {
-        self.get(key).map(|v| v.clone().into_dyn())
+        self.get(key).map(|v| v.as_dyn())
     }
 
     fn get_mut(&mut self, key: K) -> Option<CRef<dyn Component>> {
-        self.get_mut(key).map(|v| v.clone().into_dyn())
+        self.get_mut(key).map(|v| v.as_dyn())
     }
 
     fn remove(&mut self, key: K) -> Option<CRef<dyn Component>> {
-        self.remove(key).map(|v| v.into_dyn())
+        self.remove(key).map(|v| v.as_dyn())
     }
 }
 
@@ -155,6 +160,10 @@ impl ComponentStorage {
                 .iter_mut()
                 .map(|(k, v)| (TypedComponentId(*tid, k), v))
         })
+    }
+
+    pub fn iter_refs(&self) -> impl Iterator<Item = CRef<dyn Component>> {
+        self.inner.values().flat_map(|store| store.iter_refs())
     }
 
     pub fn values(&self) -> impl Iterator<Item = &dyn Component> {

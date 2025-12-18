@@ -22,15 +22,13 @@ use syrillian::components::{
     SpringComponent, Text3D,
 };
 use syrillian::core::{GameObjectExt, GameObjectId, GameObjectRef};
-use syrillian::game_thread::RenderTargetId;
-use syrillian::prefabs::CubePrefab;
-use syrillian::prefabs::first_person_player::FirstPersonPlayerPrefab;
-use syrillian::prefabs::prefab::Prefab;
+use syrillian::prefabs::{CubePrefab, FirstPersonPlayerPrefab, Prefab};
 #[cfg(debug_assertions)]
 use syrillian::rendering::DebugRenderer;
-use syrillian::rendering::glyph::TextAlignment;
 use syrillian::rendering::lights::Light;
-use syrillian::utils::frame_counter::FrameCounter;
+use syrillian::strobe::TextAlignment;
+use syrillian::utils::FrameCounter;
+use syrillian::windowing::RenderTargetId;
 use syrillian::{AppRuntime, AppState, World};
 use winit::event::MouseButton;
 use winit::keyboard::KeyCode;

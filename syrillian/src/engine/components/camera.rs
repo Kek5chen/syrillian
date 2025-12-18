@@ -1,8 +1,8 @@
 use crate::World;
 use crate::components::{Component, NewComponent};
 use crate::core::GameObjectId;
-use crate::game_thread::RenderTargetId;
 use crate::utils::FloatMathExt;
+use crate::windowing::RenderTargetId;
 use nalgebra::{Matrix4, Perspective3, Point3, Vector2, Vector4};
 use rapier3d::geometry::Ray;
 

@@ -255,17 +255,17 @@ impl<S: AppState> ApplicationHandler for App<S> {
 
         match event {
             WindowEvent::RedrawRequested => {
+                if drives_update && game_thread.next_frame(target_id).is_err() {
+                    event_loop.exit();
+                    return;
+                }
+
                 if drives_update {
                     renderer.handle_events();
                     renderer.update();
                 }
 
                 if !renderer.redraw(target_id) {
-                    event_loop.exit();
-                    return;
-                }
-
-                if drives_update && game_thread.next_frame(target_id).is_err() {
                     event_loop.exit();
                     return;
                 }

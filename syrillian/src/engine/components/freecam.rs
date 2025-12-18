@@ -1,8 +1,8 @@
 use crate::World;
 use crate::components::{CameraComponent, Component, NewComponent};
 use crate::core::GameObjectId;
-use crate::game_thread::RenderTargetId;
 use crate::input::InputManager;
+use crate::windowing::RenderTargetId;
 use gilrs::{Axis, Button};
 use nalgebra::{UnitQuaternion, Vector2, Vector3};
 use winit::event::MouseButton;

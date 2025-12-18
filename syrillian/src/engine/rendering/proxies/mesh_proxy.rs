@@ -26,7 +26,7 @@ pub enum MeshUniformIndex {
     BoneData = 1,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RuntimeMeshData {
     pub mesh_data: ModelUniform,
     // TODO: Consider having a uniform like that, for every Transform by default in some way, or
