@@ -1,5 +1,5 @@
 use crate::assets::{AssetStore, HMesh, HShader};
-use crate::components::BoneData;
+use crate::components::mesh_renderer::BoneData;
 use crate::core::ModelUniform;
 use crate::rendering::proxies::mesh_proxy::{MeshUniformIndex, RuntimeMeshData};
 use crate::rendering::proxies::{PROXY_PRIORITY_SOLID, SceneProxy};

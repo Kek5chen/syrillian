@@ -1,5 +1,5 @@
 use crate::assets::{AssetStore, HFont, HShader};
-use crate::components::BoneData;
+use crate::components::mesh_renderer::BoneData;
 use crate::core::{ModelUniform, ObjectHash};
 #[cfg(debug_assertions)]
 use crate::rendering::DebugRenderer;

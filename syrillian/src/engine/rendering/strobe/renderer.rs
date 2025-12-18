@@ -1,5 +1,6 @@
 use super::{StrobeFrame, UiDraw};
 use crate::RenderTargetId;
+use crate::components::mesh_renderer::BoneData;
 use crate::core::ModelUniform;
 use crate::rendering::cache::AssetCache;
 use crate::rendering::proxies::mesh_proxy::{MeshUniformIndex, RuntimeMeshData};
@@ -84,7 +85,7 @@ impl<'a, 'b, 'c, 'd, 'e> UiDrawContext<'a, 'b, 'c, 'd, 'e> {
             let model = ModelUniform::empty();
             let uniform = ShaderUniform::<MeshUniformIndex>::builder(&model_bgl)
                 .with_buffer_data(&model)
-                .with_buffer_data(&crate::components::BoneData::DUMMY)
+                .with_buffer_data(&BoneData::DUMMY)
                 .build(&self.state.device);
 
             let glyph_vbo = self.state.device.create_buffer(&BufferDescriptor {
@@ -104,7 +105,7 @@ impl<'a, 'b, 'c, 'd, 'e> UiDrawContext<'a, 'b, 'c, 'd, 'e> {
             let model = ModelUniform::empty();
             let uniform = ShaderUniform::<MeshUniformIndex>::builder(&model_bgl)
                 .with_buffer_data(&model)
-                .with_buffer_data(&crate::components::BoneData::DUMMY)
+                .with_buffer_data(&BoneData::DUMMY)
                 .build(&self.state.device);
 
             let mesh_data = ModelUniform {

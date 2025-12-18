@@ -1,5 +1,5 @@
 use crate::assets::{AssetStore, H, HMaterial, HMesh, HShader, Shader};
-use crate::components::BoneData;
+use crate::components::mesh_renderer::BoneData;
 use crate::core::ObjectHash;
 use crate::core::{BoundingSphere, ModelUniform};
 use crate::rendering::picking::hash_to_rgba;

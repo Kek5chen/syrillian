@@ -59,24 +59,24 @@ pub mod ui_rect;
 #[cfg(debug_assertions)]
 pub mod camera_debug;
 
-pub use animation::*;
-pub use camera::*;
-pub use collider::*;
-pub use fp_camera::*;
-pub use fp_movement::*;
-pub use freecam::*;
-pub use gravity::*;
-pub use image::*;
-pub use light::*;
-pub use mesh_renderer::*;
-pub use panel::*;
-pub use rigid_body::*;
-pub use rope::*;
-pub use rotate::*;
-pub use skeletal::*;
-pub use spring::*;
-pub use text::*;
-pub use ui_rect::*;
+pub use animation::AnimationComponent;
+pub use camera::CameraComponent;
+pub use collider::Collider3D;
+pub use fp_camera::FirstPersonCameraController;
+pub use fp_movement::FirstPersonMovementController;
+pub use freecam::FreecamController;
+pub use gravity::GravityComponent;
+pub use image::Image;
+pub use light::{PointLightComponent, SpotLightComponent, Sun, SunLightComponent};
+pub use mesh_renderer::MeshRenderer;
+pub use panel::Panel;
+pub use rigid_body::RigidBodyComponent;
+pub use rope::RopeComponent;
+pub use rotate::RotateComponent;
+pub use skeletal::SkeletalComponent;
+pub use spring::SpringComponent;
+pub use text::{Text2D, Text3D};
+pub use ui_rect::UiRect;
 
 #[cfg(debug_assertions)]
 pub use camera_debug::*;
