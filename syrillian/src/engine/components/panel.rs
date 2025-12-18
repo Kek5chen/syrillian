@@ -37,6 +37,7 @@ impl Component for Panel {
         };
 
         container_layout.top_left_px += self.padding;
+        container_layout.size_px -= self.padding * 2.0;
 
         rect.apply_to_components(world, &mut container_layout);
 
@@ -150,7 +151,7 @@ mod tests {
                 right,
                 top,
                 bottom,
-            } => assert_eq!((left, right, top, bottom), (70, 170, 565, 515)),
+            } => assert_eq!((left, right, top, bottom), (67, 163, 568, 522)),
             other => panic!("expected absolute scaling for child, got {other:?}"),
         }
         assert_eq!(child_image.draw_order(), 2);
@@ -162,7 +163,7 @@ mod tests {
                 right,
                 top,
                 bottom,
-            } => assert_eq!((left, right, top, bottom), (70, 170, 565, 465)),
+            } => assert_eq!((left, right, top, bottom), (67, 168, 568, 467)),
             other => panic!("expected absolute scaling for grandchild, got {other:?}"),
         }
         assert_eq!(grandchild_image.draw_order(), 3);
