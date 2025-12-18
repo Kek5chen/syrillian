@@ -7,9 +7,9 @@ mod shaders;
 use crate::assets::HBGL;
 use crate::engine::assets::generic_store::{HandleName, Store, StoreDefaults, StoreType};
 use crate::engine::assets::{H, HShader, StoreTypeFallback, StoreTypeName};
-use crate::rendering::proxies::text_proxy::TextPushConstants;
+use crate::rendering::proxies::text_proxy::TextImmediates;
 use crate::rendering::{AssetCache, DEFAULT_COLOR_TARGET, DEFAULT_VBL, PICKING_TEXTURE_FORMAT};
-use crate::utils::sizes::VEC2_SIZE;
+use crate::utils::sizes::{VEC2_SIZE, VEC4_SIZE};
 use crate::{store_add_checked, store_add_checked_many};
 use std::error::Error;
 use std::fs;
@@ -17,8 +17,8 @@ use std::path::Path;
 use std::sync::Arc;
 use wgpu::{
     BindGroupLayout, ColorTargetState, ColorWrites, Device, PipelineLayout,
-    PipelineLayoutDescriptor, PolygonMode, PrimitiveTopology, PushConstantRange, ShaderStages,
-    VertexAttribute, VertexBufferLayout, VertexFormat, VertexStepMode,
+    PipelineLayoutDescriptor, PolygonMode, PrimitiveTopology, VertexAttribute, VertexBufferLayout,
+    VertexFormat, VertexStepMode,
 };
 
 #[cfg(debug_assertions)]
@@ -70,7 +70,7 @@ pub enum Shader {
         topology: PrimitiveTopology,
         vertex_buffers: &'static [VertexBufferLayout<'static>],
         color_target: &'static [Option<ColorTargetState>],
-        push_constant_ranges: &'static [PushConstantRange],
+        immediate_size: u32,
         shadow_transparency: bool,
         depth_enabled: bool,
     },
@@ -224,16 +224,6 @@ impl StoreDefaults for Shader {
             ],
         }];
 
-        const TEXT_PC: &[PushConstantRange] = &[PushConstantRange {
-            stages: ShaderStages::VERTEX_FRAGMENT,
-            range: 0..size_of::<TextPushConstants>() as u32,
-        }];
-
-        const PICKER_PC: &[PushConstantRange] = &[PushConstantRange {
-            stages: ShaderStages::FRAGMENT,
-            range: 0..16,
-        }];
-
         const PICKING_COLOR_TARGET: &[Option<ColorTargetState>] = &[Some(ColorTargetState {
             format: PICKING_TEXTURE_FORMAT,
             blend: None,
@@ -249,7 +239,7 @@ impl StoreDefaults for Shader {
                 polygon_mode: PolygonMode::Fill,
                 topology: PrimitiveTopology::TriangleList,
                 vertex_buffers: &DEFAULT_VBL,
-                push_constant_ranges: PICKER_PC,
+                immediate_size: VEC4_SIZE as u32,
                 shadow_transparency: false,
                 depth_enabled: false,
                 color_target: PICKING_COLOR_TARGET,
@@ -265,7 +255,7 @@ impl StoreDefaults for Shader {
                 polygon_mode: PolygonMode::Fill,
                 topology: PrimitiveTopology::TriangleList,
                 vertex_buffers: &DEFAULT_VBL,
-                push_constant_ranges: PICKER_PC,
+                immediate_size: VEC4_SIZE as u32,
                 shadow_transparency: false,
                 depth_enabled: true,
                 color_target: PICKING_COLOR_TARGET,
@@ -281,7 +271,7 @@ impl StoreDefaults for Shader {
                 polygon_mode: PolygonMode::Fill,
                 topology: PrimitiveTopology::TriangleList,
                 vertex_buffers: TEXT_VBL,
-                push_constant_ranges: TEXT_PC,
+                immediate_size: size_of::<TextImmediates>() as u32,
                 shadow_transparency: false,
                 depth_enabled: false,
                 color_target: DEFAULT_COLOR_TARGET,
@@ -297,7 +287,7 @@ impl StoreDefaults for Shader {
                 polygon_mode: PolygonMode::Fill,
                 topology: PrimitiveTopology::TriangleList,
                 vertex_buffers: TEXT_VBL,
-                push_constant_ranges: TEXT_PC,
+                immediate_size: size_of::<TextImmediates>() as u32,
                 shadow_transparency: true,
                 depth_enabled: false,
                 color_target: PICKING_COLOR_TARGET,
@@ -313,7 +303,7 @@ impl StoreDefaults for Shader {
                 polygon_mode: PolygonMode::Fill,
                 topology: PrimitiveTopology::TriangleList,
                 vertex_buffers: TEXT_VBL,
-                push_constant_ranges: TEXT_PC,
+                immediate_size: size_of::<TextImmediates>() as u32,
                 shadow_transparency: true,
                 depth_enabled: true,
                 color_target: DEFAULT_COLOR_TARGET,
@@ -329,7 +319,7 @@ impl StoreDefaults for Shader {
                 polygon_mode: PolygonMode::Fill,
                 topology: PrimitiveTopology::TriangleList,
                 vertex_buffers: TEXT_VBL,
-                push_constant_ranges: TEXT_PC,
+                immediate_size: size_of::<TextImmediates>() as u32,
                 shadow_transparency: true,
                 depth_enabled: true,
                 color_target: PICKING_COLOR_TARGET,
@@ -351,10 +341,7 @@ impl StoreDefaults for Shader {
                     polygon_mode: PolygonMode::Line,
                     topology: PrimitiveTopology::TriangleList,
                     vertex_buffers: &DEFAULT_VBL,
-                    push_constant_ranges: &[PushConstantRange {
-                        stages: ShaderStages::FRAGMENT,
-                        range: 0..WGPU_VEC4_ALIGN as u32,
-                    }],
+                    immediate_size: WGPU_VEC4_ALIGN as u32,
                     shadow_transparency: false,
                     depth_enabled: true,
                     color_target: DEFAULT_COLOR_TARGET,
@@ -370,7 +357,7 @@ impl StoreDefaults for Shader {
                     topology: PrimitiveTopology::LineList,
                     polygon_mode: PolygonMode::Line,
                     vertex_buffers: &DEFAULT_VBL_STEP_INSTANCE,
-                    push_constant_ranges: &[],
+                    immediate_size: 0,
                     shadow_transparency: false,
                     depth_enabled: true,
                     color_target: DEFAULT_COLOR_TARGET,
@@ -413,7 +400,7 @@ impl StoreDefaults for Shader {
                     topology: PrimitiveTopology::LineList,
                     polygon_mode: PolygonMode::Line,
                     vertex_buffers: DEBUG_LINE_VBL,
-                    push_constant_ranges: &[],
+                    immediate_size: 0,
                     shadow_transparency: false,
                     depth_enabled: true,
                     color_target: DEFAULT_COLOR_TARGET,
@@ -439,7 +426,7 @@ impl StoreDefaults for Shader {
                     polygon_mode: PolygonMode::Line,
                     topology: PrimitiveTopology::TriangleList,
                     vertex_buffers: DEBUG_TEXT,
-                    push_constant_ranges: TEXT_PC,
+                    immediate_size: size_of::<TextImmediates>() as u32,
                     shadow_transparency: false,
                     depth_enabled: false,
                     color_target: DEFAULT_COLOR_TARGET,
@@ -455,7 +442,7 @@ impl StoreDefaults for Shader {
                     polygon_mode: PolygonMode::Line,
                     topology: PrimitiveTopology::TriangleList,
                     vertex_buffers: DEBUG_TEXT,
-                    push_constant_ranges: TEXT_PC,
+                    immediate_size: size_of::<TextImmediates>() as u32,
                     shadow_transparency: false,
                     depth_enabled: true,
                     color_target: DEFAULT_COLOR_TARGET,
@@ -471,10 +458,7 @@ impl StoreDefaults for Shader {
                     topology: PrimitiveTopology::LineList,
                     polygon_mode: PolygonMode::Line,
                     vertex_buffers: &[],
-                    push_constant_ranges: &[PushConstantRange {
-                        stages: ShaderStages::VERTEX,
-                        range: 0..4,
-                    }],
+                    immediate_size: 4,
                     shadow_transparency: false,
                     depth_enabled: true,
                     color_target: DEFAULT_COLOR_TARGET,
@@ -649,14 +633,11 @@ impl Shader {
         }
     }
 
-    pub fn push_constant_ranges(&self) -> &'static [PushConstantRange] {
+    pub fn immediate_size(&self) -> u32 {
         match self {
-            Shader::Default { .. } => &[],
-            Shader::PostProcess { .. } => &[],
-            Shader::Custom {
-                push_constant_ranges,
-                ..
-            } => push_constant_ranges,
+            Shader::Default { .. } => 0,
+            Shader::PostProcess { .. } => 0,
+            Shader::Custom { immediate_size, .. } => *immediate_size,
         }
     }
 
@@ -844,7 +825,7 @@ impl Shader {
         let desc = PipelineLayoutDescriptor {
             label: Some(layout_name),
             bind_group_layouts: fixed_bgls,
-            push_constant_ranges: self.push_constant_ranges(),
+            immediate_size: self.immediate_size(),
         };
         device.create_pipeline_layout(&desc)
     }

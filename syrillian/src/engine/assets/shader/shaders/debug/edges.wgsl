@@ -6,7 +6,7 @@ struct PushConstants {
     color: vec4<f32>,
 };
 
-var<push_constant> pc: PushConstants;
+var<immediate> pc: PushConstants;
 
 @vertex
 fn vs_main(in: VInput) -> @builtin(position) vec4<f32> {

@@ -545,6 +545,7 @@ impl Renderer {
                 label: Some("Picking Pass"),
                 color_attachments: &[Some(RenderPassColorAttachment {
                     view: viewport.picking_surface.view(),
+                    depth_slice: None,
                     resolve_target: None,
                     ops: Operations {
                         load: LoadOp::Clear(Color {
@@ -582,6 +583,7 @@ impl Renderer {
                 label: Some("Picking UI Pass"),
                 color_attachments: &[Some(RenderPassColorAttachment {
                     view: viewport.picking_surface.view(),
+                    depth_slice: None,
                     resolve_target: None,
                     ops: Operations {
                         load: LoadOp::Load,
@@ -658,7 +660,7 @@ impl Renderer {
         slice.map_async(MapMode::Read, move |res| {
             let _ = tx.send(res);
         });
-        let _ = self.state.device.poll(PollType::Wait);
+        let _ = self.state.device.poll(PollType::wait_indefinitely());
 
         if rx.recv().ok().and_then(Result::ok).is_none() {
             buffer.unmap();
@@ -884,6 +886,7 @@ impl Renderer {
             label: Some("Post Process Render Pass"),
             color_attachments: &[Some(RenderPassColorAttachment {
                 view: &ctx.color_view,
+                depth_slice: None,
                 resolve_target: None,
                 ops: Operations {
                     load: LoadOp::Clear(Color::BLACK),
@@ -1038,6 +1041,7 @@ impl Renderer {
             label: Some("Offscreen Render Pass"),
             color_attachments: &[Some(RenderPassColorAttachment {
                 view: viewport.offscreen_surface.view(),
+                depth_slice: None,
                 resolve_target: None,
                 ops: Operations {
                     load: LoadOp::Clear(Color::BLACK),
@@ -1066,6 +1070,7 @@ impl Renderer {
             label: Some("UI Render Pass"),
             color_attachments: &[Some(RenderPassColorAttachment {
                 view: viewport.offscreen_surface.view(),
+                depth_slice: None,
                 resolve_target: None,
                 ops: Operations {
                     load: LoadOp::Load,

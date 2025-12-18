@@ -6,7 +6,7 @@ use crate::strobe::UiDrawContext;
 use crate::strobe::ui_element::UiElement;
 use nalgebra::{Matrix4, Scale3, Translation3};
 use num_traits::Zero;
-use wgpu::{IndexFormat, ShaderStages};
+use wgpu::IndexFormat;
 
 #[derive(Debug, Clone)]
 pub struct UiImageDraw {
@@ -181,7 +181,7 @@ impl UiElement for UiImageDraw {
             }
             RenderPassType::PickingUi => {
                 let color = hash_to_rgba(self.object_hash);
-                pass.set_push_constants(ShaderStages::FRAGMENT, 0, bytemuck::bytes_of(&color));
+                pass.set_immediates(0, bytemuck::bytes_of(&color));
             }
             _ => {}
         }

@@ -22,7 +22,7 @@ use std::marker::PhantomData;
 use std::sync::RwLock;
 use syrillian_utils::debug_panic;
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
-use wgpu::{Buffer, BufferUsages, RenderPass, ShaderStages};
+use wgpu::{Buffer, BufferUsages, RenderPass};
 
 #[derive(Debug, Clone)]
 pub struct TextRenderData {
@@ -32,7 +32,7 @@ pub struct TextRenderData {
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct TextPushConstants {
+pub struct TextImmediates {
     pub position: Vector2<f32>,
     pub em_scale: f32,
     pub msdf_range_px: f32,
@@ -40,7 +40,7 @@ pub struct TextPushConstants {
     pub padding: u32,
 }
 
-ensure_aligned!(TextPushConstants { position, color }, align <= 16 * 2 => size);
+ensure_aligned!(TextImmediates { position, color }, align <= 16 * 2 => size);
 
 #[derive(Debug, Copy, Clone)]
 pub struct ThreeD;
@@ -67,7 +67,7 @@ pub struct TextProxy<const D: u8, DIM: TextDim<D>> {
     font: HFont,
     letter_spacing_em: f32,
 
-    pc: TextPushConstants,
+    pc: TextImmediates,
     rainbow_mode: bool,
     constants_dirty: bool,
     translation: ModelUniform,
@@ -92,7 +92,7 @@ impl<const D: u8, DIM: TextDim<D>> TextProxy<D, DIM> {
             font,
             letter_spacing_em: 0.0,
 
-            pc: TextPushConstants {
+            pc: TextImmediates {
                 em_scale,
                 position: Vector2::zeros(),
                 color: Vector3::new(1., 1., 1.),
@@ -277,11 +277,7 @@ impl<const D: u8, DIM: TextDim<D>> TextProxy<D, DIM> {
 
         pass.set_pipeline(pipeline);
         pass.set_vertex_buffer(0, data.glyph_vbo.slice(..));
-        pass.set_push_constants(
-            ShaderStages::VERTEX_FRAGMENT,
-            0,
-            bytemuck::bytes_of(&self.pc),
-        );
+        pass.set_immediates(0, bytemuck::bytes_of(&self.pc));
         pass.set_bind_group(groups.render, ctx.render_bind_group, &[]);
         if let Some(idx) = groups.model {
             pass.set_bind_group(idx, data.uniform.bind_group(), &[]);
@@ -317,11 +313,7 @@ impl<const D: u8, DIM: TextDim<D>> TextProxy<D, DIM> {
             pass.set_bind_group(idx, uniform.bind_group(), &[]);
         }
 
-        pass.set_push_constants(
-            ShaderStages::VERTEX_FRAGMENT,
-            0,
-            bytemuck::bytes_of(&self.pc),
-        );
+        pass.set_immediates(0, bytemuck::bytes_of(&self.pc));
 
         pass.draw(0..self.glyph_data.len() as u32 * 6, 0..1);
     }
@@ -495,7 +487,7 @@ impl<const D: u8, DIM: TextDim<D>> SceneProxy for TextProxy<D, DIM> {
         let mut pc = self.pc;
         pc.color = Vector3::new(color[0], color[1], color[2]);
 
-        pass.set_push_constants(ShaderStages::VERTEX_FRAGMENT, 0, bytemuck::bytes_of(&pc));
+        pass.set_immediates(0, bytemuck::bytes_of(&pc));
         pass.set_vertex_buffer(0, data.glyph_vbo.slice(..));
         pass.draw(0..self.glyph_data.len() as u32 * 6, 0..1);
     }

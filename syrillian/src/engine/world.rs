@@ -23,7 +23,7 @@ use crate::rendering::{CPUDrawCtx, UiContext};
 use crate::windowing::RenderTargetId;
 use log::info;
 use nalgebra::Matrix4;
-use slotmap::{HopSlotMap, Key};
+use slotmap::{Key, SlotMap};
 use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
 use std::mem;
@@ -157,7 +157,7 @@ impl WorldChannels {
 /// on different threads simultaneously.
 pub struct World {
     /// Collection of all game objects indexed by their unique ID
-    pub objects: HopSlotMap<GameObjectId, Box<GameObject>>,
+    pub objects: SlotMap<GameObjectId, Box<GameObject>>,
     /// Collection of all components indexed by their unique ID
     pub components: ComponentStorage,
     /// Root-level game objects that have no parent
@@ -201,7 +201,7 @@ impl World {
     /// Create a new, empty, clean-slate world with default data.
     fn empty(channels: WorldChannels, assets: Arc<AssetStore>) -> Box<World> {
         Box::new(World {
-            objects: HopSlotMap::with_key(),
+            objects: SlotMap::with_key(),
             components: ComponentStorage::default(),
             children: vec![],
             object_ref_counts: HashMap::new(),

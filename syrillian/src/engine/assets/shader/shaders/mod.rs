@@ -43,7 +43,7 @@ macro_rules! test_custom_shader {
                 topology: PrimitiveTopology::TriangleList,
                 polygon_mode: PolygonMode::Line,
                 vertex_buffers: &[],
-                push_constant_ranges: &[],
+                immediate_size: 0,
                 shadow_transparency: false,
                 depth_enabled: true,
                 color_target: crate::rendering::DEFAULT_COLOR_TARGET,

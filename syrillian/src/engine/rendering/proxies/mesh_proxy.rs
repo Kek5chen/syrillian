@@ -2,6 +2,8 @@ use crate::assets::{AssetStore, H, HMaterial, HMesh, HShader, Shader};
 use crate::components::mesh_renderer::BoneData;
 use crate::core::ObjectHash;
 use crate::core::{BoundingSphere, ModelUniform};
+#[cfg(debug_assertions)]
+use crate::rendering::DebugRenderer;
 use crate::rendering::picking::hash_to_rgba;
 use crate::rendering::proxies::{PROXY_PRIORITY_SOLID, PROXY_PRIORITY_TRANSPARENT, SceneProxy};
 use crate::rendering::uniform::ShaderUniform;
@@ -14,10 +16,7 @@ use std::any::Any;
 use std::ops::Range;
 use std::sync::RwLockWriteGuard;
 use syrillian_macros::UniformIndex;
-use wgpu::{IndexFormat, RenderPass, ShaderStages};
-
-#[cfg(debug_assertions)]
-use crate::rendering::DebugRenderer;
+use wgpu::{IndexFormat, RenderPass};
 
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, UniformIndex)]
@@ -151,7 +150,7 @@ impl SceneProxy for MeshSceneProxy {
         }
 
         let color = hash_to_rgba(object_hash);
-        pass.set_push_constants(ShaderStages::FRAGMENT, 0, bytemuck::bytes_of(&color));
+        pass.set_immediates(0, bytemuck::bytes_of(&color));
 
         pass.set_vertex_buffer(0, mesh.vertex_buffer().slice(..));
         if let Some(i_buffer) = mesh.indices_buffer() {
@@ -290,7 +289,6 @@ fn draw_edges(
     pass: &mut RwLockWriteGuard<RenderPass>,
 ) {
     use nalgebra::Vector4;
-    use wgpu::ShaderStages;
 
     const COLOR: Vector4<f32> = Vector4::new(1.0, 0.0, 1.0, 1.0);
 
@@ -300,7 +298,7 @@ fn draw_edges(
     }
 
     pass.set_vertex_buffer(0, mesh.vertex_buffer().slice(..));
-    pass.set_push_constants(ShaderStages::FRAGMENT, 0, bytemuck::bytes_of(&COLOR));
+    pass.set_immediates(0, bytemuck::bytes_of(&COLOR));
 
     if let Some(i_buffer) = mesh.indices_buffer().as_ref() {
         pass.set_index_buffer(i_buffer.slice(..), IndexFormat::Uint32);

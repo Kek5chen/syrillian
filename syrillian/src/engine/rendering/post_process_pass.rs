@@ -1,6 +1,9 @@
 use crate::engine::rendering::uniform::ShaderUniform;
 use syrillian_macros::UniformIndex;
-use wgpu::{AddressMode, BindGroupLayout, Device, FilterMode, SamplerDescriptor, TextureView};
+use wgpu::{
+    AddressMode, BindGroupLayout, Device, FilterMode, MipmapFilterMode, SamplerDescriptor,
+    TextureView,
+};
 
 #[repr(u8)]
 #[derive(Debug, Copy, Clone, UniformIndex)]
@@ -28,7 +31,7 @@ impl PostProcessData {
             address_mode_w: AddressMode::ClampToEdge,
             mag_filter: FilterMode::Nearest,
             min_filter: FilterMode::Nearest,
-            mipmap_filter: FilterMode::Nearest,
+            mipmap_filter: MipmapFilterMode::Nearest,
             ..SamplerDescriptor::default()
         });
 

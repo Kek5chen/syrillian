@@ -6,8 +6,8 @@ use std::error::Error;
 use std::fs;
 use std::path::PathBuf;
 use wgpu::{
-    AddressMode, Extent3d, FilterMode, TextureDescriptor, TextureDimension, TextureFormat,
-    TextureUsages,
+    AddressMode, Extent3d, FilterMode, MipmapFilterMode, TextureDescriptor, TextureDimension,
+    TextureFormat, TextureUsages,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -20,6 +20,7 @@ pub struct Texture {
     pub array_layers: u32,
     pub repeat_mode: AddressMode,
     pub filter_mode: FilterMode,
+    pub mip_filter_mode: MipmapFilterMode,
 }
 
 impl H<Texture> {
@@ -66,6 +67,7 @@ impl Texture {
             array_layers: capacity,
             repeat_mode: AddressMode::Repeat,
             filter_mode: FilterMode::Linear,
+            mip_filter_mode: MipmapFilterMode::Linear,
         }
     }
 
@@ -120,7 +122,7 @@ impl Texture {
             address_mode_w: self.repeat_mode,
             mag_filter: self.filter_mode,
             min_filter: self.filter_mode,
-            mipmap_filter: self.filter_mode,
+            mipmap_filter: self.mip_filter_mode,
             ..Default::default()
         }
     }
@@ -151,6 +153,7 @@ impl Texture {
             array_layers: 1,
             repeat_mode: AddressMode::Repeat,
             filter_mode: FilterMode::Linear,
+            mip_filter_mode: MipmapFilterMode::Linear,
         };
 
         Ok(tex)
@@ -166,6 +169,7 @@ impl Texture {
             array_layers: 1,
             repeat_mode: AddressMode::Repeat,
             filter_mode: FilterMode::Linear,
+            mip_filter_mode: MipmapFilterMode::Linear,
         }
     }
 }
@@ -236,6 +240,7 @@ impl Texture {
             array_layers: capacity.max(1),
             repeat_mode: AddressMode::Repeat,
             filter_mode: FilterMode::Linear,
+            mip_filter_mode: MipmapFilterMode::Linear,
         }
     }
 }
