@@ -435,7 +435,7 @@ impl World {
             parent: None,
             owning_world: self,
             transform: Transform::new(GameObjectId::null()),
-            components: HashSet::new(),
+            components: Vec::new(),
             custom_properties: HashMap::new(),
             event_mask: Cell::new(EventType::empty()),
             hash: 0,
@@ -985,7 +985,7 @@ impl World {
         for id in ids {
             if let Some(obj) = self.objects.get_mut(id) {
                 obj.mark_dead();
-                let comps: Vec<_> = obj.components.drain().collect();
+                let comps: Vec<_> = obj.components.drain(..).collect();
                 obj.children.clear();
                 obj.parent = None;
 

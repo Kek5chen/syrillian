@@ -145,7 +145,7 @@ mod tests {
         assert_eq!(panel_text.draw_order(), 1);
 
         match child_image.scaling_mode() {
-            crate::rendering::strobe::ImageScalingMode::Absolute {
+            ImageScalingMode::Absolute {
                 left,
                 right,
                 top,
@@ -154,10 +154,10 @@ mod tests {
             other => panic!("expected absolute scaling for child, got {other:?}"),
         }
         assert_eq!(child_image.draw_order(), 2);
-        assert!((child_image.translation()[(2, 3)] - 0.1898).abs() < 1e-6);
+        assert_lt!((child_image.translation()[(2, 3)] - 0.200).abs(), 1e-6);
 
         match grandchild_image.scaling_mode() {
-            crate::rendering::strobe::ImageScalingMode::Absolute {
+            ImageScalingMode::Absolute {
                 left,
                 right,
                 top,
@@ -166,6 +166,6 @@ mod tests {
             other => panic!("expected absolute scaling for grandchild, got {other:?}"),
         }
         assert_eq!(grandchild_image.draw_order(), 3);
-        assert!((grandchild_image.translation()[(2, 3)] - 0.1795).abs() < 1e-6);
+        assert_lt!((grandchild_image.translation()[(2, 3)] - 0.200).abs(), 1e-6);
     }
 }

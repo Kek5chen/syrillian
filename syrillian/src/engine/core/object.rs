@@ -1,4 +1,5 @@
 use crate::components::{CRef, Component, NewComponent, TypedComponentId};
+use crate::core::Transform;
 use crate::ensure_aligned;
 use crate::world::World;
 use itertools::Itertools;
@@ -6,13 +7,12 @@ use nalgebra::{Matrix4, Translation3, Vector3};
 use slotmap::{Key, KeyData, new_key_type};
 use std::borrow::Borrow;
 use std::cell::Cell;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
 use std::ops::{Deref, DerefMut};
 use std::ptr::null_mut;
-
-use crate::core::Transform;
+use syrillian_utils::debug_panic;
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Default)]
 pub struct EventType(u32);
@@ -306,7 +306,7 @@ pub struct GameObject {
     /// The transformation applied to the object.
     pub transform: Transform,
     /// Components attached to this object.
-    pub(crate) components: HashSet<CRef<dyn Component>>,
+    pub(crate) components: Vec<CRef<dyn Component>>,
     /// Custom Property Data (Keys & Values)
     pub(crate) custom_properties: HashMap<String, serde_json::Value>,
     /// Events this object is registered for.
@@ -414,8 +414,16 @@ impl GameObject {
         comp.init(world);
 
         let new_comp = world.components.add(comp, self.id);
+        if self
+            .components
+            .iter()
+            .any(|c| c.ctx.tid == new_comp.ctx.tid)
+        {
+            debug_panic!("Tried to add the same component again to the same object");
+        }
+
         let new_comp2 = new_comp.clone();
-        self.components.insert(new_comp.as_dyn());
+        self.components.push(new_comp.as_dyn());
         new_comp2
     }
 
@@ -491,7 +499,12 @@ impl GameObject {
     }
 
     /// Returns an iterator over all [`Component`] of type `C` attached to this game object.
-    pub fn get_components<C: Component + 'static>(&self) -> impl Iterator<Item = CRef<C>> {
+    pub fn iter_dyn_components(&self) -> impl Iterator<Item = &CRef<dyn Component>> {
+        self.components.iter()
+    }
+
+    /// Returns an iterator over all [`Component`] of type `C` attached to this game object.
+    pub fn iter_components<C: Component + 'static>(&self) -> impl Iterator<Item = CRef<C>> {
         self.components.iter().filter_map(|c| c.clone().as_a())
     }
 
@@ -512,7 +525,13 @@ impl GameObject {
     /// Removes a [`Component`] by id from this game object and the world.
     pub fn remove_component(&mut self, comp: impl Borrow<TypedComponentId>, world: &mut World) {
         let comp = *comp.borrow();
-        self.components.remove(&comp);
+        let removed = self
+            .components
+            .extract_if(.., |c| c.ctx.tid == comp)
+            .count();
+        if removed > 1 {
+            debug_panic!("Removed more than one component by TID (which should be unique)");
+        }
         world.components.remove(comp);
     }
 
@@ -538,7 +557,7 @@ impl GameObject {
         }
 
         let world = self.world();
-        for mut comp in self.components.drain() {
+        for mut comp in self.components.drain(..) {
             comp.delete(world);
             world.components.remove(&comp);
         }

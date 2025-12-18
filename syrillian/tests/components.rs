@@ -45,7 +45,7 @@ fn component() {
     );
 
     obj.remove_component(&comp2, &mut world);
-    assert_eq!(obj.get_components::<MyComponent>().count(), 1);
+    assert_eq!(obj.iter_components::<MyComponent>().count(), 1);
     assert_eq!(world.components.values().count(), 1);
     assert_eq!(
         world
