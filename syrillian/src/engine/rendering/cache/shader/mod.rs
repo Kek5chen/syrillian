@@ -13,7 +13,7 @@ pub struct RuntimeShader {
     pub module: ShaderModule,
     pipeline: RenderPipeline,
     shadow_pipeline: Option<RenderPipeline>,
-    pub push_constant_ranges: &'static [PushConstantRange],
+    pub immediate_size: u32,
     bind_groups: BindGroupMap,
 }
 
@@ -42,7 +42,7 @@ impl CacheType for Shader {
             module,
             pipeline,
             shadow_pipeline,
-            push_constant_ranges: self.push_constant_ranges(),
+            immediate_size: self.immediate_size(),
             bind_groups,
         }
     }

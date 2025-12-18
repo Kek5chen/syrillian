@@ -9,9 +9,9 @@ use snafu::{ResultExt, Snafu, ensure};
 use std::mem;
 use std::sync::Arc;
 use wgpu::{
-    Adapter, CreateSurfaceError, Device, DeviceDescriptor, Features, Instance, InstanceDescriptor,
-    Limits, MemoryHints, PowerPreference, Queue, RequestAdapterOptions, RequestDeviceError,
-    Surface, SurfaceConfiguration, TextureFormat,
+    Adapter, CreateSurfaceError, Device, DeviceDescriptor, ExperimentalFeatures, Features,
+    Instance, InstanceDescriptor, Limits, MemoryHints, PowerPreference, Queue,
+    RequestAdapterOptions, RequestDeviceError, Surface, SurfaceConfiguration, TextureFormat,
 };
 use winit::dpi::PhysicalSize;
 use winit::window::Window;
@@ -73,13 +73,14 @@ impl State {
                 label: Some("Renderer Hardware"),
                 required_features: Features::default()
                     | Features::POLYGON_MODE_LINE
-                    | Features::PUSH_CONSTANTS
+                    | Features::IMMEDIATES
                     | Features::ADDRESS_MODE_CLAMP_TO_BORDER,
                 required_limits: Limits {
                     max_bind_groups: 6,
-                    max_push_constant_size: 128,
+                    max_immediate_size: 128,
                     ..Limits::default()
                 },
+                experimental_features: ExperimentalFeatures::disabled(),
                 memory_hints: MemoryHints::default(),
                 trace: Self::trace_mode(),
             })

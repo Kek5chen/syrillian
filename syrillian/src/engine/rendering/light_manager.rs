@@ -13,8 +13,8 @@ use log::warn;
 use std::convert::TryFrom;
 use syrillian_utils::debug_panic;
 use wgpu::{
-    AddressMode, Device, FilterMode, Queue, Sampler, SamplerDescriptor, TextureUsages, TextureView,
-    TextureViewDescriptor,
+    AddressMode, Device, FilterMode, MipmapFilterMode, Queue, Sampler, SamplerDescriptor,
+    TextureUsages, TextureView, TextureViewDescriptor,
 };
 
 const DUMMY_POINT_LIGHT: LightProxy = LightProxy::dummy();
@@ -196,7 +196,7 @@ impl LightManager {
             address_mode_w: AddressMode::ClampToEdge,
             mag_filter: FilterMode::Linear,
             min_filter: FilterMode::Linear,
-            mipmap_filter: FilterMode::Linear,
+            mipmap_filter: MipmapFilterMode::Linear,
             lod_min_clamp: 0.0,
             lod_max_clamp: 0.0,
             compare: Some(wgpu::CompareFunction::LessEqual),
@@ -250,7 +250,6 @@ impl LightManager {
     #[cfg(debug_assertions)]
     pub fn render_debug_lights(&self, renderer: &Renderer, ctx: &crate::rendering::GPUDrawCtx) {
         use crate::assets::HShader;
-        use wgpu::ShaderStages;
 
         let mut pass = ctx.pass.write().unwrap();
 
@@ -267,7 +266,7 @@ impl LightManager {
                 }
             };
 
-            pass.set_push_constants(ShaderStages::VERTEX, 0, bytemuck::bytes_of(&(i as u32)));
+            pass.set_immediates(0, bytemuck::bytes_of(&(i as u32)));
             match type_id {
                 LightType::Point => pass.draw(0..2, 0..6),
                 LightType::Sun => pass.draw(0..2, 0..9),

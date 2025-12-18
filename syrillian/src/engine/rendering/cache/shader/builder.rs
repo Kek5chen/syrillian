@@ -113,7 +113,7 @@ impl<'a> RenderPipelineBuilder<'a> {
                 compilation_options: PipelineCompilationOptions::default(),
                 targets: self.color_target,
             }),
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         }
     }
@@ -151,7 +151,7 @@ impl<'a> RenderPipelineBuilder<'a> {
             depth_stencil: Some(SHADOW_DEPTH_STENCIL),
             multisample: MultisampleState::default(),
             fragment,
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         })
     }

@@ -1,15 +1,15 @@
 use crate::assets::HFont;
 use crate::core::{ModelUniform, ObjectHash};
 use crate::rendering::glyph::{GlyphRenderData, generate_glyph_geometry_stream};
-use crate::rendering::proxies::{MeshUniformIndex, TextPushConstants};
+use crate::rendering::proxies::{MeshUniformIndex, TextImmediates};
 use crate::rendering::{RenderPassType, hash_to_rgba};
 use crate::strobe::UiDrawContext;
 use crate::strobe::ui_element::UiElement;
 use crate::try_activate_shader;
 use crate::utils::hsv_to_rgb;
 use nalgebra::{Vector2, Vector3};
+use wgpu::BufferUsages;
 use wgpu::util::DeviceExt;
-use wgpu::{BufferUsages, ShaderStages};
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum TextAlignment {
@@ -90,7 +90,7 @@ impl UiElement for UiTextDraw {
             bytemuck::bytes_of(&model),
         );
 
-        let mut pc = TextPushConstants {
+        let mut pc = TextImmediates {
             position: self.position,
             em_scale: self.size_em,
             msdf_range_px: 4.0,
@@ -120,7 +120,7 @@ impl UiElement for UiTextDraw {
             pass.set_bind_group(idx, material.uniform.bind_group(), &[]);
         }
 
-        pass.set_push_constants(ShaderStages::VERTEX_FRAGMENT, 0, bytemuck::bytes_of(&pc));
+        pass.set_immediates(0, bytemuck::bytes_of(&pc));
         pass.set_vertex_buffer(0, cached_text.glyph_vbo.slice(..));
         pass.draw(0..glyphs.len() as u32 * 6, 0..1);
     }

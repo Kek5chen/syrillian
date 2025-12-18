@@ -18,7 +18,7 @@ struct PushConstants {
     color: vec3<f32>,
 }
 
-var<push_constant> pc: PushConstants;
+var<immediate> pc: PushConstants;
 
 
 

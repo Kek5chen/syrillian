@@ -5,7 +5,7 @@ struct PickColor {
     color: vec4<f32>,
 };
 
-var<push_constant> pick: PickColor;
+var<immediate> pick: PickColor;
 
 @vertex
 fn vs_main_2d(in: VInput) -> FInput {

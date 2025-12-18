@@ -9,7 +9,7 @@ struct PushConstants {
     light_index: u32,
 };
 
-var<push_constant> pc: PushConstants;
+var<immediate> pc: PushConstants;
 
 // Sun Light
 

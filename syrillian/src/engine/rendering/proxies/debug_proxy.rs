@@ -11,7 +11,7 @@ use nalgebra::{Matrix4, Point3, Vector4};
 use std::any::Any;
 use syrillian_utils::debug_panic;
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
-use wgpu::{Buffer, BufferUsages, Device, IndexFormat, Queue, ShaderStages};
+use wgpu::{Buffer, BufferUsages, Device, IndexFormat, Queue};
 
 #[derive(Debug)]
 pub(crate) struct GPUDebugProxyData {
@@ -210,7 +210,7 @@ impl DebugSceneProxy {
             let mut pass = ctx.pass.write().unwrap();
 
             pass.set_pipeline(pipeline);
-            pass.set_push_constants(ShaderStages::FRAGMENT, 0, bytemuck::bytes_of(&self.color));
+            pass.set_immediates(0, bytemuck::bytes_of(&self.color));
             pass.set_bind_group(groups.render, ctx.render_bind_group, &[]);
             if let Some(idx) = groups.model {
                 pass.set_bind_group(idx, data.uniform.bind_group(), &[]);
