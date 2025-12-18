@@ -60,6 +60,7 @@ chrono = "0.4"
 chrono = "0.4"
 env_logger = { version = "0.11", features = ["auto-color"] }
 notify = "8.2"
+more-asserts = "0.3"
 
 
 

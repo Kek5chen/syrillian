@@ -848,7 +848,7 @@ impl World {
             Self::find_components_of_children(collection, *child);
         }
 
-        collection.extend(obj.get_components::<C>());
+        collection.extend(obj.iter_components::<C>());
     }
 
     /// Find all objects that contain a property with the given key
