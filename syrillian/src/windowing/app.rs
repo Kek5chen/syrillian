@@ -7,7 +7,6 @@ use crate::world::WorldChannels;
 use crossbeam_channel::unbounded;
 use log::{error, info, trace};
 use std::error::Error;
-use web_time::Instant;
 use winit::application::ApplicationHandler;
 use winit::dpi::Size;
 use winit::error::EventLoopError;
@@ -231,7 +230,6 @@ impl<S: AppState> ApplicationHandler for App<S> {
         window_id: WindowId,
         event: WindowEvent,
     ) {
-        let event_start = Instant::now();
         if event_loop.exiting() {
             return;
         }
