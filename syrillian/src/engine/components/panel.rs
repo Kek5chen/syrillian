@@ -41,47 +41,40 @@ impl Component for Panel {
 
         rect.apply_to_components(world, &mut container_layout);
 
-        self.layout_children(self.parent.children(), &container_layout, world);
+        layout_children(self.parent.children(), &container_layout, world);
     }
 }
 
-impl Panel {
-    fn layout_children(
-        &self,
-        children: &[GameObjectId],
-        parent_layout: &UiRectLayout,
-        world: &mut World,
-    ) {
-        for &child in children {
-            let rect = child.get_component::<UiRect>();
-            let layout_from_rect = rect.as_ref().and_then(|rect| {
-                rect.layout_in_region(
-                    parent_layout.top_left_px,
-                    parent_layout.size_px,
-                    parent_layout.screen,
-                )
-            });
+fn layout_children(children: &[GameObjectId], parent_layout: &UiRectLayout, world: &mut World) {
+    for &child in children {
+        let rect = child.get_component::<UiRect>();
+        let layout_from_rect = rect.as_ref().and_then(|rect| {
+            rect.layout_in_region(
+                parent_layout.top_left_px,
+                parent_layout.size_px,
+                parent_layout.screen,
+            )
+        });
 
-            #[allow(clippy::unnecessary_lazy_evaluations)]
-            let mut layout = layout_from_rect.unwrap_or_else(|| UiRectLayout {
-                top_left_px: parent_layout.top_left_px,
-                size_px: parent_layout.size_px,
-                screen: parent_layout.screen,
-                target: parent_layout.target,
-                depth: parent_layout.depth,
-                draw_order: parent_layout.draw_order,
-            });
+        #[allow(clippy::unnecessary_lazy_evaluations)]
+        let mut layout = layout_from_rect.unwrap_or_else(|| UiRectLayout {
+            top_left_px: parent_layout.top_left_px,
+            size_px: parent_layout.size_px,
+            screen: parent_layout.screen,
+            target: parent_layout.target,
+            depth: parent_layout.depth,
+            draw_order: parent_layout.draw_order,
+        });
 
-            layout.draw_order = parent_layout.draw_order;
-            layout.depth = parent_layout.depth;
+        layout.draw_order = parent_layout.draw_order;
+        layout.depth = parent_layout.depth;
 
-            if let Some(mut rect) = rect {
-                rect.apply_to_components(world, &mut layout);
-            }
+        if let Some(mut rect) = rect {
+            rect.apply_to_components(world, &mut layout);
+        }
 
-            if !child.children().is_empty() {
-                self.layout_children(child.children(), &layout, world);
-            }
+        if !child.children().is_empty() {
+            layout_children(child.children(), &layout, world);
         }
     }
 }

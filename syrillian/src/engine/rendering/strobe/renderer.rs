@@ -109,7 +109,7 @@ impl<'a, 'b, 'c, 'd, 'e> UiDrawContext<'a, 'b, 'c, 'd, 'e> {
                 .build(&self.state.device);
 
             let mesh_data = ModelUniform {
-                model_mat: model_mat.clone(),
+                model_mat: *model_mat,
             };
 
             RuntimeMeshData { mesh_data, uniform }
@@ -127,10 +127,7 @@ impl StrobeRenderer {
     }
 
     pub fn has_draws(&self, target: RenderTargetId) -> bool {
-        self.draws
-            .get(&target)
-            .map(|d| !d.is_empty())
-            .unwrap_or(false)
+        self.draws.get(&target).is_some_and(|d| !d.is_empty())
     }
 
     pub fn render(
