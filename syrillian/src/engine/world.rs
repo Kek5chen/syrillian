@@ -117,8 +117,7 @@ impl WorldChannels {
     pub fn active_camera_for(&self, target: RenderTargetId) -> CWeak<CameraComponent> {
         self.targets
             .get(&target)
-            .map(|t| t.active_camera)
-            .unwrap_or_else(CWeak::null)
+            .map_or_else(CWeak::null, |t| t.active_camera)
     }
 
     pub fn set_viewport_size(&mut self, target: RenderTargetId, size: PhysicalSize<u32>) {
@@ -408,7 +407,7 @@ impl World {
 
         let mut seed = id.as_ffi();
         loop {
-            let mut hasher = DefaultHasher::new();
+            let mut hasher = DefaultHasher::default();
             hasher.write_u64(seed);
             let candidate = (hasher.finish() & 0xffff_ffff) as ObjectHash;
             let hash = if candidate == 0 { 1 } else { candidate };

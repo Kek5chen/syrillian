@@ -73,7 +73,7 @@ pub struct UiContext {
 
 impl UiContext {
     pub(crate) fn new(object_hash: ObjectHash, component_id: TypedComponentId) -> UiContext {
-        let mut hasher = DefaultHasher::new();
+        let mut hasher = DefaultHasher::default();
         object_hash.hash(&mut hasher);
         component_id.0.hash(&mut hasher);
         component_id.1.hash(&mut hasher);
