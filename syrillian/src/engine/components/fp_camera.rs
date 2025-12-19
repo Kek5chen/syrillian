@@ -17,20 +17,34 @@ pub struct FPSCameraConfig {
     pub controller_sensitivity: Vector2<f32>,
     /// Maximum up-down (pitch) angle. Default: 89.9
     pub max_pitch: f32,
-    /// Maximum tilt (in degrees) when turning. Default: 1.5
+    /// Maximum tilt (in degrees) when turning. Default: 1.0
     pub max_roll: f32,
-    /// Bobbing amplitude on X and Y axes. Default: X = 0.05, Y = 0.05, Z = 0.0
+    /// Look smoothing speed. Default: 12.0
+    pub look_smoothing: f32,
+    /// Bobbing amplitude on X and Y axes. Default: X = 0.015, Y = 0.03, Z = 0.0
     pub bob_amplitude: Vector3<f32>,
-    /// Interpolation speed for bobbing and roll. Default: 10.0
+    /// Bobbing base frequency (walk cycles per second) for x/y. Default: (1.8, 3.0)
+    pub bob_frequency: Vector2<f32>,
+    /// How much bob increases while sprinting. Default: 0.35
+    pub sprint_bob_scale: f32,
+    /// Interpolation speed for bobbing and roll. Default: 12.0
     pub smoothing_speed: f32,
-    /// Vertical bob on jump. Default: 0.5
+    /// Vertical bob on jump. Default: 0.6
     pub jump_bob_height: f32,
-    /// How fast jump bob resets. Default: 5.0
+    /// How fast jump bob resets. Default: 6.0
     pub jump_bob_speed: f32,
+    /// Idle sway amplitude. Default: 0.08
+    pub idle_sway_amplitude: f32,
+    /// Idle sway frequency. Default: 0.8
+    pub idle_sway_frequency: f32,
     /// The normal unzoomed fov
     pub normal_fov: f32,
     /// Maximum zoom FOV
     pub zoom_fov: f32,
+    /// Additional FOV kick while sprinting. Default: 3.0
+    pub sprint_fov_kick: f32,
+    /// How fast FOV changes interpolate. Default: 10.0
+    pub fov_lerp_speed: f32,
     /// Enable the zoom feature
     pub enable_zoom: bool,
 }
@@ -51,11 +65,15 @@ pub struct FirstPersonCameraController {
     jump_offset: f32,
     jump_bob_interp: f32,
     jump_bob_interp_t: f32,
-    is_jumping: bool,
-    is_falling: bool,
+    is_grounded: bool,
     zoom_factor: f32,
 
     pub base_position: Vector3<f32>,
+    interp_yaw: f32,
+    interp_pitch: f32,
+    movement_speed_fraction: f32,
+    is_sprinting: bool,
+    idle_phase: f32,
 }
 
 impl Default for FPSCameraConfig {
@@ -65,13 +83,20 @@ impl Default for FPSCameraConfig {
             mouse_sensitivity: Vector2::new(0.6, 0.6),
             controller_sensitivity: Vector2::new(1.0, 1.0),
             max_pitch: 89.9,
-            max_roll: 1.5,
+            max_roll: 1.0,
+            look_smoothing: 12.0,
             bob_amplitude: Vector3::new(0.05, 0.05, 0.0),
-            smoothing_speed: 10.0,
-            jump_bob_height: 0.5,
-            jump_bob_speed: 5.0,
+            bob_frequency: Vector2::new(3.0, 6.0),
+            sprint_bob_scale: 0.35,
+            smoothing_speed: 12.0,
+            jump_bob_height: 0.6,
+            jump_bob_speed: 6.0,
+            idle_sway_amplitude: 0.08,
+            idle_sway_frequency: 0.8,
             normal_fov: 60.0,
             zoom_fov: 30.0,
+            sprint_fov_kick: 3.0,
+            fov_lerp_speed: 10.0,
             enable_zoom: true,
         }
     }
@@ -93,11 +118,15 @@ impl NewComponent for FirstPersonCameraController {
             jump_offset: 0.0,
             jump_bob_interp: 0.0,
             jump_bob_interp_t: 0.,
-            is_jumping: false,
-            is_falling: false,
+            is_grounded: false,
             zoom_factor: 0.0,
 
             base_position: Vector3::zeros(),
+            interp_yaw: 0.0,
+            interp_pitch: 0.0,
+            movement_speed_fraction: 0.0,
+            is_sprinting: false,
+            idle_phase: 0.0,
         }
     }
 }
@@ -148,21 +177,44 @@ impl FirstPersonCameraController {
         self.smooth_roll = (self.smooth_roll + delta / 70.0).clamp(-max, max);
     }
 
-    pub fn update_bob(&mut self, speed_factor: f32) {
-        const FREQ_X: f32 = 5.;
-        const FREQ_Y: f32 = 10.;
+    pub fn apply_movement_state(&mut self, speed_fraction: f32, sprinting: bool) {
+        self.movement_speed_fraction = speed_fraction.clamp(0.0, 3.0);
+        self.is_sprinting = sprinting;
+    }
 
-        let dt = World::instance().delta_time().as_secs_f32();
-        let mul = (speed_factor / 4.).clamp(0.0, 2.0);
+    pub fn update_bob(&mut self, speed_factor: f32, is_sprinting: bool, dt: f32) {
+        const TAU: f32 = std::f32::consts::TAU;
 
-        self.bob_phase.x = (self.bob_phase.x + dt * FREQ_X * mul) % std::f32::consts::TAU;
-        self.bob_phase.y = (self.bob_phase.y + dt * FREQ_Y * mul) % std::f32::consts::TAU;
+        let freq_scale = self.movement_speed_fraction.clamp(0.1, 1.4);
+
+        let mul = (speed_factor / 4.).clamp(0.0, 2.5);
+        let sprint_scale = if is_sprinting {
+            1.0 + self.config.sprint_bob_scale
+        } else {
+            1.0
+        };
+
+        let freq_x = self.config.bob_frequency.x * freq_scale;
+        let freq_y = self.config.bob_frequency.y * freq_scale;
+
+        self.bob_phase.x = (self.bob_phase.x + dt * freq_x * mul) % TAU;
+        self.bob_phase.y = (self.bob_phase.y + dt * freq_y * mul) % TAU;
+
+        if mul < 0.05 {
+            self.idle_phase = (self.idle_phase + dt * self.config.idle_sway_frequency) % TAU;
+            let sway = self.idle_phase.sin() * self.config.idle_sway_amplitude;
+            self.bob_offset = self.bob_offset.lerp(
+                &Vector3::new(sway * 0.15, sway, 0.0),
+                0.2 * dt * self.config.smoothing_speed,
+            );
+            return;
+        }
 
         let sin_tx = self.bob_phase.x.sin();
         let sin_ty = self.bob_phase.y.sin();
         let target = Vector3::new(
-            sin_tx * self.config.bob_amplitude.x * mul,
-            sin_ty * self.config.bob_amplitude.y * mul,
+            sin_tx * self.config.bob_amplitude.x * mul * sprint_scale,
+            sin_ty * self.config.bob_amplitude.y * mul * sprint_scale,
             0.0,
         );
 
@@ -170,9 +222,13 @@ impl FirstPersonCameraController {
     }
 
     pub fn signal_jump(&mut self) {
-        self.is_jumping = true;
-        self.is_falling = self.vel.y < f32::EPSILON;
+        self.is_grounded = false;
         self.jump_offset = self.config.jump_bob_height;
+    }
+
+    pub fn signal_ground(&mut self) {
+        self.is_grounded = true;
+        self.jump_offset = 0.;
     }
 
     fn update_rotation(
@@ -181,15 +237,18 @@ impl FirstPersonCameraController {
         delta_time: f32,
         mouse_delta: &Vector2<f32>,
     ) {
-        let yaw_rotation =
-            UnitQuaternion::from_axis_angle(&Vector3::y_axis(), self.yaw.to_radians());
-        let pitch_rotation =
-            UnitQuaternion::from_axis_angle(&Vector3::x_axis(), self.pitch.to_radians());
         if self.vel.xz().magnitude() < 0.01
             || self.vel.xz().normalize().dot(&transform.forward().xz()) > 0.9
         {
             self.update_roll(mouse_delta.x, self.config.max_roll);
         }
+
+        self.interp_yaw = self
+            .interp_yaw
+            .lerp(self.yaw, self.config.look_smoothing * delta_time);
+        self.interp_pitch = self
+            .interp_pitch
+            .lerp(self.pitch, self.config.look_smoothing * delta_time);
 
         self.smooth_roll = self
             .smooth_roll
@@ -197,13 +256,18 @@ impl FirstPersonCameraController {
         let roll_rotation =
             UnitQuaternion::from_axis_angle(&Vector3::z_axis(), self.smooth_roll.to_radians());
 
-        transform.set_local_rotation(pitch_rotation * roll_rotation);
+        let yaw_rot =
+            UnitQuaternion::from_axis_angle(&Vector3::y_axis(), self.interp_yaw.to_radians());
+        let pitch_rot =
+            UnitQuaternion::from_axis_angle(&Vector3::x_axis(), self.interp_pitch.to_radians());
+
+        transform.set_local_rotation(pitch_rot * roll_rotation);
         self.bob_offset = self
             .bob_offset
             .lerp(&Vector3::zeros(), self.config.smoothing_speed * delta_time);
 
         if let Some(mut parent) = self.parent.parent {
-            parent.transform.set_local_rotation(yaw_rotation);
+            parent.transform.set_local_rotation(yaw_rot);
         }
     }
 
@@ -230,16 +294,8 @@ impl FirstPersonCameraController {
     }
 
     fn calculate_jump_bob(&mut self, delta_time: f32) {
-        if self.is_jumping {
-            if !self.is_falling && self.vel.y <= 0. {
-                self.is_falling = true;
-                self.jump_offset = -self.config.jump_bob_height;
-                self.jump_bob_interp_t = 0.;
-            } else if self.is_falling && self.vel.y.abs() < f32::EPSILON * 10000. {
-                self.is_jumping = false;
-                self.is_falling = false;
-                self.jump_offset = 0.;
-            }
+        if !self.is_grounded {
+            self.jump_offset = self.vel.y.clamp(-3.5, 3.5) / 3.5 * self.config.jump_bob_height;
         }
 
         self.jump_bob_interp_t = self
@@ -265,7 +321,15 @@ impl FirstPersonCameraController {
             return self.config.normal_fov;
         }
         let delta = self.config.normal_fov - self.config.zoom_fov;
-        self.config.normal_fov - delta * self.zoom_factor.clamp(0.0, 1.0)
+        let zoomed = self.config.normal_fov - delta * self.zoom_factor.clamp(0.0, 1.0);
+        let sprint_kick = self.config.sprint_fov_kick
+            * if self.is_sprinting {
+                self.movement_speed_fraction.clamp(0.0, 1.5)
+            } else {
+                0.0
+            };
+
+        zoomed + sprint_kick
     }
 
     fn update_zoom(&mut self) {
@@ -274,6 +338,7 @@ impl FirstPersonCameraController {
             return;
         };
 
+        camera.zoom_speed = self.config.fov_lerp_speed;
         camera.set_fov_target(self.calculate_zoom());
     }
 }
