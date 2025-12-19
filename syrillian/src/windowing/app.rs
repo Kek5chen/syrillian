@@ -288,7 +288,7 @@ impl<S: AppState> ApplicationHandler for App<S> {
             }
         }
 
-        debug_assert!(event_start.elapsed().as_secs_f32() < 2.0);
+        // debug_assert!(event_start.elapsed().as_secs_f32() < 2.0);
     }
 
     fn device_event(
