@@ -157,8 +157,8 @@ fn shadow_visibility_spot(in_pos: vec3<f32>, N: vec3<f32>, L: vec3<f32>, light: 
 
     let slope = 1.0 - max(dot(N, L), 0.0);
     let bias  = 0.0001 * slope;
-    let layer = f32(light.shadow_map_id);
-    return pcf_3x3(shadow_maps, shadow_sampler, vec4<f32>(uvz.xy, uvz.z - bias, layer));
+    let layer = i32(light.shadow_map_id);
+    return pcf_3x3(shadow_maps, shadow_sampler, uvz.xy, uvz.z - bias, layer);
 }
 
 fn point_face_axes(dir: vec3<f32>) -> CubeFaceAxes {
@@ -250,7 +250,6 @@ fn sample_point_face(
     light: Light,
     face: u32,
     world_pos_bias: vec3<f32>,
-    base_layer: f32,
     bias: f32
 ) -> vec2<f32> {
     let uvz = point_shadow_uvz_axes(light, cube_face_axes_from_index(face), world_pos_bias);
@@ -259,8 +258,8 @@ fn sample_point_face(
         return vec2<f32>(0.0);
     }
 
-    let layer = base_layer + f32(face);
-    let samp = pcf_3x3(shadow_maps, shadow_sampler, vec4<f32>(uvz.xy, uvz.z - bias, layer));
+    let layer = i32(light.shadow_map_id) + i32(face);
+    let samp = pcf_3x3(shadow_maps, shadow_sampler, uvz.xy, uvz.z - bias, layer);
     return vec2<f32>(samp, 1.0);
 }
 
@@ -270,7 +269,6 @@ fn axis_shadow_contrib(
     weight: f32,
     light: Light,
     world_pos_bias: vec3<f32>,
-    base_layer: f32,
     bias: f32
 ) -> vec2<f32> {
     if (weight <= 1e-4) {
@@ -278,7 +276,7 @@ fn axis_shadow_contrib(
     }
 
     let face = axis_face_index(axis, dir_component >= 0.0);
-    let samp = sample_point_face(light, face, world_pos_bias, base_layer, bias);
+    let samp = sample_point_face(light, face, world_pos_bias, bias);
     return vec2<f32>(samp.x, samp.y) * weight;
 }
 
@@ -294,11 +292,10 @@ fn shadow_visibility_point(in_pos: vec3<f32>, N: vec3<f32>, L: vec3<f32>, light:
     let world_pos_bias = in_pos + N * 0.002;
     let slope = 1.0 - max(dot(N, L), 0.0);
     let bias  = 0.0003 * slope;
-    let base_layer = f32(light.shadow_map_id);
 
-    let contrib_x = axis_shadow_contrib(0u, ndir.x, abs_dir.x, light, world_pos_bias, base_layer, bias);
-    let contrib_y = axis_shadow_contrib(1u, ndir.y, abs_dir.y, light, world_pos_bias, base_layer, bias);
-    let contrib_z = axis_shadow_contrib(2u, ndir.z, abs_dir.z, light, world_pos_bias, base_layer, bias);
+    let contrib_x = axis_shadow_contrib(0u, ndir.x, abs_dir.x, light, world_pos_bias, bias);
+    let contrib_y = axis_shadow_contrib(1u, ndir.y, abs_dir.y, light, world_pos_bias, bias);
+    let contrib_z = axis_shadow_contrib(2u, ndir.z, abs_dir.z, light, world_pos_bias, bias);
 
     let total_weight = contrib_x.y + contrib_y.y + contrib_z.y;
     if (total_weight <= 1e-5) {
@@ -479,9 +476,8 @@ fn spot_shadow_uvz(light: Light, world_pos: vec3<f32>) -> vec3<f32> {
 
 fn pcf_3x3(depthTex: texture_depth_2d_array,
            cmpSampler: sampler_comparison,
-           uvzLayer: vec4<f32>) -> f32
+           uv: vec2<f32>, depth_ref: f32, layer: i32) -> f32
 {
-    let layer = u32(uvzLayer.w + 0.5);
     let dims  = vec2<f32>(textureDimensions(depthTex, 0));
     let texel = 1.0 / dims;
     let guard = texel * 0.5;
@@ -491,8 +487,8 @@ fn pcf_3x3(depthTex: texture_depth_2d_array,
     for (var dy = -1; dy <= 1; dy++) {
         for (var dx = -1; dx <= 1; dx++) {
             let ofs = vec2<f32>(f32(dx), f32(dy)) * texel;
-            let sample_uv = clamp(uvzLayer.xy + ofs, guard, guard_max);
-            sum += textureSampleCompare(depthTex, cmpSampler, sample_uv, layer, uvzLayer.z);
+            let sample_uv = clamp(uv + ofs, guard, guard_max);
+            sum += textureSampleCompare(depthTex, cmpSampler, sample_uv, layer, depth_ref);
         }
     }
     return sum / 9.0;
