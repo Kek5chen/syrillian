@@ -169,11 +169,12 @@ impl UiElement for UiImageDraw {
             return;
         }
 
+        if let Some(idx) = shader.bind_groups().model {
+            pass.set_bind_group(idx, cached_image.uniform.bind_group(), &[]);
+        }
+
         match ctx.pass_type() {
             RenderPassType::Color2D => {
-                if let Some(idx) = shader.bind_groups().model {
-                    pass.set_bind_group(idx, cached_image.uniform.bind_group(), &[]);
-                }
                 let material = ctx.cache().material(self.material);
                 if let Some(idx) = shader.bind_groups().material {
                     pass.set_bind_group(idx, material.uniform.bind_group(), &[]);
