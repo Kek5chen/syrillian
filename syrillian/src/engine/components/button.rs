@@ -2,9 +2,11 @@ use crate::World;
 use crate::components::{Component, NewComponent};
 use crate::core::{EventType, GameObjectId};
 
+type ButtonClickHandler = Box<dyn FnMut(&mut World) + 'static>;
+
 pub struct Button {
     parent: GameObjectId,
-    click_handler: Vec<Box<dyn FnMut(&mut World) + 'static>>,
+    click_handler: Vec<ButtonClickHandler>,
 }
 
 impl NewComponent for Button {
