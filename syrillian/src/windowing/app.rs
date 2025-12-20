@@ -7,6 +7,7 @@ use crate::world::WorldChannels;
 use crossbeam_channel::unbounded;
 use log::{error, info, trace};
 use std::error::Error;
+use std::marker::PhantomData;
 use winit::application::ApplicationHandler;
 use winit::dpi::Size;
 use winit::error::EventLoopError;
@@ -21,18 +22,11 @@ pub struct App<S: AppState> {
     main_window_attributes: WindowAttributes,
     renderer: Option<Renderer>,
     game_thread: Option<GameThread<S>>,
-    state: Option<S>,
 }
 
 pub struct AppSettings<S: AppState> {
     pub main_window: WindowAttributes,
-    pub state: S,
-}
-
-pub trait AppRuntime: AppState {
-    fn configure(self, title: &str, width: u32, height: u32) -> AppSettings<Self>;
-
-    fn default_config(self) -> AppSettings<Self>;
+    pub(crate) _state_type: PhantomData<S>,
 }
 
 impl<S: AppState> AppSettings<S> {
@@ -54,7 +48,6 @@ impl<S: AppState> AppSettings<S> {
             main_window_attributes: self.main_window,
             renderer: None,
             game_thread: None,
-            state: Some(self.state),
         };
 
         Ok((event_loop, app))
@@ -118,9 +111,8 @@ impl<S: AppState> App<S> {
 
         trace!("Created Renderer");
 
-        let state = self.state.take().expect("app state already initialized");
         let channels = WorldChannels::new(render_state_tx, game_event_tx, pick_result_rx);
-        let game_thread = GameThread::new(state, asset_store.clone(), channels, game_event_rx);
+        let game_thread = GameThread::new(asset_store.clone(), channels, game_event_rx);
 
         if !game_thread.init() {
             error!("Couldn't initialize Game Thread");

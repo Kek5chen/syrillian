@@ -537,7 +537,7 @@ fn main() {
         .parse_default_env()
         .try_init();
 
-    let app = MyMain::default().configure("MyMain", 1280, 720);
+    let app = MyMain::configure("MyMain", 1280, 720);
 
     if let Err(e) = app.run() {
         syrillian::log::error!("{e}");

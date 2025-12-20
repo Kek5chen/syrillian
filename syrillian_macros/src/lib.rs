@@ -94,7 +94,7 @@ pub fn syrillian_app(input: TokenStream) -> TokenStream {
 
     quote! {
         fn main() {
-            let app = ::syrillian::AppRuntime::configure(#app_name::default(), stringify!(#app_name), 800, 600);
+            let app = <#app_name as ::syrillian::AppRuntime>::configure(stringify!(#app_name), 800, 600);
 
             #logger
 

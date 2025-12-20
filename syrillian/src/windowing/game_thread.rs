@@ -63,12 +63,12 @@ struct GameThreadInner<S: AppState> {
 impl<S: AppState> GameThreadInner<S> {
     #[cfg(not(target_arch = "wasm32"))]
     fn spawn(
-        state: S,
         asset_store: Arc<AssetStore>,
         channels: WorldChannels,
         render_event_rx: Receiver<RenderAppEvent>,
     ) -> JoinHandle<()> {
         std::thread::spawn(move || {
+            let state = S::default();
             Self::spawn_local(state, asset_store, channels, render_event_rx).run();
             log::debug!("Game thread exited");
         })
@@ -93,14 +93,13 @@ impl<S: AppState> GameThreadInner<S> {
 #[cfg(not(target_arch = "wasm32"))]
 impl<S: AppState> GameThread<S> {
     pub fn new(
-        state: S,
         asset_store: Arc<AssetStore>,
         channels: WorldChannels,
         game_event_rx: Receiver<GameAppEvent>,
     ) -> Self {
         let (render_event_tx, render_event_rx) = unbounded();
 
-        let thread = GameThreadInner::spawn(state, asset_store, channels, render_event_rx);
+        let thread = GameThreadInner::<S>::spawn(asset_store, channels, render_event_rx);
 
         GameThread {
             _thread: thread,
