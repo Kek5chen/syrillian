@@ -38,6 +38,7 @@
 
 pub mod animation;
 pub mod audio;
+pub mod button;
 pub mod camera;
 pub mod collider;
 pub mod fp_camera;
@@ -60,6 +61,7 @@ pub mod ui_rect;
 pub mod camera_debug;
 
 pub use animation::AnimationComponent;
+pub use button::Button;
 pub use camera::CameraComponent;
 pub use collider::Collider3D;
 pub use fp_camera::FirstPersonCameraController;
@@ -95,7 +97,8 @@ use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
 use std::mem;
 use std::ops::{Deref, DerefMut};
-use std::sync::{Arc, OnceLock};
+use std::rc::Rc;
+use std::sync::Arc;
 
 new_key_type! { pub struct ComponentId; }
 
@@ -124,8 +127,8 @@ impl ComponentContext {
 }
 
 pub struct CRef<C: Component + ?Sized> {
-    pub(crate) data: Option<Arc<C>>,
-    pub(crate) ctx: Arc<ComponentContext>,
+    pub(crate) data: Option<Rc<C>>,
+    pub(crate) ctx: Rc<ComponentContext>,
 }
 
 impl<C: Component + ?Sized> Clone for CRef<C> {
@@ -157,14 +160,12 @@ impl<C: Component + ?Sized> Hash for CRef<C> {
     }
 }
 
-static NULL_CTX: OnceLock<Arc<ComponentContext>> = OnceLock::new();
-
 #[allow(unused)]
 impl<C: Component> CRef<C> {
-    pub(crate) fn new(comp: Arc<C>, tid: TypedComponentId, parent: GameObjectId) -> Self {
+    pub(crate) fn new(comp: Rc<C>, tid: TypedComponentId, parent: GameObjectId) -> Self {
         CRef {
             data: Some(comp),
-            ctx: Arc::new(ComponentContext::new(tid, parent)),
+            ctx: Rc::new(ComponentContext::new(tid, parent)),
         }
     }
 
@@ -179,7 +180,7 @@ impl<C: Component> CRef<C> {
     pub fn as_dyn(&self) -> CRef<dyn Component> {
         unsafe {
             CRef {
-                data: Some(self.data.as_ref().unwrap_unchecked().clone() as Arc<dyn Component>),
+                data: Some(self.data.as_ref().unwrap_unchecked().clone() as Rc<dyn Component>),
                 ctx: self.ctx.clone(),
             }
         }
@@ -196,9 +197,7 @@ impl<C: Component> CRef<C> {
     pub unsafe fn null() -> CRef<C> {
         CRef {
             data: None,
-            ctx: NULL_CTX
-                .get_or_init(|| Arc::new(unsafe { ComponentContext::null() }))
-                .clone(),
+            ctx: Rc::new(unsafe { ComponentContext::null() }),
         }
     }
 }
@@ -223,7 +222,7 @@ impl CRef<dyn Component> {
             return None;
         }
         let downcasted =
-            Arc::downcast::<C>(unsafe { self.data.as_ref().unwrap_unchecked() }.clone()).ok()?;
+            Rc::downcast::<C>(unsafe { self.data.as_ref().unwrap_unchecked() }.clone()).ok()?;
         Some(CRef {
             data: Some(downcasted),
             ctx: self.ctx.clone(),
@@ -377,7 +376,7 @@ impl TypedComponentId {
 /// }
 ///```
 #[allow(unused)]
-pub trait Component: Any + Send + Sync {
+pub trait Component: Any {
     // Gets called when the game object is created directly after new
     fn init(&mut self, world: &mut World) {}
 

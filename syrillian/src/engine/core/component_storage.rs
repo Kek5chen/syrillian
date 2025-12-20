@@ -6,12 +6,12 @@ use slotmap::basic::Values;
 use std::any::{Any, TypeId};
 use std::borrow::Borrow;
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::rc::Rc;
 
 #[allow(unused)]
 pub(crate) trait SlotMapUntyped<K>
 where
-    K: slotmap::Key + Send + 'static,
+    K: slotmap::Key + 'static,
 {
     fn as_dyn(&self) -> &dyn Any;
     fn as_dyn_mut(&mut self) -> &mut dyn Any;
@@ -27,7 +27,7 @@ where
 
 impl<K, V> SlotMapUntyped<K> for SlotMap<K, CRef<V>>
 where
-    K: slotmap::Key + Send + 'static,
+    K: slotmap::Key + 'static,
     V: Component,
 {
     fn as_dyn(&self) -> &dyn Any {
@@ -175,7 +175,7 @@ impl ComponentStorage {
     }
 
     pub(crate) fn add<C: Component>(&mut self, component: C, parent: GameObjectId) -> CRef<C> {
-        let comp = Arc::new(component);
+        let comp = Rc::new(component);
 
         let store = self._get_or_insert_mut();
         let id = store.insert_with_key(|id| {
