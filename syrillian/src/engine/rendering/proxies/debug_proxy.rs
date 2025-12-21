@@ -11,7 +11,7 @@ use nalgebra::{Matrix4, Point3, Vector4};
 use std::any::Any;
 use syrillian_utils::debug_panic;
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
-use wgpu::{Buffer, BufferUsages, Device, IndexFormat, Queue};
+use wgpu::{Buffer, BufferUsages, Device, Queue};
 
 #[derive(Debug)]
 pub(crate) struct GPUDebugProxyData {
@@ -216,13 +216,7 @@ impl DebugSceneProxy {
                 pass.set_bind_group(idx, data.uniform.bind_group(), &[]);
             }
 
-            pass.set_vertex_buffer(0, runtime_mesh.vertex_buffer().slice(..));
-            if let Some(idx_buf) = &runtime_mesh.indices_buffer() {
-                pass.set_index_buffer(idx_buf.slice(..), IndexFormat::Uint32);
-                pass.draw_indexed(0..runtime_mesh.indices_count(), 0, 0..1);
-            } else {
-                pass.draw(0..runtime_mesh.vertex_count(), 0..1);
-            }
+            runtime_mesh.draw_all(&mut pass);
         }
     }
 }

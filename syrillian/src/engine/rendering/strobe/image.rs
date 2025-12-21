@@ -6,7 +6,6 @@ use crate::strobe::UiDrawContext;
 use crate::strobe::ui_element::UiElement;
 use nalgebra::{Matrix4, Scale3, Translation3};
 use num_traits::Zero;
-use wgpu::IndexFormat;
 
 #[derive(Debug, Clone)]
 pub struct UiImageDraw {
@@ -187,13 +186,6 @@ impl UiElement for UiImageDraw {
             _ => {}
         }
 
-        let unit_square = ctx.cache().mesh_unit_square();
-        pass.set_vertex_buffer(0, unit_square.vertex_buffer().slice(..));
-        if let Some(i_buffer) = unit_square.indices_buffer() {
-            pass.set_index_buffer(i_buffer.slice(..), IndexFormat::Uint32);
-            pass.draw_indexed(0..unit_square.indices_count(), 0, 0..1);
-        } else {
-            pass.draw(0..unit_square.vertex_count(), 0..1);
-        }
+        ctx.cache().mesh_unit_square().draw_all(&mut pass);
     }
 }
