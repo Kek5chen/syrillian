@@ -40,6 +40,7 @@ pub mod animation;
 pub mod audio;
 pub mod camera;
 pub mod collider;
+pub mod fixed_joint;
 pub mod fp_camera;
 pub mod fp_movement;
 pub mod freecam;
