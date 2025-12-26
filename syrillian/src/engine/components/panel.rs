@@ -144,7 +144,7 @@ mod tests {
                 right,
                 top,
                 bottom,
-            } => assert_eq!((left, right, top, bottom), (67, 163, 568, 522)),
+            } => assert_eq!((left, right, top, bottom), (67.0, 163.0, 568.0, 522.0)),
             other => panic!("expected absolute scaling for child, got {other:?}"),
         }
         assert_eq!(child_image.draw_order(), 2);
@@ -156,7 +156,7 @@ mod tests {
                 right,
                 top,
                 bottom,
-            } => assert_eq!((left, right, top, bottom), (67, 168, 568, 467)),
+            } => assert_eq!((left, right, top, bottom), (67.0, 168.0, 568.0, 467.0)),
             other => panic!("expected absolute scaling for grandchild, got {other:?}"),
         }
         assert_eq!(grandchild_image.draw_order(), 3);

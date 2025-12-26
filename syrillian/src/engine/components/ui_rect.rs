@@ -124,13 +124,13 @@ impl UiRect {
             if let Some(mut image) = component.as_a::<Image>() {
                 let screen_h = layout.screen.y.max(1.0);
 
-                let left = layout.top_left_px.x.max(0.0).floor() as u32;
-                let right = (layout.top_left_px.x + layout.size_px.x).max(0.0).ceil() as u32;
+                let left = layout.top_left_px.x.max(0.0).floor();
+                let right = (layout.top_left_px.x + layout.size_px.x).max(0.0).ceil();
 
                 let bottom = (screen_h - (layout.top_left_px.y + layout.size_px.y))
                     .max(0.0)
-                    .floor() as u32;
-                let top = (screen_h - layout.top_left_px.y).max(0.0).ceil() as u32;
+                    .floor();
+                let top = (screen_h - layout.top_left_px.y).max(0.0).ceil();
 
                 if top > bottom && right > left {
                     image.set_scaling_mode(ImageScalingMode::Absolute {
@@ -249,7 +249,7 @@ mod tests {
                 top,
                 bottom,
             } => {
-                assert_eq!((left, right, top, bottom), (12, 162, 582, 507));
+                assert_eq!((left, right, top, bottom), (12.0, 162.0, 582.0, 507.0));
             }
             _ => panic!("expected absolute scaling"),
         }

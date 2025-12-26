@@ -12,25 +12,24 @@ pub struct UiImageDraw {
     pub draw_order: u32,
     pub material: HMaterial,
     pub scaling: ImageScalingMode,
-    pub translation: Matrix4<f32>,
     pub object_hash: ObjectHash,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ImageScalingMode {
     Absolute {
-        left: u32,
-        right: u32,
-        top: u32,
-        bottom: u32,
+        left: f32,
+        right: f32,
+        top: f32,
+        bottom: f32,
     },
     Relative {
-        width: u32,
-        height: u32,
-        left: u32,
-        right: u32,
-        top: u32,
-        bottom: u32,
+        width: f32,
+        height: f32,
+        left: f32,
+        right: f32,
+        top: f32,
+        bottom: f32,
     },
     RelativeStretch {
         left: f32,
@@ -53,14 +52,10 @@ impl ImageScalingMode {
                 top,
                 bottom,
             } => {
-                if right <= left || top <= bottom {
-                    return Matrix4::zeros();
-                }
-
-                let left = (*left as f32 / window_width) * 2.0 - 1.0;
-                let right = (*right as f32 / window_width) * 2.0 - 1.0;
-                let bottom = (*bottom as f32 / window_height) * 2.0 - 1.0;
-                let top = (*top as f32 / window_height) * 2.0 - 1.0;
+                let left = (*left / window_width) * 2.0 - 1.0;
+                let right = (*right / window_width) * 2.0 - 1.0;
+                let bottom = (*bottom / window_height) * 2.0 - 1.0;
+                let top = (*top / window_height) * 2.0 - 1.0;
 
                 let sx = (right - left) * 0.5;
                 let sy = (top - bottom) * 0.5;
@@ -79,17 +74,13 @@ impl ImageScalingMode {
                 top,
                 bottom,
             } => {
-                if right <= left || top <= bottom {
-                    return Matrix4::zeros();
-                }
+                let width = *width;
+                let height = *height;
 
-                let width = *width as f32;
-                let height = *height as f32;
-
-                let left = (*left as f32 / width) * 2.0 - 1.0;
-                let right = (*right as f32 / width) * 2.0 - 1.0;
-                let bottom = (*bottom as f32 / height) * 2.0 - 1.0;
-                let top = (*top as f32 / height) * 2.0 - 1.0;
+                let left = (*left / width) * 2.0 - 1.0;
+                let right = (*right / width) * 2.0 - 1.0;
+                let bottom = (*bottom / height) * 2.0 - 1.0;
+                let top = (*top / height) * 2.0 - 1.0;
 
                 let sx = (right - left) * 0.5;
                 let sy = (top - bottom) * 0.5;
@@ -106,10 +97,6 @@ impl ImageScalingMode {
                 top,
                 bottom,
             } => {
-                if right <= left || top <= bottom {
-                    return Matrix4::zeros();
-                }
-
                 let sx = right - left;
                 let sy = top - bottom;
 

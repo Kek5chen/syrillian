@@ -13,9 +13,7 @@ pub struct Image {
     material: HMaterial,
     scaling: ImageScalingMode,
     translation: Matrix4<f32>,
-    dirty: bool,
     draw_order: u32,
-    order_dirty: bool,
     pub parent: GameObjectId,
     render_target: RenderTargetId,
 }
@@ -27,7 +25,6 @@ impl Image {
 
     pub fn set_scaling_mode(&mut self, scaling: ImageScalingMode) {
         self.scaling = scaling;
-        self.dirty = true;
     }
 
     pub fn material(&self) -> HMaterial {
@@ -36,22 +33,18 @@ impl Image {
 
     pub fn set_material(&mut self, material: HMaterial) {
         self.material = material;
-        self.dirty = true;
     }
 
     pub fn set_render_target(&mut self, target: RenderTargetId) {
         self.render_target = target;
-        self.dirty = true;
     }
 
     pub fn set_ndc_layout(&mut self, center: [f32; 2], size: [f32; 2]) {
         self.scaling = ImageScalingMode::Ndc { center, size };
-        self.dirty = true;
     }
 
     pub fn set_translation(&mut self, translation: Matrix4<f32>) {
         self.translation = translation;
-        self.dirty = true;
     }
 
     pub fn set_draw_order(&mut self, order: u32) {
@@ -59,7 +52,6 @@ impl Image {
             return;
         }
         self.draw_order = order;
-        self.order_dirty = true;
     }
 
     pub fn draw_order(&self) -> u32 {
@@ -79,7 +71,6 @@ impl Image {
             draw_order: self.draw_order(),
             material: self.material(),
             scaling: self.scaling_mode(),
-            translation: self.translation(),
             object_hash: self.parent.object_hash(),
         }
     }
@@ -92,15 +83,13 @@ impl NewComponent for Image {
 
             material: HMaterial::FALLBACK,
             scaling: ImageScalingMode::Absolute {
-                left: 0,
-                right: 100,
-                top: 0,
-                bottom: 100,
+                left: 0.0,
+                right: 100.0,
+                top: 0.0,
+                bottom: 100.0,
             },
             translation: Matrix4::identity(),
-            dirty: false,
             draw_order: 0,
-            order_dirty: false,
             render_target: RenderTargetId::PRIMARY,
         }
     }

@@ -488,18 +488,23 @@ impl World {
         self.channels.set_active_camera(target, camera.downgrade());
     }
 
-    fn active_camera_for_target(&self, target: RenderTargetId) -> CWeak<CameraComponent> {
+    fn active_camera_for_target(&self, target: RenderTargetId) -> Option<CWeak<CameraComponent>> {
         let target_cam = self.channels.active_camera_for(target);
         if target_cam.exists(self) {
-            target_cam
+            Some(target_cam)
+        } else if target == RenderTargetId::PRIMARY {
+            Some(self.main_active_camera)
         } else {
-            self.main_active_camera
+            None
         }
     }
 
     pub fn set_viewport_size(&mut self, target: RenderTargetId, size: PhysicalSize<u32>) {
         self.channels.set_viewport_size(target, size);
-        if let Some(mut cam) = self.active_camera_for_target(target).upgrade(self) {
+        if let Some(mut cam) = self
+            .active_camera_for_target(target)
+            .and_then(|c| c.upgrade(self))
+        {
             cam.resize(size.width as f32, size.height as f32);
         }
     }
@@ -513,7 +518,7 @@ impl World {
     }
 
     pub fn create_window_with_size(&mut self, size: PhysicalSize<u32>) -> RenderTargetId {
-        let target_id = self.channels.add_window(self.main_active_camera, size);
+        let target_id = self.channels.add_window(CWeak::null(), size);
         let _ = self
             .channels
             .game_event_tx
@@ -686,7 +691,10 @@ impl World {
         }
 
         for target_id in self.channels.targets.keys().copied() {
-            if let Some(mut camera) = self.active_camera_for_target(target_id).upgrade(self) {
+            if let Some(mut camera) = self
+                .active_camera_for_target(target_id)
+                .and_then(|c| c.upgrade(self))
+            {
                 Self::push_camera_updates(target_id, &mut command_batch, &mut camera);
             }
         }
