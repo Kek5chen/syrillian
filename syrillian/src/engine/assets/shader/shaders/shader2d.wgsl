@@ -10,7 +10,7 @@ fn vs_main_2d(in: VInput) -> FInput {
 
 @fragment
 fn fs_main_2d(in: FInput) -> @location(0) vec4<f32> {
-    if material.use_diffuse_texture != 0u {
+    if mat_has_texture_diffuse(material) {
         return textureSample(t_diffuse, s_diffuse, in.uv);
     } else {
         return vec4<f32>(material.diffuse, 1.0);

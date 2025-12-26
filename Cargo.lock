@@ -356,6 +356,9 @@ name = "bitflags"
 version = "2.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "812e12b5285cc515a9c72a5c1d3b6d46a19dac5acfef5265968c166106e31dd3"
+dependencies = [
+ "bytemuck",
+]
 
 [[package]]
 name = "bitstream-io"
@@ -3601,6 +3604,7 @@ dependencies = [
 name = "syrillian"
 version = "0.4.1"
 dependencies = [
+ "bitflags 2.10.0",
  "bon",
  "bytemuck",
  "chrono",

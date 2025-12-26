@@ -214,7 +214,7 @@ impl MeshSceneProxy {
                 .unwrap_or(HMaterial::FALLBACK);
             let material = cache.material(h_mat);
 
-            if ctx.pass_type == RenderPassType::Shadow && material.data.cast_shadows == 0 {
+            if ctx.pass_type == RenderPassType::Shadow && !material.data.has_cast_shadows() {
                 continue;
             }
 

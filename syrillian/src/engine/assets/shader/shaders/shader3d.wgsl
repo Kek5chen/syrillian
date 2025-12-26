@@ -147,7 +147,7 @@ fn calculate_attenuation(distance: f32, radius: f32) -> f32 {
 // ----------- Shadows ---------------
 
 fn shadow_visibility_spot(in_pos: vec3<f32>, N: vec3<f32>, L: vec3<f32>, light: Light) -> f32 {
-    if (material.cast_shadows == 0u || light.shadow_map_id == 0xffffffffu) { return 1.0; }
+    if (!mat_has_cast_shadows(material) || light.shadow_map_id == 0xffffffffu) { return 1.0; }
 
     let world_pos_bias = in_pos + N * 0.002;
     let uvz = spot_shadow_uvz(light, world_pos_bias);
@@ -281,7 +281,7 @@ fn axis_shadow_contrib(
 }
 
 fn shadow_visibility_point(in_pos: vec3<f32>, N: vec3<f32>, L: vec3<f32>, light: Light) -> f32 {
-    if (material.cast_shadows == 0u || light.shadow_map_id == 0xffffffffu) { return 1.0; }
+    if (!mat_has_cast_shadows(material) || light.shadow_map_id == 0xffffffffu) { return 1.0; }
 
     let dir_unbiased = in_pos - light.position;
     let dist_sq = dot(dir_unbiased, dir_unbiased);
@@ -369,8 +369,11 @@ fn eval_sun(
 fn fs_main_3d(in: FInput) -> @location(0) vec4<f32> {
     // Base color (linear)
     var base_rgba: vec4<f32>;
-    if material.use_diffuse_texture != 0u {
+    if mat_has_texture_diffuse(material) {
         base_rgba = textureSample(t_diffuse, s_diffuse, in.uv);
+        if mat_is_grayscale_diffuse(material) {
+            return vec4(vec3(base_rgba.r), base_rgba.g);
+        }
     } else {
         base_rgba = vec4<f32>(material.diffuse, 1.0);
     }
@@ -380,10 +383,10 @@ fn fs_main_3d(in: FInput) -> @location(0) vec4<f32> {
 
     let base = saturate3(base_rgba.rgb);
 
-    let metallic  = clamp(material.metallic, 0.0, 1.0);
+    let metallic = clamp(material.metallic, 0.0, 1.0);
 
     var roughness: f32;
-    if material.use_roughness_texture != 0u {
+    if mat_has_texture_roughness(material) {
         roughness = textureSample(t_roughness, s_roughness, in.uv).g;
     } else {
         roughness = clamp(material.roughness, 0.045, 1.0);
@@ -393,14 +396,14 @@ fn fs_main_3d(in: FInput) -> @location(0) vec4<f32> {
 
     // World normal
     var N: vec3<f32>;
-    if material.use_normal_texture != 0u {
+    if mat_has_texture_normal(material) {
         N = normal_from_map(t_normal, s_normal, in.uv, in.normal, in.tangent, in.bitangent);
     } else {
         N = safe_normalize(in.normal);
     }
     let V = safe_normalize(camera.position - in.position);   // to viewer
 
-    if material.lit != 0u {
+    if mat_is_lit(material) {
         // start with a dim ambient term (energy‑aware)
         Lo *= (AMBIENT_STRENGTH * (1.0 - 0.04)); // tiny spec energy loss
     }
