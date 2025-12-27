@@ -215,7 +215,7 @@ impl Texture {
 
     pub fn refresh_transparency(&mut self) {
         if let Some(data) = &self.data {
-            self.has_transparency = Self::calculate_transparency(self.view_formats[0], &data);
+            self.has_transparency = Self::calculate_transparency(self.view_formats[0], data);
         }
     }
 }
