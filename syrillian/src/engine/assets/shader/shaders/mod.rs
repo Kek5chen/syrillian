@@ -61,6 +61,12 @@ macro_rules! test_custom_shader {
 test_shader!(shader_2d, "Shader 2D" => "shader2d.wgsl");
 test_shader!(shader_3d, "Shader 3D" => "shader3d.wgsl");
 test_shader!(fallback_shader3d, "Fallback Shader 3D" => "fallback_shader3d.wgsl");
+test_custom_shader!(picking_text_2d, "Text 2D Picking Shader" => "picking_text2d.wgsl");
+test_custom_shader!(picking_text_3d, "Text 3D Picking Shader" => "picking_text3d.wgsl");
+test_custom_shader!(picking_mesh, "Mesh Picking Shader" => "picking_mesh.wgsl");
+test_custom_shader!(picking_ui, "UI Picking Shader" => "picking_ui.wgsl");
+test_custom_shader!(text2d, "Text 2D Shader" => "text2d.wgsl");
+test_custom_shader!(text3d, "Text 3D Shader" => "text3d.wgsl");
 
 // Debug shaders
 test_custom_shader!(debug_edges, "Debug Edges Shader" => "debug/edges.wgsl");

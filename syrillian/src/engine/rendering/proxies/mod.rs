@@ -65,7 +65,8 @@ pub trait SceneProxy: Send + Any + Debug {
         _renderer: &Renderer,
         _ctx: &GPUDrawCtx,
         _binding: &SceneProxyBinding,
-    ) {}
+    ) {
+    }
 
     fn render_picking(
         &self,
