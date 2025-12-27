@@ -329,7 +329,7 @@ impl StoreDefaults for Shader {
         #[cfg(debug_assertions)]
         {
             use crate::rendering::DEFAULT_VBL;
-            use crate::utils::sizes::{VEC3_SIZE, VEC4_SIZE, WGPU_VEC4_ALIGN};
+            use crate::utils::sizes::{VEC3_SIZE, WGPU_VEC4_ALIGN};
             use wgpu::{VertexAttribute, VertexFormat, VertexStepMode};
 
             store_add_checked!(
@@ -365,28 +365,18 @@ impl StoreDefaults for Shader {
             );
 
             const DEBUG_LINE_VBL: &[VertexBufferLayout] = &[VertexBufferLayout {
-                array_stride: 0,
-                step_mode: VertexStepMode::Instance,
+                array_stride: VEC3_SIZE + VEC4_SIZE,
+                step_mode: VertexStepMode::Vertex,
                 attributes: &[
                     VertexAttribute {
-                        format: VertexFormat::Float32x3, // start position
+                        format: VertexFormat::Float32x3, // position
                         offset: 0,
                         shader_location: 0,
                     },
                     VertexAttribute {
-                        format: VertexFormat::Float32x3, // end position
+                        format: VertexFormat::Float32x4, // color
                         offset: VEC3_SIZE,
                         shader_location: 1,
-                    },
-                    VertexAttribute {
-                        format: VertexFormat::Float32x4, // start color
-                        offset: VEC3_SIZE * 2,
-                        shader_location: 2,
-                    },
-                    VertexAttribute {
-                        format: VertexFormat::Float32x4, // end color
-                        offset: VEC3_SIZE * 2 + VEC4_SIZE,
-                        shader_location: 3,
                     },
                 ],
             }];

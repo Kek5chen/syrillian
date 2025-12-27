@@ -23,8 +23,8 @@ pub(crate) struct GPUDebugProxyData {
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct DebugLine {
     pub start: Point3<f32>,
-    pub end: Point3<f32>,
     pub start_color: Vector4<f32>,
+    pub end: Point3<f32>,
     pub end_color: Vector4<f32>,
 }
 
@@ -178,7 +178,8 @@ impl DebugSceneProxy {
         try_activate_shader!(shader, &mut pass, ctx => return);
 
         pass.set_vertex_buffer(0, line_buffer.slice(..));
-        pass.draw(0..2, 0..self.lines.len() as u32);
+        let vertices = self.lines.len() as u32 * 2;
+        pass.draw(0..vertices, 0..1);
     }
 
     fn render_meshes(&self, data: &GPUDebugProxyData, cache: &AssetCache, ctx: &GPUDrawCtx) {
