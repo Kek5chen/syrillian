@@ -22,6 +22,15 @@ mod textures;
 
 pub use meshes::MeshData;
 
+#[derive(Debug, Snafu)]
+#[snafu(context(suffix(Err)))]
+pub enum Error {
+    #[snafu(display("glTF contains no scenes"))]
+    GltfNoScenes,
+    #[snafu(display("failed to import glTF scene: {source}"))]
+    GltfImport { source: gltf::Error },
+}
+
 /// Container for a glTF document and its binary attachments.
 pub struct GltfScene {
     pub doc: Document,
@@ -31,8 +40,8 @@ pub struct GltfScene {
 
 impl GltfScene {
     /// Imports a glTF scene from disk and gathers its buffers and images.
-    pub fn import(path: &str) -> Result<Self, Box<dyn Error>> {
-        let (doc, buffers, images) = gltf::import(path)?;
+    pub fn import(path: &str) -> Result<Self, Error> {
+        let (doc, buffers, images) = gltf::import(path).context(GltfImportErr)?;
         Ok(Self {
             doc,
             buffers,
@@ -41,8 +50,8 @@ impl GltfScene {
     }
 
     /// Imports a glTF scene from an in-memory byte slice.
-    pub fn from_slice(bytes: &[u8]) -> Result<Self, Box<dyn Error>> {
-        let (doc, buffers, images) = gltf::import_slice(bytes)?;
+    pub fn from_slice(bytes: &[u8]) -> Result<Self, Error> {
+        let (doc, buffers, images) = gltf::import_slice(bytes).context(GltfImportErr)?;
         Ok(Self {
             doc,
             buffers,
@@ -56,30 +65,30 @@ pub struct SceneLoader;
 
 impl SceneLoader {
     /// Loads a glTF file from disk and spawns its root into the world.
-    pub fn load(world: &mut World, path: &str) -> Result<GameObjectId, Box<dyn Error>> {
+    pub fn load(world: &mut World, path: &str) -> Result<GameObjectId, Error> {
         let scene = GltfScene::import(path)?;
         Self::load_into_world(world, &scene)
     }
 
     /// Loads a glTF scene from memory and spawns its root into the world.
-    pub fn load_buffer(world: &mut World, model: &[u8]) -> Result<GameObjectId, Box<dyn Error>> {
+    pub fn load_buffer(world: &mut World, model: &[u8]) -> Result<GameObjectId, Error> {
         let scene = Self::load_scene_from_buffer(model)?;
         Self::load_into_world(world, &scene)
     }
 
     /// Parses a glTF scene directly from an in-memory buffer.
-    pub fn load_scene_from_buffer(model: &[u8]) -> Result<GltfScene, Box<dyn Error>> {
+    pub fn load_scene_from_buffer(model: &[u8]) -> Result<GltfScene, Error> {
         GltfScene::from_slice(model)
     }
 
     /// Loads the first mesh found in the document referenced by the provided path.
-    pub fn load_first_mesh(path: &str) -> Result<MeshData, Box<dyn Error>> {
+    pub fn load_first_mesh(path: &str) -> Result<MeshData, Error> {
         let scene = GltfScene::import(path)?;
         Ok(meshes::load_first_from_scene(&scene))
     }
 
     /// Loads the first mesh contained in the provided glTF buffer.
-    pub fn load_first_mesh_from_buffer(model: &[u8]) -> Result<MeshData, Box<dyn Error>> {
+    pub fn load_first_mesh_from_buffer(model: &[u8]) -> Result<MeshData, Error> {
         let scene = GltfScene::from_slice(model)?;
         Ok(meshes::load_first_from_scene(&scene))
     }
@@ -90,15 +99,12 @@ impl SceneLoader {
     }
 
     /// Spawns the glTF scene graph into the world and returns the created root object.
-    fn load_into_world(
-        world: &mut World,
-        gltf_scene: &GltfScene,
-    ) -> Result<GameObjectId, Box<dyn Error>> {
+    fn load_into_world(world: &mut World, gltf_scene: &GltfScene) -> Result<GameObjectId, Error> {
         let doc = &gltf_scene.doc;
         let root_scene = doc
             .default_scene()
             .or_else(|| doc.scenes().next())
-            .ok_or("glTF contains no scenes")?;
+            .context(GltfNoScenesErr)?;
 
         let materials = textures::load_materials(gltf_scene, world);
         trace!("Loaded materials");
