@@ -928,7 +928,7 @@ impl Renderer {
         let mut pass = encoder.begin_render_pass(&RenderPassDescriptor {
             label: Some("Post Process Render Pass"),
             color_attachments: &[Some(RenderPassColorAttachment {
-                view: &color_view,
+                view: color_view,
                 depth_slice: None,
                 resolve_target: None,
                 ops: Operations {
