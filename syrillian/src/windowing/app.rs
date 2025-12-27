@@ -248,18 +248,21 @@ impl<S: AppState> ApplicationHandler for App<S> {
 
         match event {
             WindowEvent::RedrawRequested => {
-                if drives_update && game_thread.next_frame(target_id).is_err() {
-                    event_loop.exit();
-                    return;
-                }
-
                 if drives_update {
-                    renderer.handle_events();
-                    renderer.update();
+                    match game_thread.next_frame(target_id) {
+                        Ok(()) => {
+                            renderer.handle_events();
+                            renderer.update();
+                        }
+                        Err(_) => {
+                            event_loop.exit();
+                            return;
+                        }
+                    }
                 }
 
                 if !renderer.redraw(target_id) {
-                    event_loop.exit();
+                    event_loop.exit(); // TODO: Possibly just remove the window
                     return;
                 }
 
