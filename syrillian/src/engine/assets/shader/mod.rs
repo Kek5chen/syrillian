@@ -2,6 +2,7 @@ mod shader_gen;
 pub(crate) use shader_gen::ShaderGen;
 
 // this module only has tests for the built-in shaders and can be safely ignored
+#[cfg(test)]
 mod shaders;
 
 use crate::assets::HBGL;
