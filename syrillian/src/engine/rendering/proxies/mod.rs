@@ -58,20 +58,20 @@ pub trait SceneProxy: Send + Any + Debug {
         data: &mut dyn Any,
         local_to_world: &Matrix4<f32>,
     );
-    fn render(
+    fn render(&self, renderer: &Renderer, ctx: &GPUDrawCtx, binding: &SceneProxyBinding);
+
+    fn render_shadows(
         &self,
-        renderer: &Renderer,
-        data: &dyn Any,
-        ctx: &GPUDrawCtx,
-        local_to_world: &Matrix4<f32>,
-    );
+        _renderer: &Renderer,
+        _ctx: &GPUDrawCtx,
+        _binding: &SceneProxyBinding,
+    ) {}
+
     fn render_picking(
         &self,
         _renderer: &Renderer,
-        _data: &dyn Any,
         _ctx: &GPUDrawCtx,
-        _local_to_world: &Matrix4<f32>,
-        _object_hash: ObjectHash,
+        _binding: &SceneProxyBinding,
     ) {
     }
 
@@ -86,7 +86,7 @@ pub struct SceneProxyBinding {
     pub component_id: TypedComponentId,
     pub object_hash: ObjectHash,
     pub local_to_world: Affine3<f32>,
-    pub proxy_data: Box<dyn Any>,
+    proxy_data: Box<dyn Any>,
     pub proxy: Box<dyn SceneProxy>,
     pub enabled: bool,
 }
@@ -109,6 +109,10 @@ impl SceneProxyBinding {
         }
     }
 
+    pub fn proxy_data(&self) -> &dyn Any {
+        self.proxy_data.as_ref()
+    }
+
     pub fn update_transform(&mut self, local_to_world: Affine3<f32>) {
         self.local_to_world = local_to_world;
     }
@@ -126,20 +130,26 @@ impl SceneProxyBinding {
     }
 
     pub fn render(&self, renderer: &Renderer, ctx: &GPUDrawCtx) {
+        self.proxy.render(renderer, ctx, self);
+    }
+
+    pub fn render_shadows(&self, renderer: &Renderer, ctx: &GPUDrawCtx) {
+        self.proxy.render_shadows(renderer, ctx, self);
+    }
+
+    pub fn render_picking(&self, renderer: &Renderer, ctx: &GPUDrawCtx) {
+        self.proxy.render_picking(renderer, ctx, self)
+    }
+
+    pub fn render_by_pass(&self, renderer: &Renderer, ctx: &GPUDrawCtx) {
         match ctx.pass_type {
-            RenderPassType::Picking | RenderPassType::PickingUi => self.proxy.render_picking(
-                renderer,
-                self.proxy_data.as_ref(),
-                ctx,
-                self.local_to_world.matrix(),
-                self.object_hash,
-            ),
-            _ => self.proxy.render(
-                renderer,
-                self.proxy_data.as_ref(),
-                ctx,
-                self.local_to_world.matrix(),
-            ),
+            RenderPassType::Color | RenderPassType::Color2D => {
+                self.proxy.render(renderer, ctx, self)
+            }
+            RenderPassType::Shadow => self.proxy.render_shadows(renderer, ctx, self),
+            RenderPassType::Picking | RenderPassType::PickingUi => {
+                self.proxy.render_picking(renderer, ctx, self)
+            }
         }
     }
 }

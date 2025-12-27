@@ -2,7 +2,7 @@ use crate::assets::{AssetStore, HMesh, HShader};
 use crate::components::mesh_renderer::BoneData;
 use crate::core::ModelUniform;
 use crate::rendering::proxies::mesh_proxy::{MeshUniformIndex, RuntimeMeshData};
-use crate::rendering::proxies::{PROXY_PRIORITY_SOLID, SceneProxy};
+use crate::rendering::proxies::{PROXY_PRIORITY_SOLID, SceneProxy, SceneProxyBinding};
 use crate::rendering::uniform::ShaderUniform;
 use crate::rendering::{AssetCache, GPUDrawCtx, Renderer};
 use crate::{must_pipeline, proxy_data, proxy_data_mut, try_activate_shader};
@@ -70,14 +70,8 @@ impl SceneProxy for DebugSceneProxy {
         );
     }
 
-    fn render(
-        &self,
-        renderer: &Renderer,
-        data: &dyn Any,
-        ctx: &GPUDrawCtx,
-        _local_to_world: &Matrix4<f32>,
-    ) {
-        let data = proxy_data!(data);
+    fn render(&self, renderer: &Renderer, ctx: &GPUDrawCtx, binding: &SceneProxyBinding) {
+        let data = proxy_data!(binding.proxy_data());
         let cache = &renderer.cache;
         self.render_lines(data, cache, ctx);
         self.render_meshes(data, cache, ctx)

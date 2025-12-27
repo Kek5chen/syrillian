@@ -30,6 +30,7 @@ bitflags! {
         const lit                   = 1 << 3;
         const cast_shadows          = 1 << 4;
         const grayscale_diffuse     = 1 << 5;
+        const has_transparency      = 1 << 6;
     }
 }
 
@@ -77,6 +78,7 @@ impl CacheType for Material {
         }
 
         let diffuse = cache.texture_opt(self.diffuse_texture, HTexture::FALLBACK_DIFFUSE);
+
         let is_grayscale = diffuse.format == TextureFormat::Rg8Unorm;
         if is_grayscale {
             params |= MaterialParams::grayscale_diffuse;
@@ -86,6 +88,9 @@ impl CacheType for Material {
         }
         if !is_grayscale && self.cast_shadows {
             params |= MaterialParams::cast_shadows;
+        }
+        if is_grayscale || self.has_transparency || diffuse.has_transparency {
+            params |= MaterialParams::has_transparency;
         }
 
         let data = MaterialUniform {
@@ -139,5 +144,9 @@ impl MaterialUniform {
 
     pub fn has_cast_shadows(&self) -> bool {
         self.params.contains(MaterialParams::cast_shadows)
+    }
+
+    pub fn has_transparency(&self) -> bool {
+        self.params.contains(MaterialParams::has_transparency) || self.alpha < 1.0
     }
 }

@@ -39,6 +39,7 @@ pub(super) fn load_materials(scene: &GltfScene, world: &mut World) -> HashMap<u3
             lit,
             cast_shadows: true,
             shader: HShader::DIM3,
+            has_transparency: false,
         };
         map.insert(i as u32, world.assets.materials.add(material));
     }

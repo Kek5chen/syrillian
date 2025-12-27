@@ -1,11 +1,12 @@
 use crate::assets::{AssetStore, H, HMaterial, HMesh, HShader, Shader};
 use crate::components::mesh_renderer::BoneData;
-use crate::core::ObjectHash;
 use crate::core::{BoundingSphere, ModelUniform};
 #[cfg(debug_assertions)]
 use crate::rendering::DebugRenderer;
 use crate::rendering::picking::hash_to_rgba;
-use crate::rendering::proxies::{PROXY_PRIORITY_SOLID, PROXY_PRIORITY_TRANSPARENT, SceneProxy};
+use crate::rendering::proxies::{
+    PROXY_PRIORITY_SOLID, PROXY_PRIORITY_TRANSPARENT, SceneProxy, SceneProxyBinding,
+};
 use crate::rendering::uniform::ShaderUniform;
 use crate::rendering::{
     AssetCache, GPUDrawCtx, RenderPassType, Renderer, RuntimeMesh, RuntimeShader,
@@ -93,14 +94,8 @@ impl SceneProxy for MeshSceneProxy {
         );
     }
 
-    fn render<'a>(
-        &self,
-        renderer: &Renderer,
-        data: &dyn Any,
-        ctx: &GPUDrawCtx,
-        _local_to_world: &Matrix4<f32>,
-    ) {
-        let data: &RuntimeMeshData = proxy_data!(data);
+    fn render<'a>(&self, renderer: &Renderer, ctx: &GPUDrawCtx, binding: &SceneProxyBinding) {
+        let data: &RuntimeMeshData = proxy_data!(binding.proxy_data());
 
         let Some(mesh) = renderer.cache.mesh(self.mesh) else {
             return;
@@ -110,28 +105,32 @@ impl SceneProxy for MeshSceneProxy {
         self.draw_mesh(ctx, &renderer.cache, &mesh, data, &mut pass);
 
         #[cfg(debug_assertions)]
-        if DebugRenderer::mesh_edges() {
+        if !ctx.transparency_pass && DebugRenderer::mesh_edges() {
             draw_edges(ctx, &renderer.cache, &mesh, data, &mut pass);
         }
 
         #[cfg(debug_assertions)]
-        if DebugRenderer::mesh_vertex_normals() {
+        if !ctx.transparency_pass && DebugRenderer::mesh_vertex_normals() {
             draw_vertex_normals(ctx, &renderer.cache, &mesh, data, &mut pass);
         }
     }
 
+    fn render_shadows(&self, renderer: &Renderer, ctx: &GPUDrawCtx, binding: &SceneProxyBinding) {
+        let data: &RuntimeMeshData = proxy_data!(binding.proxy_data());
+
+        let Some(mesh) = renderer.cache.mesh(self.mesh) else {
+            return;
+        };
+
+        let mut pass = ctx.pass.write().unwrap();
+        self.draw_mesh(ctx, &renderer.cache, &mesh, data, &mut pass);
+    }
+
     // TODO: Make shaders more modular so picking and (shadow) shaders can be generated from just a vertex shader
-    fn render_picking(
-        &self,
-        renderer: &Renderer,
-        data: &dyn Any,
-        ctx: &GPUDrawCtx,
-        _local_to_world: &Matrix4<f32>,
-        object_hash: ObjectHash,
-    ) {
+    fn render_picking(&self, renderer: &Renderer, ctx: &GPUDrawCtx, binding: &SceneProxyBinding) {
         debug_assert_ne!(ctx.pass_type, RenderPassType::Shadow);
 
-        let data: &RuntimeMeshData = proxy_data!(data);
+        let data: &RuntimeMeshData = proxy_data!(binding.proxy_data());
 
         let Some(mesh) = renderer.cache.mesh(self.mesh) else {
             return;
@@ -149,7 +148,7 @@ impl SceneProxy for MeshSceneProxy {
             pass.set_bind_group(model, data.uniform.bind_group(), &[]);
         }
 
-        let color = hash_to_rgba(object_hash);
+        let color = hash_to_rgba(binding.object_hash);
         pass.set_immediates(0, bytemuck::bytes_of(&color));
 
         if mesh_data.material_ranges.is_empty() {
@@ -213,6 +212,12 @@ impl MeshSceneProxy {
                 .cloned()
                 .unwrap_or(HMaterial::FALLBACK);
             let material = cache.material(h_mat);
+
+            if ctx.pass_type == RenderPassType::Color
+                && material.data.has_transparency() ^ ctx.transparency_pass
+            {
+                continue; // either transparent in a non-transparency pass, or transparent in a non-transparency pass
+            }
 
             if ctx.pass_type == RenderPassType::Shadow && !material.data.has_cast_shadows() {
                 continue;

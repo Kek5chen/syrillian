@@ -21,6 +21,7 @@ pub struct Texture {
     pub repeat_mode: AddressMode,
     pub filter_mode: FilterMode,
     pub mip_filter_mode: MipmapFilterMode,
+    pub has_transparency: bool,
 }
 
 impl H<Texture> {
@@ -68,6 +69,7 @@ impl Texture {
             repeat_mode: AddressMode::Repeat,
             filter_mode: FilterMode::Linear,
             mip_filter_mode: MipmapFilterMode::Linear,
+            has_transparency: false,
         }
     }
 
@@ -144,22 +146,16 @@ impl Texture {
             data.push(pixel[3]); // A
         }
 
-        let tex = Texture {
-            width: rgba.width(),
-            height: rgba.height(),
-            format: TextureFormat::Bgra8UnormSrgb,
-            data: Some(data),
-            view_formats: [TextureFormat::Bgra8UnormSrgb],
-            array_layers: 1,
-            repeat_mode: AddressMode::Repeat,
-            filter_mode: FilterMode::Linear,
-            mip_filter_mode: MipmapFilterMode::Linear,
-        };
-
-        Ok(tex)
+        Ok(Self::load_pixels(
+            data,
+            rgba.width(),
+            rgba.height(),
+            TextureFormat::Bgra8UnormSrgb,
+        ))
     }
 
     pub fn load_pixels(pixels: Vec<u8>, width: u32, height: u32, format: TextureFormat) -> Texture {
+        let has_transparency = Self::calculate_transparency(format, &pixels);
         Texture {
             width,
             height,
@@ -170,6 +166,56 @@ impl Texture {
             repeat_mode: AddressMode::Repeat,
             filter_mode: FilterMode::Linear,
             mip_filter_mode: MipmapFilterMode::Linear,
+            has_transparency,
+        }
+    }
+
+    pub fn load_pixels_with_transparency(
+        pixels: Vec<u8>,
+        width: u32,
+        height: u32,
+        format: TextureFormat,
+        has_transparency: bool,
+    ) -> Texture {
+        Texture {
+            width,
+            height,
+            format,
+            data: Some(pixels),
+            view_formats: [format],
+            array_layers: 1,
+            repeat_mode: AddressMode::Repeat,
+            filter_mode: FilterMode::Linear,
+            mip_filter_mode: MipmapFilterMode::Linear,
+            has_transparency,
+        }
+    }
+
+    fn calculate_transparency(format: TextureFormat, data: &[u8]) -> bool {
+        let chunk_size = match format {
+            TextureFormat::Rg8Unorm => 2,
+            TextureFormat::Rgba8Unorm
+            | TextureFormat::Rgba8UnormSrgb
+            | TextureFormat::Rgba8Snorm
+            | TextureFormat::Rgba8Uint
+            | TextureFormat::Rgba8Sint
+            | TextureFormat::Bgra8Unorm
+            | TextureFormat::Bgra8UnormSrgb => 4,
+            _ => return false,
+        };
+
+        for alpha in data.iter().skip(chunk_size - 1).step_by(chunk_size) {
+            if *alpha < u8::MAX {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    pub fn refresh_transparency(&mut self) {
+        if let Some(data) = &self.data {
+            self.has_transparency = Self::calculate_transparency(self.view_formats[0], &data);
         }
     }
 }
@@ -181,24 +227,37 @@ impl StoreDefaults for Texture {
         store_add_checked!(
             store,
             HTexture::FALLBACK_DIFFUSE_ID,
-            Texture::load_pixels(
+            Texture::load_pixels_with_transparency(
                 Self::gen_fallback_diffuse(FALLBACK_SIZE, FALLBACK_SIZE),
                 FALLBACK_SIZE,
                 FALLBACK_SIZE,
-                TextureFormat::Bgra8UnormSrgb
+                TextureFormat::Bgra8UnormSrgb,
+                false,
             )
         );
 
         store_add_checked!(
             store,
             HTexture::FALLBACK_NORMAL_ID,
-            Texture::load_pixels(vec![0; 4], 1, 1, TextureFormat::Bgra8UnormSrgb)
+            Texture::load_pixels_with_transparency(
+                vec![0; 4],
+                1,
+                1,
+                TextureFormat::Bgra8UnormSrgb,
+                false
+            )
         );
 
         store_add_checked!(
             store,
             HTexture::FALLBACK_SHININESS_ID,
-            Texture::load_pixels(vec![0; 4], 1, 1, TextureFormat::Bgra8UnormSrgb)
+            Texture::load_pixels_with_transparency(
+                vec![0; 4],
+                1,
+                1,
+                TextureFormat::Bgra8UnormSrgb,
+                false
+            )
         );
     }
 }
@@ -241,6 +300,7 @@ impl Texture {
             repeat_mode: AddressMode::Repeat,
             filter_mode: FilterMode::Linear,
             mip_filter_mode: MipmapFilterMode::Linear,
+            has_transparency: false,
         }
     }
 }

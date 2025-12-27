@@ -23,6 +23,8 @@ pub struct Material {
     pub lit: bool,
     #[builder(default = true)]
     pub cast_shadows: bool,
+    #[builder(default = false)]
+    pub has_transparency: bool,
     #[builder(default = HShader::DIM3)]
     pub shader: HShader,
 }
@@ -56,6 +58,7 @@ impl StoreDefaults for Material {
             alpha: 1.0,
             lit: true,
             cast_shadows: true,
+            has_transparency: false,
         };
 
         store_add_checked!(store, HMaterial::FALLBACK_ID, fallback);
@@ -72,6 +75,7 @@ impl StoreDefaults for Material {
             alpha: 1.0,
             lit: true,
             cast_shadows: true,
+            has_transparency: false,
         };
 
         store_add_checked!(store, HMaterial::DEFAULT_ID, default);

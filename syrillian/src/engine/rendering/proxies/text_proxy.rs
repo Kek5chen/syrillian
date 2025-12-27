@@ -1,12 +1,12 @@
 use crate::assets::{AssetStore, HFont, HShader};
 use crate::components::mesh_renderer::BoneData;
-use crate::core::{ModelUniform, ObjectHash};
+use crate::core::ModelUniform;
 #[cfg(debug_assertions)]
 use crate::rendering::DebugRenderer;
 use crate::rendering::glyph::{GlyphRenderData, generate_glyph_geometry_stream};
 use crate::rendering::picking::hash_to_rgba;
 use crate::rendering::proxies::mesh_proxy::MeshUniformIndex;
-use crate::rendering::proxies::{PROXY_PRIORITY_TRANSPARENT, SceneProxy};
+use crate::rendering::proxies::{PROXY_PRIORITY_TRANSPARENT, SceneProxy, SceneProxyBinding};
 use crate::rendering::strobe::TextAlignment;
 use crate::rendering::uniform::ShaderUniform;
 use crate::rendering::{AssetCache, CPUDrawCtx, GPUDrawCtx, RenderPassType, Renderer};
@@ -255,10 +255,6 @@ impl<const D: u8, DIM: TextDim<D>> TextProxy<D, DIM> {
     }
 
     pub fn render(&self, renderer: &Renderer, data: &TextRenderData, ctx: &GPUDrawCtx) {
-        if DIM::shader() != HShader::TEXT_3D && ctx.pass_type == RenderPassType::Shadow {
-            return;
-        }
-
         if data.glyph_vbo.size() == 0 || self.text.is_empty() {
             return;
         }
@@ -435,28 +431,21 @@ impl<const D: u8, DIM: TextDim<D>> SceneProxy for TextProxy<D, DIM> {
         self.update_render_thread(renderer, data, local_to_world);
     }
 
-    fn render<'a>(
-        &self,
-        renderer: &Renderer,
-        data: &dyn Any,
-        ctx: &GPUDrawCtx,
-        _local_to_world: &Matrix4<f32>,
-    ) {
-        let data: &TextRenderData = proxy_data!(data);
+    fn render<'a>(&self, renderer: &Renderer, ctx: &GPUDrawCtx, binding: &SceneProxyBinding) {
+        let data: &TextRenderData = proxy_data!(binding.proxy_data());
         self.render(renderer, data, ctx);
     }
 
-    fn render_picking(
-        &self,
-        renderer: &Renderer,
-        data: &dyn Any,
-        ctx: &GPUDrawCtx,
-        _local_to_world: &Matrix4<f32>,
-        object_hash: ObjectHash,
-    ) {
+    fn render_shadows(&self, renderer: &Renderer, ctx: &GPUDrawCtx, binding: &SceneProxyBinding) {
+        if D == 3 {
+            SceneProxy::render(self, renderer, ctx, binding);
+        }
+    }
+
+    fn render_picking(&self, renderer: &Renderer, ctx: &GPUDrawCtx, binding: &SceneProxyBinding) {
         debug_assert_ne!(ctx.pass_type, RenderPassType::Shadow);
 
-        let data: &TextRenderData = proxy_data!(data);
+        let data: &TextRenderData = proxy_data!(binding.proxy_data());
         if data.glyph_vbo.size() == 0 || self.text.is_empty() {
             return;
         }
@@ -483,7 +472,7 @@ impl<const D: u8, DIM: TextDim<D>> SceneProxy for TextProxy<D, DIM> {
             pass.set_bind_group(material_id, material.uniform.bind_group(), &[]);
         }
 
-        let color = hash_to_rgba(object_hash);
+        let color = hash_to_rgba(binding.object_hash);
         let mut pc = self.pc;
         pc.color = Vector3::new(color[0], color[1], color[2]);
 

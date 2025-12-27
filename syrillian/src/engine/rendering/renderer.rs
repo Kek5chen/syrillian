@@ -601,6 +601,7 @@ impl Renderer {
                 render_bind_group: viewport.render_data.uniform.bind_group(),
                 light_bind_group: self.lights.uniform().bind_group(),
                 shadow_bind_group: self.lights.placeholder_shadow_uniform().bind_group(),
+                transparency_pass: false,
             };
             let mut strobe = self.strobe.borrow_mut();
 
@@ -790,8 +791,8 @@ impl Renderer {
             );
         }
 
-        let render_ui = self.strobe.borrow().has_draws(target_id);
-        if render_ui {
+        let has_ui_draws_queued = self.strobe.borrow().has_draws(target_id);
+        if has_ui_draws_queued {
             let pass = self.prepare_ui_render_pass(&mut encoder, viewport, ctx);
 
             let draw_ctx = GPUDrawCtx {
@@ -801,6 +802,7 @@ impl Renderer {
                 render_bind_group: viewport.render_data.uniform.bind_group(),
                 light_bind_group: self.lights.uniform().bind_group(),
                 shadow_bind_group: self.lights.placeholder_shadow_uniform().bind_group(),
+                transparency_pass: false,
             };
 
             self.strobe.borrow_mut().render(
@@ -826,23 +828,23 @@ impl Renderer {
     ) {
         let shadow_bind_group = match pass_type {
             RenderPassType::Color | RenderPassType::Color2D => self.lights.shadow_uniform(),
-            RenderPassType::Shadow => self.lights.placeholder_shadow_uniform(),
-            RenderPassType::Picking | RenderPassType::PickingUi => {
+            RenderPassType::Shadow | RenderPassType::Picking | RenderPassType::PickingUi => {
                 self.lights.placeholder_shadow_uniform()
             }
         }
         .bind_group();
 
-        let draw_ctx = GPUDrawCtx {
+        let mut draw_ctx = GPUDrawCtx {
             frame: frame_ctx,
             pass: RwLock::new(pass),
             pass_type,
             render_bind_group: render_uniform.uniform.bind_group(),
             light_bind_group: self.lights.uniform().bind_group(),
             shadow_bind_group,
+            transparency_pass: false,
         };
 
-        self.render_proxies(&draw_ctx, proxies);
+        self.render_proxies(&mut draw_ctx, proxies);
 
         #[cfg(debug_assertions)]
         if DebugRenderer::light() && pass_type == RenderPassType::Color {
@@ -850,13 +852,34 @@ impl Renderer {
         }
     }
 
-    fn render_proxies(&self, ctx: &GPUDrawCtx, proxies: &[(u32, TypedComponentId)]) {
+    fn render_proxies(&self, ctx: &mut GPUDrawCtx, proxies: &[(u32, TypedComponentId)]) {
+        ctx.transparency_pass = false;
+
         for proxy in proxies.iter().map(|(_, ctid)| self.proxies.get(ctid)) {
             let Some(proxy) = proxy else {
                 debug_panic!("Sorted proxy not in proxy list");
                 continue;
             };
-            proxy.render(self, ctx);
+            proxy.render_by_pass(self, ctx);
+        }
+
+        match ctx.pass_type {
+            RenderPassType::Color | RenderPassType::Shadow => (),
+            RenderPassType::Picking => return,
+            RenderPassType::Color2D | RenderPassType::PickingUi => {
+                debug_panic!("Shouldn't render scene in 2D passes");
+                return;
+            }
+        }
+
+        ctx.transparency_pass = true;
+
+        for proxy in proxies.iter().map(|(_, ctid)| self.proxies.get(ctid)) {
+            let Some(proxy) = proxy else {
+                debug_panic!("Sorted proxy not in proxy list");
+                continue;
+            };
+            proxy.render_by_pass(self, ctx);
         }
     }
 
@@ -1182,7 +1205,7 @@ mod tests {
 
         fn update_render(&mut self, _: &Renderer, _: &mut dyn Any, _: &Matrix4<f32>) {}
 
-        fn render(&self, _: &Renderer, _: &dyn Any, _: &GPUDrawCtx, _: &Matrix4<f32>) {}
+        fn render(&self, _renderer: &Renderer, _ctx: &GPUDrawCtx, _binding: &SceneProxyBinding) {}
 
         fn priority(&self, _: &AssetStore) -> u32 {
             self.priority

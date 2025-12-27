@@ -31,6 +31,7 @@ pub struct GPUDrawCtx<'a> {
     pub render_bind_group: &'a BindGroup,
     pub light_bind_group: &'a BindGroup,
     pub shadow_bind_group: &'a BindGroup,
+    pub transparency_pass: bool,
 }
 
 pub struct CPUDrawCtx<'a> {
