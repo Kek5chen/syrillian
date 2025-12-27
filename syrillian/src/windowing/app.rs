@@ -194,10 +194,7 @@ impl<S: AppState> App<S> {
             return true;
         };
 
-        if !Self::handle_events(renderer, game_thread, event_loop) {
-            return false;
-        }
-        true
+        Self::handle_events(renderer, game_thread, event_loop)
     }
 }
 
