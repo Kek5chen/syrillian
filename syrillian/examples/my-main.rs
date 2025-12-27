@@ -27,7 +27,6 @@ use syrillian::rendering::DebugRenderer;
 use syrillian::rendering::lights::Light;
 use syrillian::strobe::TextAlignment;
 use syrillian::utils::FrameCounter;
-use syrillian::windowing::RenderTargetId;
 use syrillian::{AppRuntime, AppState, World};
 use tracing::{error, info};
 use tracing_subscriber::layer::SubscriberExt;
@@ -61,7 +60,6 @@ struct MyMain {
     sound_cube_emitter: CRef<AudioEmitter>,
     sound_cube2_emitter: CRef<AudioEmitter>,
     viewport_camera: Option<CRef<CameraComponent>>,
-    viewport_window: RenderTargetId,
 }
 
 impl Default for MyMain {
@@ -79,7 +77,6 @@ impl Default for MyMain {
                 sound_cube_emitter: CRef::null(),
                 sound_cube2_emitter: CRef::null(),
                 viewport_camera: None,
-                viewport_window: RenderTargetId::PRIMARY,
             }
         }
     }
@@ -105,11 +102,9 @@ impl AppState for MyMain {
         self.player = player;
         self.player_rb = player_rb;
 
-        self.viewport_window = world.create_window();
-
         let camera = self.spawn_viewport_camera(world);
         self.viewport_camera = Some(camera.clone());
-        world.set_active_camera_for_target(self.viewport_window, camera);
+        // world.set_active_camera_for_target(RenderTargetId::PRIMARY, camera);
 
         world.print_objects();
 
@@ -118,8 +113,7 @@ impl AppState for MyMain {
 
     fn update(&mut self, world: &mut World) -> Result<(), Box<dyn Error>> {
         self.frame_counter.new_frame_from_world(world);
-        world.set_window_title(RenderTargetId::PRIMARY, self.format_title(false));
-        world.set_window_title(self.viewport_window, self.format_title(true));
+        world.set_default_window_title(self.format_title(false));
 
         self.update_world_text(world);
         self.update_audio_controls(world);
@@ -535,10 +529,10 @@ impl MyMain {
 }
 
 fn main() {
-    let (chrome_layer, _guard) = tracing_chrome::ChromeLayerBuilder::new().build();
+    // let (chrome_layer, _guard) = tracing_chrome::ChromeLayerBuilder::new().build();
     tracing_subscriber::registry()
         .with(tracing_subscriber::fmt::layer().with_filter(EnvFilter::from_default_env()))
-        .with(chrome_layer)
+        //     .with(chrome_layer)
         .init();
 
     let app = MyMain::configure("MyMain", 1280, 720);
