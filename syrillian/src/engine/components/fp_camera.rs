@@ -5,8 +5,8 @@ use crate::input::InputManager;
 use crate::utils::FloatMathExt;
 use crate::windowing::RenderTargetId;
 use gilrs::Axis;
-use log::warn;
 use nalgebra::{UnitQuaternion, Vector2, Vector3};
+use tracing::warn;
 
 /// All tweakable parameters for the FPS Camera
 #[derive(Debug, Clone)]

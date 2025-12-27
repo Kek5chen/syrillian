@@ -10,11 +10,11 @@ use crate::utils::animation::{AnimationClip, Channel, TransformKeys};
 use gltf::animation::util::ReadOutputs;
 use gltf::khr_lights_punctual::Kind;
 use gltf::{self, Document, Node};
-use log::trace;
 use nalgebra::{Quaternion, UnitQuaternion, Vector3};
+use snafu::{OptionExt, ResultExt, Snafu};
 use std::collections::HashMap;
-use std::error::Error;
 use syrillian_utils::debug_panic;
+use tracing::trace;
 
 mod bones;
 mod meshes;

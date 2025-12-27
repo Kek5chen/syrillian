@@ -21,7 +21,7 @@ wgpu = { version = "28.0", default-features = false, features = ["wgsl"] }
 naga = { version = "28.0", features = ["stderr"] }
 winit = { version = "0.30" }
 bytemuck = "1.24"
-log = "0.4"
+tracing = "0.1"
 nalgebra = { version = "0.34", features = ["bytemuck", "mint"] }
 num-traits = "0.2"
 itertools = "0.14"
@@ -63,6 +63,9 @@ chrono = "0.4"
 chrono = "0.4"
 env_logger = { version = "0.11", features = ["auto-color"] }
 notify = "8.2"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-log = "0.2"
+tracing-chrome = "0.7"
 
 
 
@@ -105,5 +108,5 @@ wasm-bindgen-test = "0.3"
 
 [features]
 default = ["derive", "audio"]
-derive = ["syrillian_macros/derive_env_logger"]
+derive = ["syrillian_macros/derive_tracing_subscriber"]
 audio = ["kira/cpal"]

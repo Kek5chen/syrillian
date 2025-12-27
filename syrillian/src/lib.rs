@@ -7,7 +7,7 @@ pub use rendering::strobe;
 pub use windowing::*;
 
 pub use ::gilrs;
-pub use ::log;
+pub use ::tracing;
 pub use ::winit;
 
 #[cfg(feature = "derive")]

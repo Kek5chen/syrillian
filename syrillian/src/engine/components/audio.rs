@@ -6,7 +6,7 @@ use kira::Tween;
 use kira::sound::PlaybackState;
 use kira::sound::static_sound::StaticSoundHandle;
 use kira::track::{SpatialTrackBuilder, SpatialTrackHandle};
-use log::{trace, warn};
+use tracing::{trace, warn};
 
 pub struct AudioReceiver {
     parent: GameObjectId,

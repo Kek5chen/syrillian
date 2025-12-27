@@ -26,7 +26,6 @@ use crate::rendering::texture_export::{TextureExportError, save_texture_to_png};
 use crate::rendering::{GPUDrawCtx, RenderPassType, State};
 use crossbeam_channel::{Receiver, Sender};
 use itertools::Itertools;
-use log::{error, trace, warn};
 use nalgebra::{Matrix4, Vector2, Vector3, Vector4};
 use snafu::ResultExt;
 use std::cell::RefCell;
@@ -35,6 +34,7 @@ use std::convert::TryFrom;
 use std::mem;
 use std::sync::{Arc, RwLock};
 use syrillian_utils::debug_panic;
+use tracing::{error, instrument, trace, trace_span, warn};
 use web_time::{Duration, Instant};
 use wgpu::*;
 use winit::dpi::PhysicalSize;
@@ -146,15 +146,18 @@ impl RenderViewport {
         config.height = config.height.max(1);
     }
 
+    #[instrument(skip_all)]
     fn recreate_surface(&mut self, state: &State) {
         self.surface.configure(&state.device, &self.config);
     }
 
+    #[instrument(skip_all)]
     fn resize(&mut self, new_size: PhysicalSize<u32>, state: &State, cache: &AssetCache) {
         let Ok(mut new_config) = state
             .surface_config(&self.surface, new_size)
             .context(StateErr)
         else {
+            warn!("Couldn't acquire surface config for surface reconfiguration");
             return;
         };
 
@@ -194,11 +197,13 @@ impl RenderViewport {
         })
     }
 
+    #[instrument(skip_all)]
     fn begin_render(&mut self, state: &State) -> Result<FrameCtx> {
         self.frame_count += 1;
 
         let mut output = self.surface.get_current_texture().context(SurfaceErr)?;
         if output.suboptimal {
+            warn!("Surface Output is suboptimal. Recreating...");
             drop(output);
             self.recreate_surface(state);
             output = self.surface.get_current_texture().context(SurfaceErr)?;
@@ -426,6 +431,7 @@ impl Renderer {
         self.start_time
     }
 
+    #[instrument(skip_all)]
     pub fn handle_events(&mut self) {
         loop {
             let Ok(msg) = self.game_rx.try_recv() else {
@@ -460,6 +466,7 @@ impl Renderer {
         rendered
     }
 
+    #[instrument(skip_all)]
     pub fn update(&mut self) {
         let mut proxies = mem::take(&mut self.proxies);
         for proxy in proxies.values_mut() {
@@ -477,6 +484,7 @@ impl Renderer {
             .update(&self.cache, &self.state.queue, &self.state.device);
     }
 
+    #[instrument(skip_all)]
     fn resort_proxies(&mut self) {
         let frustum = self
             .viewports
@@ -487,6 +495,7 @@ impl Renderer {
             sorted_enabled_proxy_ids(&self.proxies, self.cache.store(), frustum.as_ref());
     }
 
+    #[instrument(skip_all)]
     pub fn render_frame(
         &mut self,
         target_id: RenderTargetId,
@@ -497,6 +506,7 @@ impl Renderer {
             Err(RenderError::Surface {
                 source: SurfaceError::Lost,
             }) => {
+                warn!("Lost Window Surface. Recreating");
                 let size = viewport.size();
                 viewport.resize(size, &self.state, &self.cache);
                 return true; // drop frame but don't cancel
@@ -527,6 +537,7 @@ impl Renderer {
         true
     }
 
+    #[instrument(skip_all)]
     fn picking_pass(
         &mut self,
         viewport: &RenderViewport,
@@ -655,6 +666,7 @@ impl Renderer {
         }
     }
 
+    #[instrument(skip_all)]
     fn resolve_pick_buffer(&self, buffer: Buffer, request: PickRequest) -> Option<PickResult> {
         let slice = buffer.slice(0..4);
         let (tx, rx) = crossbeam_channel::bounded(1);
@@ -683,11 +695,13 @@ impl Renderer {
         })
     }
 
+    #[instrument(skip_all)]
     fn render(&mut self, target_id: RenderTargetId, viewport: &RenderViewport, ctx: &mut FrameCtx) {
         self.shadow_pass(ctx);
         self.main_pass(target_id, viewport, ctx);
     }
 
+    #[instrument(skip_all)]
     fn shadow_pass(&mut self, ctx: &mut FrameCtx) {
         self.lights
             .update(&self.cache, &self.state.queue, &self.state.device);
@@ -744,6 +758,7 @@ impl Renderer {
         }
     }
 
+    #[instrument(skip_all)]
     fn prepare_shadow_map(&mut self, ctx: &mut FrameCtx, layer: u32) {
         let mut encoder = self
             .state
@@ -766,6 +781,7 @@ impl Renderer {
         self.state.queue.submit(Some(encoder.finish()));
     }
 
+    #[instrument(skip_all)]
     fn main_pass(
         &mut self,
         target_id: RenderTargetId,
@@ -818,6 +834,7 @@ impl Renderer {
         self.state.queue.submit(Some(encoder.finish()));
     }
 
+    #[instrument(skip_all)]
     fn render_scene(
         &self,
         frame_ctx: &FrameCtx,
@@ -852,6 +869,7 @@ impl Renderer {
         }
     }
 
+    #[instrument(skip_all)]
     fn render_proxies(&self, ctx: &mut GPUDrawCtx, proxies: &[(u32, TypedComponentId)]) {
         ctx.transparency_pass = false;
 
@@ -883,6 +901,7 @@ impl Renderer {
         }
     }
 
+    #[instrument(skip_all)]
     fn end_render(&mut self, viewport: &mut RenderViewport, mut ctx: FrameCtx) {
         self.render_final_pass(viewport, &mut ctx);
 
@@ -898,6 +917,7 @@ impl Renderer {
         }
     }
 
+    #[instrument(skip_all)]
     fn render_final_pass(&mut self, viewport: &RenderViewport, ctx: &mut FrameCtx) {
         let mut encoder = self
             .state
@@ -938,6 +958,7 @@ impl Renderer {
         self.state.queue.submit(Some(encoder.finish()));
     }
 
+    #[instrument(skip_all)]
     fn handle_message(&mut self, msg: RenderMsg) {
         match msg {
             RenderMsg::RegisterProxy(cid, object_hash, mut proxy, local_to_world) => {
@@ -1034,6 +1055,7 @@ impl Renderer {
         Ok(())
     }
 
+    #[instrument(skip_all)]
     fn prepare_shadow_pass<'a>(
         &self,
         encoder: &'a mut CommandEncoder,
@@ -1054,6 +1076,7 @@ impl Renderer {
         })
     }
 
+    #[instrument(skip_all)]
     fn prepare_main_render_pass<'a>(
         &self,
         encoder: &'a mut CommandEncoder,
@@ -1083,6 +1106,7 @@ impl Renderer {
         })
     }
 
+    #[instrument(skip_all)]
     fn prepare_ui_render_pass<'a>(
         &self,
         encoder: &'a mut CommandEncoder,
@@ -1106,6 +1130,7 @@ impl Renderer {
     }
 }
 
+#[instrument(skip_all)]
 fn sorted_enabled_proxy_ids(
     proxies: &HashMap<TypedComponentId, SceneProxyBinding>,
     store: &AssetStore,
@@ -1145,6 +1170,7 @@ struct Frustum {
 }
 
 impl Frustum {
+    #[instrument(skip_all)]
     fn from_matrix(m: &Matrix4<f32>) -> Self {
         let row0 = m.row(0).transpose();
         let row1 = m.row(1).transpose();
@@ -1176,6 +1202,7 @@ impl Frustum {
         Frustum { planes }
     }
 
+    #[instrument(skip_all)]
     fn intersects_sphere(&self, sphere: &BoundingSphere) -> bool {
         self.planes
             .iter()

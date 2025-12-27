@@ -9,9 +9,9 @@ use crate::rendering::uniform::ShaderUniform;
 #[cfg(debug_assertions)]
 use crate::try_activate_shader;
 use itertools::Itertools;
-use log::warn;
 use std::convert::TryFrom;
 use syrillian_utils::debug_panic;
+use tracing::warn;
 use wgpu::{
     AddressMode, Device, FilterMode, MipmapFilterMode, Queue, Sampler, SamplerDescriptor,
     TextureUsages, TextureView, TextureViewDescriptor,

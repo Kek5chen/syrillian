@@ -21,7 +21,6 @@ use crate::rendering::picking::PickResult;
 use crate::rendering::strobe::StrobeFrame;
 use crate::rendering::{CPUDrawCtx, UiContext};
 use crate::windowing::RenderTargetId;
-use log::info;
 use nalgebra::Matrix4;
 use slotmap::{Key, SlotMap};
 use std::cell::Cell;
@@ -30,6 +29,7 @@ use std::mem;
 use std::mem::swap;
 use std::path::PathBuf;
 use std::sync::Arc;
+use tracing::info;
 use web_time::{Duration, Instant};
 
 use crossbeam_channel::unbounded;

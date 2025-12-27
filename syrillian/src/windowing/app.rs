@@ -5,9 +5,9 @@ use crate::rendering::Renderer;
 use crate::windowing::game_thread::GameThread;
 use crate::world::WorldChannels;
 use crossbeam_channel::unbounded;
-use log::{error, info, trace};
 use std::error::Error;
 use std::marker::PhantomData;
+use tracing::{error, info, instrument, trace};
 use winit::application::ApplicationHandler;
 use winit::dpi::Size;
 use winit::error::EventLoopError;
@@ -67,6 +67,7 @@ impl<S: AppState> App<S> {
         Ok(())
     }
 
+    #[instrument(skip_all)]
     fn init(&mut self, event_loop: &ActiveEventLoop) {
         info!("Initializing render state");
 
@@ -124,6 +125,7 @@ impl<S: AppState> App<S> {
         self.game_thread = Some(game_thread);
     }
 
+    #[instrument(skip_all)]
     fn handle_events(
         renderer: &mut Renderer,
         game_thread: &GameThread<S>,
@@ -182,6 +184,7 @@ impl<S: AppState> App<S> {
         true
     }
 
+    #[instrument(skip_all)]
     fn handle_all_game_events(&mut self, event_loop: &ActiveEventLoop) -> bool {
         let Some(renderer) = self.renderer.as_mut() else {
             return true;
@@ -199,6 +202,7 @@ impl<S: AppState> App<S> {
 }
 
 impl<S: AppState> ApplicationHandler for App<S> {
+    #[instrument(skip_all)]
     fn new_events(&mut self, event_loop: &ActiveEventLoop, cause: StartCause) {
         match cause {
             StartCause::Poll => {
@@ -212,10 +216,12 @@ impl<S: AppState> ApplicationHandler for App<S> {
         }
     }
 
+    #[instrument(skip_all)]
     fn resumed(&mut self, _event_loop: &ActiveEventLoop) {
         // TODO: Reinit cache?
     }
 
+    #[instrument(skip_all)]
     fn window_event(
         &mut self,
         event_loop: &ActiveEventLoop,
@@ -281,6 +287,7 @@ impl<S: AppState> ApplicationHandler for App<S> {
         // debug_assert!(event_start.elapsed().as_secs_f32() < 2.0);
     }
 
+    #[instrument(skip_all)]
     fn device_event(
         &mut self,
         event_loop: &ActiveEventLoop,

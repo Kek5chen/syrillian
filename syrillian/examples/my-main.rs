@@ -7,7 +7,6 @@
 use gilrs::Button;
 use kira::effect::reverb::ReverbBuilder;
 use kira::track::SpatialTrackBuilder;
-use log::{LevelFilter, info};
 use nalgebra::UnitQuaternion;
 use rapier3d::parry::query::Ray;
 use rapier3d::prelude::QueryFilter;
@@ -30,6 +29,10 @@ use syrillian::strobe::TextAlignment;
 use syrillian::utils::FrameCounter;
 use syrillian::windowing::RenderTargetId;
 use syrillian::{AppRuntime, AppState, World};
+use tracing::{error, info};
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::{EnvFilter, Layer};
 use winit::event::MouseButton;
 use winit::keyboard::KeyCode;
 
@@ -532,15 +535,16 @@ impl MyMain {
 }
 
 fn main() {
-    let _ = env_logger::builder()
-        .filter_level(LevelFilter::Info)
-        .parse_default_env()
-        .try_init();
+    let (chrome_layer, _guard) = tracing_chrome::ChromeLayerBuilder::new().build();
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::fmt::layer().with_filter(EnvFilter::from_default_env()))
+        .with(chrome_layer)
+        .init();
 
     let app = MyMain::configure("MyMain", 1280, 720);
 
     if let Err(e) = app.run() {
-        syrillian::log::error!("{e}");
+        error!("{e}");
     }
 }
 

@@ -6,10 +6,10 @@ use crate::utils::animation::{
     AnimationClip, Binding, ChannelBinding, ClipIndex, Playback, sample_rotation, sample_scale,
     sample_translation,
 };
-use log::warn;
 use nalgebra::{UnitQuaternion, Vector3};
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
+use tracing::warn;
 
 pub struct AnimationComponent {
     parent: GameObjectId,

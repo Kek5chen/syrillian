@@ -3,10 +3,10 @@ use crate::World;
 use crate::components::{Component, MeshRenderer, NewComponent, RigidBodyComponent};
 use crate::core::GameObjectId;
 use crate::engine::assets::{HMesh, Mesh};
-use log::{trace, warn};
 use nalgebra::{Point3, Vector3};
 use rapier3d::prelude::*;
 use snafu::Snafu;
+use tracing::{trace, warn};
 
 #[cfg(debug_assertions)]
 use crate::assets::StoreType;

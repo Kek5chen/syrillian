@@ -1,12 +1,12 @@
 use crate::components::{CRef, Component, ComponentId, TypedComponentId};
 use crate::core::GameObjectId;
-use log::trace;
 use slotmap::SlotMap;
 use slotmap::basic::Values;
 use std::any::{Any, TypeId};
 use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::rc::Rc;
+use tracing::trace;
 
 #[allow(unused)]
 pub(crate) trait SlotMapUntyped<K>

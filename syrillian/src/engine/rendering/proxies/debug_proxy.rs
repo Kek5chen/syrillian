@@ -6,10 +6,10 @@ use crate::rendering::proxies::{PROXY_PRIORITY_SOLID, SceneProxy, SceneProxyBind
 use crate::rendering::uniform::ShaderUniform;
 use crate::rendering::{AssetCache, GPUDrawCtx, Renderer};
 use crate::{must_pipeline, proxy_data, proxy_data_mut, try_activate_shader};
-use log::warn;
 use nalgebra::{Matrix4, Point3, Vector4};
 use std::any::Any;
 use syrillian_utils::debug_panic;
+use tracing::warn;
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::{Buffer, BufferUsages, Device, Queue};
 

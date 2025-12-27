@@ -2,6 +2,7 @@ use crate::assets::{H, HFont, HandleName, Store, StoreDefaults, StoreType, Store
 use crate::store_add_checked;
 use std::convert::Into;
 use std::sync::Arc;
+use tracing::trace;
 
 #[derive(Debug, Clone)]
 pub struct Font {
@@ -103,7 +104,7 @@ fn find_font_and_bytes(family_name: &str) -> Option<Arc<Vec<u8>>> {
         db.load_fonts_dir(".");
         db.load_font_data(NOTO_SANS_REGULAR.to_vec());
         for face in db.faces() {
-            log::trace!("Loaded font: {}", face.post_script_name);
+            trace!("Loaded font: {}", face.post_script_name);
         }
         db
     });

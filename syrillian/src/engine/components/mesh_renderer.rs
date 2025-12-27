@@ -6,8 +6,8 @@ use crate::engine::rendering::CPUDrawCtx;
 use crate::rendering::proxies::SceneProxy;
 use crate::rendering::proxies::mesh_proxy::MeshSceneProxy;
 use crate::{MAX_BONES, World, proxy_data_mut};
-use log::warn;
 use nalgebra::{Matrix4, Vector3};
+use tracing::warn;
 
 #[derive(Debug, Default, Clone)]
 pub struct BoneData {

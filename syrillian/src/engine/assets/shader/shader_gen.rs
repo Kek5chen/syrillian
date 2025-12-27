@@ -1,5 +1,5 @@
 use crate::assets::{BindGroupMap, PipelineStage, Shader, ShaderCode};
-use log::warn;
+use tracing::warn;
 
 const POST_PROCESS_HEADER: &str = include_str!("shaders/groups/post_process.wgsl");
 const DEFAULT_HEADER: &str = include_str!("shaders/groups/basic.wgsl");

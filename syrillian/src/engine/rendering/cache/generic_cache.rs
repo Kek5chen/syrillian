@@ -2,9 +2,9 @@ use crate::engine::assets::generic_store::{Store, StoreType};
 use crate::engine::assets::{AssetKey, H, StoreTypeFallback};
 use crate::engine::rendering::cache::AssetCache;
 use dashmap::DashMap;
-use log::{trace, warn};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use tracing::{trace, warn};
 use wgpu::{Device, Queue};
 
 type Slot<T> = Arc<<T as CacheType>::Hot>;

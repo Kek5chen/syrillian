@@ -81,11 +81,10 @@ pub fn uniform_index(input: TokenStream) -> TokenStream {
 pub fn syrillian_app(input: TokenStream) -> TokenStream {
     let input = syn::parse_macro_input!(input as syn::DeriveInput);
 
-    let logger = cfg!(feature = "derive_env_logger").then(|| {
+    let logger = cfg!(feature = "derive_tracing_subscriber").then(|| {
         quote!(
-            ::env_logger::builder()
-                .filter_level(::log::LevelFilter::Info)
-                .parse_default_env()
+            ::tracing_subscriber::FmtSubscriber::builder()
+                .with_env_filter(::tracing_subscriber::EnvFilter::from_default_env())
                 .init();
         )
     });
@@ -99,7 +98,7 @@ pub fn syrillian_app(input: TokenStream) -> TokenStream {
             #logger
 
             if let Err(e) = ::syrillian::AppSettings::run(app) {
-                ::syrillian::log::error!("{e}");
+                ::syrillian::tracing::error!("{e}");
             }
         }
     }.into()

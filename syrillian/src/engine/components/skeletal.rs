@@ -3,9 +3,9 @@ use crate::components::{Component, MeshRenderer, NewComponent};
 use crate::core::{Bones, GameObjectId};
 use crate::utils::{ExtraMatrixMath, MATRIX4_ID};
 use itertools::izip;
-use log::warn;
 use nalgebra::{Matrix4, Rotation3, Scale3, Vector3};
 use nalgebra::{Translation3, UnitQuaternion};
+use tracing::warn;
 
 pub struct SkeletalComponent {
     parent: GameObjectId,

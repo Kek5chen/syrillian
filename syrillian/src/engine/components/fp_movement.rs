@@ -6,10 +6,10 @@ use crate::components::{
 use crate::core::GameObjectId;
 use crate::windowing::RenderTargetId;
 use gilrs::Axis;
-use log::warn;
 use nalgebra::Vector3;
 use num_traits::Zero;
 use rapier3d::prelude::{LockedAxes, QueryFilter, RigidBody, vector};
+use tracing::warn;
 use winit::keyboard::KeyCode;
 
 pub struct FirstPersonMovementController {

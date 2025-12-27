@@ -151,7 +151,7 @@ impl State {
         let instance = Self::setup_instance();
         let surface = instance.create_surface(window).context(CreateSurfaceErr)?;
         // SAFETY: The surface stores the window handle internally and the caller owns the window.
-        let surface = unsafe { mem::transmute::<Surface<'_>, wgpu::Surface<'_>>(surface) };
+        let surface = unsafe { mem::transmute::<Surface<'_>, Surface<'static>>(surface) };
         let adapter = block_on(Self::setup_adapter(&instance, Some(&surface)));
         let (device, queue) = block_on(Self::get_device_and_queue(&adapter))?;
         let caps = surface.get_capabilities(&adapter);

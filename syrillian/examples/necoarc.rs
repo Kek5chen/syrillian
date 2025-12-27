@@ -1,6 +1,5 @@
 //! Example that renders a textured spinning cube and some 2d images.
 
-use log::{info, warn};
 use nalgebra::Vector3;
 use rapier3d::prelude::QueryFilter;
 use std::error::Error;
@@ -11,6 +10,7 @@ use syrillian::prefabs::CubePrefab;
 use syrillian::strobe::ImageScalingMode;
 use syrillian::{AppState, World};
 use syrillian_macros::SyrillianApp;
+use tracing::{info, warn};
 use winit::event::MouseButton;
 
 const NECO_IMAGE: &[u8; 1293] = include_bytes!("assets/neco.jpg");

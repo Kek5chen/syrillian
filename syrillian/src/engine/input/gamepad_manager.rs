@@ -1,6 +1,6 @@
 use gilrs::{Axis, Button, Event, EventType, Gilrs, GilrsBuilder};
-use log::{debug, trace};
 use std::collections::HashMap;
+use tracing::{debug, trace};
 use uuid::Uuid;
 
 #[derive(Debug)]

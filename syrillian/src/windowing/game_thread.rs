@@ -2,8 +2,8 @@ use crate::assets::AssetStore;
 use crate::world::{World, WorldChannels};
 use crate::{AppState, RenderTargetId};
 use crossbeam_channel::{Receiver, SendError, Sender, TryRecvError, unbounded};
-use log::{error, info};
 use std::sync::Arc;
+use tracing::{debug, error, info, instrument};
 use winit::dpi::PhysicalSize;
 use winit::event::{DeviceEvent, DeviceId, WindowEvent};
 
@@ -70,7 +70,7 @@ impl<S: AppState> GameThreadInner<S> {
         std::thread::spawn(move || {
             let state = S::default();
             Self::spawn_local(state, asset_store, channels, render_event_rx).run();
-            log::debug!("Game thread exited");
+            debug!("Game thread exited");
         })
     }
 
@@ -154,6 +154,7 @@ impl<S: AppState> GameThread<S> {
     }
 
     // TODO: Think about if render frame and world should be linked
+    #[instrument(skip_all)]
     pub fn next_frame(&self, target: RenderTargetId) -> Result<(), Box<SendError<RenderAppEvent>>> {
         self.render_event_tx
             .send(RenderAppEvent::StartFrame(RenderEventTarget { id: target }))
