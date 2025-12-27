@@ -1139,16 +1139,19 @@ fn sorted_enabled_proxy_ids(
     proxies
         .iter()
         .filter(|(_, binding)| binding.enabled)
-        .filter(|(_, binding)| {
+        .filter_map(|(tid, binding)| {
             if let Some(f) = frustum
                 && let Some(bounds) = binding.bounds()
+                && f.intersects_sphere(&bounds)
             {
-                return f.intersects_sphere(&bounds);
+                let priority = binding.proxy.priority(store);
+                let distance = f.side(FrustumSide::Near).distance_to(&bounds);
+                return Some((tid, priority, distance));
             }
-            true
+            None
         })
-        .map(|(tid, proxy)| (proxy.proxy.priority(store), *tid))
-        .sorted_by_key(|(priority, _)| *priority)
+        .sorted_by_key(|(_, priority, distance)| (*priority, -(*distance * 100000.0) as i64))
+        .map(|(tid, priority, _)| (priority, *tid))
         .collect()
 }
 
@@ -1167,6 +1170,16 @@ impl FrustumPlane {
 #[derive(Debug, Clone, Copy)]
 struct Frustum {
     planes: [FrustumPlane; 6],
+}
+
+#[allow(unused)]
+enum FrustumSide {
+    Left,
+    Right,
+    Bottom,
+    Top,
+    Near,
+    Far,
 }
 
 impl Frustum {
@@ -1200,6 +1213,17 @@ impl Frustum {
         ];
 
         Frustum { planes }
+    }
+
+    pub fn side(&self, side: FrustumSide) -> &FrustumPlane {
+        match side {
+            FrustumSide::Left => &self.planes[0],
+            FrustumSide::Right => &self.planes[1],
+            FrustumSide::Bottom => &self.planes[2],
+            FrustumSide::Top => &self.planes[3],
+            FrustumSide::Near => &self.planes[4],
+            FrustumSide::Far => &self.planes[5],
+        }
     }
 
     #[instrument(skip_all)]
