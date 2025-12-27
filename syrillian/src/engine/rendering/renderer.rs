@@ -34,7 +34,7 @@ use std::convert::TryFrom;
 use std::mem;
 use std::sync::{Arc, RwLock};
 use syrillian_utils::debug_panic;
-use tracing::{error, instrument, trace, trace_span, warn};
+use tracing::{error, instrument, trace, warn};
 use web_time::{Duration, Instant};
 use wgpu::*;
 use winit::dpi::PhysicalSize;
@@ -198,29 +198,14 @@ impl RenderViewport {
     }
 
     #[instrument(skip_all)]
-    fn begin_render(&mut self, state: &State) -> Result<FrameCtx> {
+    fn begin_render(&mut self) -> FrameCtx {
         self.frame_count += 1;
 
-        let mut output = self.surface.get_current_texture().context(SurfaceErr)?;
-        if output.suboptimal {
-            warn!("Surface Output is suboptimal. Recreating...");
-            drop(output);
-            self.recreate_surface(state);
-            output = self.surface.get_current_texture().context(SurfaceErr)?;
-        }
-
-        let color_view = output
-            .texture
-            .create_view(&TextureViewDescriptor::default());
         let depth_view = self
             .depth_texture
             .create_view(&TextureViewDescriptor::default());
 
-        Ok(FrameCtx {
-            output,
-            color_view,
-            depth_view,
-        })
+        FrameCtx { depth_view }
     }
 
     fn update_render_data(&mut self, queue: &Queue) {
@@ -501,7 +486,19 @@ impl Renderer {
         target_id: RenderTargetId,
         viewport: &mut RenderViewport,
     ) -> bool {
-        let mut ctx = match viewport.begin_render(&self.state) {
+        let mut ctx = viewport.begin_render();
+
+        let frustum = Frustum::from_matrix(&viewport.render_data.camera_data.proj_view_mat);
+        self.sorted_proxies =
+            sorted_enabled_proxy_ids(&self.proxies, self.cache.store(), Some(&frustum));
+
+        if let Some(request) = self.take_pick_request(target_id) {
+            self.picking_pass(viewport, &mut ctx, request);
+        }
+
+        self.render(target_id, viewport, &mut ctx);
+
+        match self.end_render(viewport) {
             Ok(ctx) => ctx,
             Err(RenderError::Surface {
                 source: SurfaceError::Lost,
@@ -522,17 +519,6 @@ impl Renderer {
                 return false;
             }
         };
-
-        let frustum = Frustum::from_matrix(&viewport.render_data.camera_data.proj_view_mat);
-        self.sorted_proxies =
-            sorted_enabled_proxy_ids(&self.proxies, self.cache.store(), Some(&frustum));
-
-        if let Some(request) = self.take_pick_request(target_id) {
-            self.picking_pass(viewport, &mut ctx, request);
-        }
-
-        self.render(target_id, viewport, &mut ctx);
-        self.end_render(viewport, ctx);
 
         true
     }
@@ -902,11 +888,23 @@ impl Renderer {
     }
 
     #[instrument(skip_all)]
-    fn end_render(&mut self, viewport: &mut RenderViewport, mut ctx: FrameCtx) {
-        self.render_final_pass(viewport, &mut ctx);
+    fn end_render(&mut self, viewport: &mut RenderViewport) -> Result<()> {
+        let mut output = viewport.surface.get_current_texture().context(SurfaceErr)?;
+        if output.suboptimal {
+            warn!("Surface Output is suboptimal. Recreating...");
+            drop(output);
+            viewport.recreate_surface(&self.state);
+            output = viewport.surface.get_current_texture().context(SurfaceErr)?;
+        }
+
+        let color_view = output
+            .texture
+            .create_view(&TextureViewDescriptor::default());
+
+        self.render_final_pass(viewport, &color_view);
 
         viewport.window.pre_present_notify();
-        ctx.output.present();
+        output.present();
 
         if self.cache.last_refresh().elapsed().as_secs_f32() > 5.0 {
             trace!("Refreshing cache...");
@@ -915,10 +913,12 @@ impl Renderer {
                 trace!("Refreshed cache elements {}", refreshed_count);
             }
         }
+
+        Ok(())
     }
 
     #[instrument(skip_all)]
-    fn render_final_pass(&mut self, viewport: &RenderViewport, ctx: &mut FrameCtx) {
+    fn render_final_pass(&mut self, viewport: &RenderViewport, color_view: &TextureView) {
         let mut encoder = self
             .state
             .device
@@ -928,7 +928,7 @@ impl Renderer {
         let mut pass = encoder.begin_render_pass(&RenderPassDescriptor {
             label: Some("Post Process Render Pass"),
             color_attachments: &[Some(RenderPassColorAttachment {
-                view: &ctx.color_view,
+                view: &color_view,
                 depth_slice: None,
                 resolve_target: None,
                 ops: Operations {

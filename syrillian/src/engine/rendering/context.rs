@@ -7,11 +7,9 @@ use crate::strobe::{CacheId, UiDraw, UiImageDraw, UiTextDraw};
 use crate::{RenderTargetId, World};
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::sync::RwLock;
-use wgpu::{BindGroup, RenderPass, SurfaceTexture, TextureView};
+use wgpu::{BindGroup, RenderPass, TextureView};
 
 pub struct FrameCtx {
-    pub output: SurfaceTexture,
-    pub color_view: TextureView,
     pub depth_view: TextureView,
 }
 
