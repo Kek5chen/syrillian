@@ -1142,15 +1142,16 @@ fn sorted_enabled_proxy_ids(
         .filter_map(|(tid, binding)| {
             let priority = binding.proxy.priority(store);
             let mut distance = 0.0;
-            if let Some(f) = frustum && let Some(bounds) = binding.bounds() {
-                if !f.intersects_sphere(&bounds)
-                {
+            if let Some(f) = frustum
+                && let Some(bounds) = binding.bounds()
+            {
+                if !f.intersects_sphere(&bounds) {
                     return None;
                 }
                 distance = f.side(FrustumSide::Near).distance_to(&bounds);
             };
 
-            return Some((tid, priority, distance));
+            Some((tid, priority, distance))
         })
         .sorted_by_key(|(_, priority, distance)| (*priority, -(*distance * 100000.0) as i64))
         .map(|(tid, priority, _)| (priority, *tid))

@@ -12,6 +12,7 @@ use crate::rendering::proxies::text_proxy::TextImmediates;
 use crate::rendering::{AssetCache, DEFAULT_COLOR_TARGET, DEFAULT_VBL, PICKING_TEXTURE_FORMAT};
 use crate::utils::sizes::{VEC2_SIZE, VEC4_SIZE};
 use crate::{store_add_checked, store_add_checked_many};
+use bon::Builder;
 use std::error::Error;
 use std::fs;
 use std::path::Path;
@@ -45,36 +46,32 @@ impl ShaderCode {
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub enum PipelineStage {
+pub enum ShaderType {
     Default,
-    PostProcess,
+    Custom,
+    PostProcessing,
 }
 
-#[derive(Debug, Clone)]
-pub enum Shader {
-    Default {
-        name: String,
-        code: ShaderCode,
-        polygon_mode: PolygonMode,
-        depth_enabled: bool,
-    },
-
-    PostProcess {
-        name: String,
-        code: ShaderCode,
-    },
-
-    Custom {
-        name: String,
-        code: ShaderCode,
-        polygon_mode: PolygonMode,
-        topology: PrimitiveTopology,
-        vertex_buffers: &'static [VertexBufferLayout<'static>],
-        color_target: &'static [Option<ColorTargetState>],
-        immediate_size: u32,
-        shadow_transparency: bool,
-        depth_enabled: bool,
-    },
+#[derive(Debug, Clone, Builder)]
+pub struct Shader {
+    #[builder(into)]
+    name: String,
+    code: ShaderCode,
+    #[builder(default = PolygonMode::Fill)]
+    polygon_mode: PolygonMode,
+    #[builder(default = PrimitiveTopology::TriangleList)]
+    topology: PrimitiveTopology,
+    #[builder(default = &DEFAULT_VBL)]
+    vertex_buffers: &'static [VertexBufferLayout<'static>],
+    #[builder(default = DEFAULT_COLOR_TARGET)]
+    color_target: &'static [Option<ColorTargetState>],
+    #[builder(default = 0)]
+    immediate_size: u32,
+    #[builder(default = false)]
+    shadow_transparency: bool,
+    #[builder(default = true)]
+    depth_enabled: bool,
+    shader_type: ShaderType,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -234,135 +231,110 @@ impl StoreDefaults for Shader {
         store_add_checked!(
             store,
             HShader::DIM2_PICKER_ID,
-            Shader::Custom {
-                name: "Default 2D Picking Shader".to_string(),
-                code: ShaderCode::Full(SHADER_DIM2_PICKER.to_string()),
-                polygon_mode: PolygonMode::Fill,
-                topology: PrimitiveTopology::TriangleList,
-                vertex_buffers: &DEFAULT_VBL,
-                immediate_size: VEC4_SIZE as u32,
-                shadow_transparency: false,
-                depth_enabled: false,
-                color_target: PICKING_COLOR_TARGET,
-            }
+            Shader::builder()
+                .shader_type(ShaderType::Custom)
+                .name("Default 2D Picking Shader")
+                .code(ShaderCode::Full(SHADER_DIM2_PICKER.to_string()))
+                .immediate_size(VEC4_SIZE as u32)
+                .depth_enabled(false)
+                .color_target(PICKING_COLOR_TARGET)
+                .build()
         );
 
         store_add_checked!(
             store,
             HShader::DIM3_PICKER_ID,
-            Shader::Custom {
-                name: "Default 3D Picking Shader".to_string(),
-                code: ShaderCode::Fragment(SHADER_DIM3_PICKER.to_string()),
-                polygon_mode: PolygonMode::Fill,
-                topology: PrimitiveTopology::TriangleList,
-                vertex_buffers: &DEFAULT_VBL,
-                immediate_size: VEC4_SIZE as u32,
-                shadow_transparency: false,
-                depth_enabled: true,
-                color_target: PICKING_COLOR_TARGET,
-            }
+            Shader::builder()
+                .shader_type(ShaderType::Custom)
+                .name("Default 3D Picking Shader")
+                .code(ShaderCode::Full(SHADER_DIM3_PICKER.to_string()))
+                .immediate_size(VEC4_SIZE as u32)
+                .color_target(PICKING_COLOR_TARGET)
+                .build()
         );
 
         store_add_checked!(
             store,
             HShader::TEXT_2D_ID,
-            Shader::Custom {
-                name: "Text 2D Shader".to_string(),
-                code: ShaderCode::Full(SHADER_TEXT2D.to_string()),
-                polygon_mode: PolygonMode::Fill,
-                topology: PrimitiveTopology::TriangleList,
-                vertex_buffers: TEXT_VBL,
-                immediate_size: size_of::<TextImmediates>() as u32,
-                shadow_transparency: false,
-                depth_enabled: false,
-                color_target: DEFAULT_COLOR_TARGET,
-            }
+            Shader::builder()
+                .shader_type(ShaderType::Custom)
+                .name("Text 2D Shader")
+                .code(ShaderCode::Full(SHADER_TEXT2D.to_string()))
+                .vertex_buffers(TEXT_VBL)
+                .immediate_size(size_of::<TextImmediates>() as u32)
+                .depth_enabled(false)
+                .build()
         );
 
         store_add_checked!(
             store,
             HShader::TEXT_2D_PICKER_ID,
-            Shader::Custom {
-                name: "Text 2D Picking Shader".to_string(),
-                code: ShaderCode::Full(SHADER_TEXT2D_PICKER.to_string()),
-                polygon_mode: PolygonMode::Fill,
-                topology: PrimitiveTopology::TriangleList,
-                vertex_buffers: TEXT_VBL,
-                immediate_size: size_of::<TextImmediates>() as u32,
-                shadow_transparency: true,
-                depth_enabled: false,
-                color_target: PICKING_COLOR_TARGET,
-            }
+            Shader::builder()
+                .shader_type(ShaderType::Custom)
+                .name("Text 2D Picking Shader")
+                .code(ShaderCode::Full(SHADER_TEXT2D_PICKER.to_string()))
+                .vertex_buffers(TEXT_VBL)
+                .immediate_size(size_of::<TextImmediates>() as u32)
+                .depth_enabled(false)
+                .color_target(PICKING_COLOR_TARGET)
+                .build()
         );
 
         store_add_checked!(
             store,
             HShader::TEXT_3D_ID,
-            Shader::Custom {
-                name: "Text 3D Shader".to_string(),
-                code: ShaderCode::Full(SHADER_TEXT3D.to_string()),
-                polygon_mode: PolygonMode::Fill,
-                topology: PrimitiveTopology::TriangleList,
-                vertex_buffers: TEXT_VBL,
-                immediate_size: size_of::<TextImmediates>() as u32,
-                shadow_transparency: true,
-                depth_enabled: true,
-                color_target: DEFAULT_COLOR_TARGET,
-            }
+            Shader::builder()
+                .shader_type(ShaderType::Custom)
+                .name("Text 3D Shader")
+                .code(ShaderCode::Full(SHADER_TEXT3D.to_string()))
+                .vertex_buffers(TEXT_VBL)
+                .immediate_size(size_of::<TextImmediates>() as u32)
+                .shadow_transparency(true)
+                .build()
         );
 
         store_add_checked!(
             store,
             HShader::TEXT_3D_PICKER_ID,
-            Shader::Custom {
-                name: "Text 3D Picking Shader".to_string(),
-                code: ShaderCode::Full(SHADER_TEXT3D_PICKER.to_string()),
-                polygon_mode: PolygonMode::Fill,
-                topology: PrimitiveTopology::TriangleList,
-                vertex_buffers: TEXT_VBL,
-                immediate_size: size_of::<TextImmediates>() as u32,
-                shadow_transparency: true,
-                depth_enabled: true,
-                color_target: PICKING_COLOR_TARGET,
-            }
+            Shader::builder()
+                .shader_type(ShaderType::Custom)
+                .name("Text 3D Picking Shader")
+                .code(ShaderCode::Full(SHADER_TEXT3D_PICKER.to_string()))
+                .vertex_buffers(TEXT_VBL)
+                .immediate_size(size_of::<TextImmediates>() as u32)
+                .shadow_transparency(true)
+                .color_target(PICKING_COLOR_TARGET)
+                .build()
         );
 
         #[cfg(debug_assertions)]
         {
-            use crate::rendering::DEFAULT_VBL;
             use crate::utils::sizes::{VEC3_SIZE, WGPU_VEC4_ALIGN};
             use wgpu::{VertexAttribute, VertexFormat, VertexStepMode};
 
             store_add_checked!(
                 store,
                 HShader::DEBUG_EDGES_ID,
-                Shader::Custom {
-                    name: "Mesh Debug Edges Shader".to_owned(),
-                    code: ShaderCode::Full(DEBUG_EDGES_SHADER.to_string()),
-                    polygon_mode: PolygonMode::Line,
-                    topology: PrimitiveTopology::TriangleList,
-                    vertex_buffers: &DEFAULT_VBL,
-                    immediate_size: WGPU_VEC4_ALIGN as u32,
-                    shadow_transparency: false,
-                    depth_enabled: true,
-                    color_target: DEFAULT_COLOR_TARGET,
-                }
+                Shader::builder()
+                    .shader_type(ShaderType::Custom)
+                    .name("Mesh Debug Edges Shader")
+                    .code(ShaderCode::Full(DEBUG_EDGES_SHADER.to_string()))
+                    .polygon_mode(PolygonMode::Line)
+                    .immediate_size(WGPU_VEC4_ALIGN as u32)
+                    .build()
             );
 
             store_add_checked!(
                 store,
                 HShader::DEBUG_VERTEX_NORMALS_ID,
-                Shader::Custom {
-                    name: "Mesh Debug Vertices Shader".to_owned(),
-                    code: ShaderCode::Full(DEBUG_VERTEX_NORMAL_SHADER.to_string()),
-                    topology: PrimitiveTopology::LineList,
-                    polygon_mode: PolygonMode::Line,
-                    vertex_buffers: &DEFAULT_VBL_STEP_INSTANCE,
-                    immediate_size: 0,
-                    shadow_transparency: false,
-                    depth_enabled: true,
-                    color_target: DEFAULT_COLOR_TARGET,
-                }
+                Shader::builder()
+                    .shader_type(ShaderType::Custom)
+                    .name("Mesh Debug Vertices Shader")
+                    .code(ShaderCode::Full(DEBUG_VERTEX_NORMAL_SHADER.to_string()))
+                    .topology(PrimitiveTopology::LineList)
+                    .polygon_mode(PolygonMode::Line)
+                    .vertex_buffers(&DEFAULT_VBL_STEP_INSTANCE)
+                    .build()
             );
 
             const DEBUG_LINE_VBL: &[VertexBufferLayout] = &[VertexBufferLayout {
@@ -385,17 +357,14 @@ impl StoreDefaults for Shader {
             store_add_checked!(
                 store,
                 HShader::DEBUG_LINES_ID,
-                Shader::Custom {
-                    name: "Line Debug".to_owned(),
-                    code: ShaderCode::Full(DEBUG_LINES_SHADER.to_string()),
-                    topology: PrimitiveTopology::LineList,
-                    polygon_mode: PolygonMode::Line,
-                    vertex_buffers: DEBUG_LINE_VBL,
-                    immediate_size: 0,
-                    shadow_transparency: false,
-                    depth_enabled: true,
-                    color_target: DEFAULT_COLOR_TARGET,
-                }
+                Shader::builder()
+                    .shader_type(ShaderType::Custom)
+                    .name("Line Debug")
+                    .code(ShaderCode::Full(DEBUG_LINES_SHADER.to_string()))
+                    .topology(PrimitiveTopology::LineList)
+                    .polygon_mode(PolygonMode::Line)
+                    .vertex_buffers(DEBUG_LINE_VBL)
+                    .build()
             );
 
             const DEBUG_TEXT: &[VertexBufferLayout] = &[VertexBufferLayout {
@@ -411,49 +380,42 @@ impl StoreDefaults for Shader {
             store_add_checked!(
                 store,
                 HShader::DEBUG_TEXT2D_GEOMETRY_ID,
-                Shader::Custom {
-                    name: "Debug 2D Text Geometry Shader".to_owned(),
-                    code: ShaderCode::Full(DEBUG_TEXT2D_GEOMETRY.to_string()),
-                    polygon_mode: PolygonMode::Line,
-                    topology: PrimitiveTopology::TriangleList,
-                    vertex_buffers: DEBUG_TEXT,
-                    immediate_size: size_of::<TextImmediates>() as u32,
-                    shadow_transparency: false,
-                    depth_enabled: false,
-                    color_target: DEFAULT_COLOR_TARGET,
-                }
+                Shader::builder()
+                    .shader_type(ShaderType::Custom)
+                    .name("Debug 2D Text Geometry Shader")
+                    .code(ShaderCode::Full(DEBUG_TEXT2D_GEOMETRY.to_string()))
+                    .polygon_mode(PolygonMode::Line)
+                    .vertex_buffers(DEBUG_TEXT)
+                    .immediate_size(size_of::<TextImmediates>() as u32)
+                    .depth_enabled(false)
+                    .build()
             );
 
             store_add_checked!(
                 store,
                 HShader::DEBUG_TEXT3D_GEOMETRY_ID,
-                Shader::Custom {
-                    name: "Debug 3D Text Geometry Shader".to_owned(),
-                    code: ShaderCode::Full(DEBUG_TEXT3D_GEOMETRY.to_string()),
-                    polygon_mode: PolygonMode::Line,
-                    topology: PrimitiveTopology::TriangleList,
-                    vertex_buffers: DEBUG_TEXT,
-                    immediate_size: size_of::<TextImmediates>() as u32,
-                    shadow_transparency: false,
-                    depth_enabled: true,
-                    color_target: DEFAULT_COLOR_TARGET,
-                }
+                Shader::builder()
+                    .shader_type(ShaderType::Custom)
+                    .name("Debug 3D Text Geometry Shader")
+                    .code(ShaderCode::Full(DEBUG_TEXT3D_GEOMETRY.to_string()))
+                    .polygon_mode(PolygonMode::Line)
+                    .vertex_buffers(DEBUG_TEXT)
+                    .immediate_size(size_of::<TextImmediates>() as u32)
+                    .build()
             );
 
             store_add_checked!(
                 store,
                 HShader::DEBUG_LIGHT_ID,
-                Shader::Custom {
-                    name: "Light Debug".to_owned(),
-                    code: ShaderCode::Full(DEBUG_LIGHT_SHADER.to_string()),
-                    topology: PrimitiveTopology::LineList,
-                    polygon_mode: PolygonMode::Line,
-                    vertex_buffers: &[],
-                    immediate_size: 4,
-                    shadow_transparency: false,
-                    depth_enabled: true,
-                    color_target: DEFAULT_COLOR_TARGET,
-                }
+                Shader::builder()
+                    .shader_type(ShaderType::Custom)
+                    .name("Light Debug")
+                    .code(ShaderCode::Full(DEBUG_LIGHT_SHADER.to_string()))
+                    .topology(PrimitiveTopology::LineList)
+                    .polygon_mode(PolygonMode::Line)
+                    .vertex_buffers(&[])
+                    .immediate_size(4)
+                    .build()
             );
         }
     }
@@ -536,9 +498,17 @@ impl Shader {
         S: Into<String>,
         S2: Into<String>,
     {
-        Shader::PostProcess {
+        Shader {
             name: name.into(),
             code: ShaderCode::Full(code.into()),
+            polygon_mode: PolygonMode::Fill,
+            topology: PrimitiveTopology::TriangleList,
+            vertex_buffers: &DEFAULT_VBL,
+            color_target: DEFAULT_COLOR_TARGET,
+            immediate_size: 0,
+            shadow_transparency: false,
+            depth_enabled: false,
+            shader_type: ShaderType::PostProcessing,
         }
     }
 
@@ -547,11 +517,17 @@ impl Shader {
         S: Into<String>,
         S2: Into<String>,
     {
-        Shader::Default {
+        Shader {
             name: name.into(),
             code: ShaderCode::Fragment(code.into()),
             polygon_mode: PolygonMode::Fill,
+            topology: PrimitiveTopology::TriangleList,
+            vertex_buffers: &DEFAULT_VBL,
+            color_target: DEFAULT_COLOR_TARGET,
+            immediate_size: 0,
+            shadow_transparency: false,
             depth_enabled: true,
+            shader_type: ShaderType::Default,
         }
     }
 
@@ -560,120 +536,83 @@ impl Shader {
         S: Into<String>,
         S2: Into<String>,
     {
-        Shader::Default {
+        Shader {
             name: name.into(),
             code: ShaderCode::Full(code.into()),
             polygon_mode: PolygonMode::Fill,
+            topology: PrimitiveTopology::TriangleList,
+            vertex_buffers: &DEFAULT_VBL,
+            color_target: DEFAULT_COLOR_TARGET,
+            immediate_size: 0,
+            shadow_transparency: false,
             depth_enabled: true,
+            shader_type: ShaderType::Default,
         }
     }
 
     pub fn name(&self) -> &str {
-        match self {
-            Shader::Default { name, .. } => name,
-            Shader::PostProcess { name, .. } => name,
-            Shader::Custom { name, .. } => name,
-        }
+        &self.name
     }
 
     pub fn polygon_mode(&self) -> PolygonMode {
-        match self {
-            Shader::Default { polygon_mode, .. } | Shader::Custom { polygon_mode, .. } => {
-                *polygon_mode
-            }
-            Shader::PostProcess { .. } => PolygonMode::Fill,
-        }
+        self.polygon_mode
     }
 
     pub fn topology(&self) -> PrimitiveTopology {
-        match self {
-            Shader::Default { .. } | Shader::PostProcess { .. } => PrimitiveTopology::TriangleList,
-            Shader::Custom { topology, .. } => *topology,
-        }
+        self.topology
     }
 
     pub fn set_code(&mut self, source: String) {
-        match self {
-            Shader::Default { code, .. }
-            | Shader::PostProcess { code, .. }
-            | Shader::Custom { code, .. } => *code = ShaderCode::Full(source),
-        }
+        self.code = ShaderCode::Full(source);
     }
 
     pub fn code(&self) -> &ShaderCode {
-        match self {
-            Shader::Default { code, .. }
-            | Shader::PostProcess { code, .. }
-            | Shader::Custom { code, .. } => code,
-        }
+        &self.code
     }
 
     pub fn set_fragment_code(&mut self, source: String) {
-        match self {
-            Shader::Default { code, .. }
-            | Shader::PostProcess { code, .. }
-            | Shader::Custom { code, .. } => *code = ShaderCode::Fragment(source),
-        }
+        self.code = ShaderCode::Fragment(source);
     }
 
-    pub fn stage(&self) -> PipelineStage {
-        match self {
-            Shader::Default { .. } => PipelineStage::Default,
-            Shader::PostProcess { .. } => PipelineStage::PostProcess,
-            Shader::Custom { .. } => PipelineStage::Default,
-        }
+    pub fn stage(&self) -> ShaderType {
+        self.shader_type
     }
 
     pub fn immediate_size(&self) -> u32 {
-        match self {
-            Shader::Default { .. } => 0,
-            Shader::PostProcess { .. } => 0,
-            Shader::Custom { immediate_size, .. } => *immediate_size,
-        }
+        self.immediate_size
     }
 
-    pub fn depth_enabled(&self) -> bool {
-        match self {
-            Shader::Default { depth_enabled, .. } | Shader::Custom { depth_enabled, .. } => {
-                *depth_enabled
-            }
-            Shader::PostProcess { .. } => false,
-        }
+    pub fn is_depth_enabled(&self) -> bool {
+        self.depth_enabled
     }
 
     pub fn color_target(&self) -> &'static [Option<ColorTargetState>] {
-        match self {
-            Shader::Default { .. } | Shader::PostProcess { .. } => DEFAULT_COLOR_TARGET,
-            Shader::Custom { color_target, .. } => color_target,
-        }
+        self.color_target
+    }
+
+    pub fn vertex_buffers(&self) -> &'static [VertexBufferLayout<'static>] {
+        self.vertex_buffers
     }
 
     pub fn with_depth_enabled(mut self, enabled: bool) -> Self {
-        match &mut self {
-            Shader::Default { depth_enabled, .. } | Shader::Custom { depth_enabled, .. } => {
-                *depth_enabled = enabled;
-            }
-            Shader::PostProcess { .. } => {}
+        if self.stage() == ShaderType::PostProcessing {
+            return self;
         }
+
+        self.depth_enabled = enabled;
         self
     }
 
     pub fn is_custom(&self) -> bool {
-        matches!(self, Shader::Custom { .. })
+        self.stage() == ShaderType::Custom
     }
 
     pub fn is_post_process(&self) -> bool {
-        matches!(self, Shader::PostProcess { .. })
+        self.stage() == ShaderType::PostProcessing
     }
 
     pub fn has_shadow_transparency(&self) -> bool {
-        matches!(
-            self,
-            Shader::Custom {
-                shadow_transparency: true,
-                ..
-            }
-        )
+        self.shadow_transparency
     }
 
     pub fn gen_code(&self) -> String {
@@ -684,7 +623,7 @@ impl Shader {
     pub fn needs_bgl(&self, bgl: HBGL) -> bool {
         if !self.is_custom() {
             if bgl == HBGL::LIGHT || bgl == HBGL::SHADOW {
-                return self.depth_enabled();
+                return self.is_depth_enabled();
             }
 
             return true;

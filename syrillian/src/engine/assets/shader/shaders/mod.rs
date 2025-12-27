@@ -1,3 +1,5 @@
+use crate::assets::ShaderType;
+
 macro_rules! test_shader {
     ($fn_name:ident, $name:literal => $path:literal) => {
         #[test]
@@ -34,21 +36,15 @@ macro_rules! test_custom_shader {
         #[test]
         fn $fn_name() {
             use crate::assets::Shader;
-            use crate::assets::shader::{PolygonMode, PrimitiveTopology, ShaderCode};
+            use crate::assets::shader::ShaderCode;
             use crate::utils::validate_wgsl_source;
 
-            let shader = Shader::Custom {
-                name: $name.to_owned(),
-                code: ShaderCode::Full(include_str!($path).to_string()),
-                topology: PrimitiveTopology::TriangleList,
-                polygon_mode: PolygonMode::Line,
-                vertex_buffers: &[],
-                immediate_size: 0,
-                shadow_transparency: false,
-                depth_enabled: true,
-                color_target: crate::rendering::DEFAULT_COLOR_TARGET,
-            }
-            .gen_code();
+            let shader = Shader::builder()
+                .shader_type(ShaderType::Custom)
+                .name($name)
+                .code(ShaderCode::Full(include_str!($path).to_string()))
+                .build()
+                .gen_code();
 
             validate_wgsl_source(&shader)
                 .inspect_err(|e| e.emit_to_stderr_with_path(&shader, $path))

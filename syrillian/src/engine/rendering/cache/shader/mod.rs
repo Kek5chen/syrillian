@@ -1,3 +1,4 @@
+use crate::assets::ShaderType;
 use crate::engine::assets::{BindGroupMap, Shader, ShaderGen};
 use crate::engine::rendering::cache::AssetCache;
 use crate::engine::rendering::cache::generic_cache::CacheType;
@@ -15,6 +16,7 @@ pub struct RuntimeShader {
     shadow_pipeline: Option<RenderPipeline>,
     pub immediate_size: u32,
     bind_groups: BindGroupMap,
+    pub shader_type: ShaderType,
 }
 
 impl CacheType for Shader {
@@ -44,6 +46,7 @@ impl CacheType for Shader {
             shadow_pipeline,
             immediate_size: self.immediate_size(),
             bind_groups,
+            shader_type: self.stage(),
         }
     }
 }
