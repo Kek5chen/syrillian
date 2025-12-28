@@ -3620,7 +3620,7 @@ dependencies = [
 
 [[package]]
 name = "syrillian"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "bitflags 2.10.0",
  "bon",
@@ -3673,7 +3673,7 @@ dependencies = [
 
 [[package]]
 name = "syrillian_macros"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "quote",
  "syn",
@@ -3683,7 +3683,7 @@ dependencies = [
 
 [[package]]
 name = "syrillian_utils"
-version = "0.4.1"
+version = "0.5.0"
 
 [[package]]
 name = "termcolor"

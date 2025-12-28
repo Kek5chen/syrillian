@@ -13,7 +13,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.4.1"
+version = "0.5.0"
 license = "MIT"
 edition = "2024"
 repository = "https://github.com/Kek5chen/syrillian"
@@ -36,5 +36,5 @@ lto = "fat"
 panic = "abort"
 
 [workspace.dependencies]
-syrillian_utils = { version = "0.4.0", path = "syrillian_utils", default-features = false }
-syrillian_macros = { version = "0.4.0", path = "syrillian_macros", default-features = false }
+syrillian_utils = { version = "0.5.0", path = "syrillian_utils", default-features = false }
+syrillian_macros = { version = "0.5.0", path = "syrillian_macros", default-features = false }
