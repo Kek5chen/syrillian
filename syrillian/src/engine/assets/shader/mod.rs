@@ -247,7 +247,7 @@ impl StoreDefaults for Shader {
             Shader::builder()
                 .shader_type(ShaderType::Custom)
                 .name("Default 3D Picking Shader")
-                .code(ShaderCode::Full(SHADER_DIM3_PICKER.to_string()))
+                .code(ShaderCode::Fragment(SHADER_DIM3_PICKER.to_string()))
                 .immediate_size(VEC4_SIZE as u32)
                 .color_target(PICKING_COLOR_TARGET)
                 .build()

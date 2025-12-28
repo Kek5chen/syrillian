@@ -25,6 +25,18 @@ impl CacheType for Shader {
     fn upload(self, device: &Device, _queue: &Queue, cache: &AssetCache) -> Self::Hot {
         let bind_groups = self.bind_group_map();
         let code = ShaderGen::new(&self, &bind_groups).generate();
+
+        debug_assert!(
+            code.contains("@fragment"),
+            "No fragment entry point in shader {:?}: \n{code}",
+            self.name()
+        );
+        debug_assert!(
+            code.contains("@vertex"),
+            "No vertex entry point in shader {:?}: \n{code}",
+            self.name()
+        );
+
         let module = device.create_shader_module(ShaderModuleDescriptor {
             label: Some(self.name()),
             source: ShaderSource::Wgsl(Cow::Owned(code)),
