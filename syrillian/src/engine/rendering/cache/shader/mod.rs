@@ -1,3 +1,4 @@
+use crate::assets::ShaderType;
 use crate::engine::assets::{BindGroupMap, Shader, ShaderGen};
 use crate::engine::rendering::cache::AssetCache;
 use crate::engine::rendering::cache::generic_cache::CacheType;
@@ -13,8 +14,9 @@ pub struct RuntimeShader {
     pub module: ShaderModule,
     pipeline: RenderPipeline,
     shadow_pipeline: Option<RenderPipeline>,
-    pub push_constant_ranges: &'static [PushConstantRange],
+    pub immediate_size: u32,
     bind_groups: BindGroupMap,
+    pub shader_type: ShaderType,
 }
 
 impl CacheType for Shader {
@@ -42,8 +44,9 @@ impl CacheType for Shader {
             module,
             pipeline,
             shadow_pipeline,
-            push_constant_ranges: self.push_constant_ranges(),
+            immediate_size: self.immediate_size(),
             bind_groups,
+            shader_type: self.stage(),
         }
     }
 }
@@ -98,7 +101,7 @@ macro_rules! activate_shader {
             ::syrillian_utils::debug_panic!(
                 "Invalid pipeline for specified shader. Cannot activate shader."
             );
-            ::log::error!("A pipeline for the specified shader could not be found for the current render pass");
+            ::tracing::error!("A pipeline for the specified shader could not be found for the current render pass");
             $( $exit_strat )*;
         };
     };
@@ -108,7 +111,7 @@ macro_rules! activate_shader {
 macro_rules! try_activate_shader {
     ($shader:expr, $pass:expr, $ctx:expr => $( $exit_strat:tt )*) => {
         if !$shader.activate($pass, $ctx) {
-            ::log::debug!("Tried to activate shader {:?}, but pipeline was not found for the specified render pass of type {:?}", $shader.name(), $ctx.pass_type);
+            ::tracing::debug!("Tried to activate shader {:?}, but pipeline was not found for the specified render pass of type {:?}", $shader.name(), $ctx.pass_type);
             $( $exit_strat )*;
         };
     };
@@ -121,7 +124,7 @@ macro_rules! must_pipeline {
             ::syrillian_utils::debug_panic!(
                 "A 3D Shader was instantiated without a Shadow Pipeline Variant"
             );
-            ::log::error!("A 3D Shader was instantiated without a Shadow Pipeline Variant");
+            ::tracing::error!("A 3D Shader was instantiated without a Shadow Pipeline Variant");
             $( $exit_strat )*;
         };
     };

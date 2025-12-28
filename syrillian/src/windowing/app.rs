@@ -5,9 +5,9 @@ use crate::rendering::Renderer;
 use crate::windowing::game_thread::GameThread;
 use crate::world::WorldChannels;
 use crossbeam_channel::unbounded;
-use log::{error, info, trace};
 use std::error::Error;
-use web_time::Instant;
+use std::marker::PhantomData;
+use tracing::{error, info, instrument, trace};
 use winit::application::ApplicationHandler;
 use winit::dpi::Size;
 use winit::error::EventLoopError;
@@ -22,18 +22,11 @@ pub struct App<S: AppState> {
     main_window_attributes: WindowAttributes,
     renderer: Option<Renderer>,
     game_thread: Option<GameThread<S>>,
-    state: Option<S>,
 }
 
 pub struct AppSettings<S: AppState> {
     pub main_window: WindowAttributes,
-    pub state: S,
-}
-
-pub trait AppRuntime: AppState {
-    fn configure(self, title: &str, width: u32, height: u32) -> AppSettings<Self>;
-
-    fn default_config(self) -> AppSettings<Self>;
+    pub(crate) _state_type: PhantomData<S>,
 }
 
 impl<S: AppState> AppSettings<S> {
@@ -55,7 +48,6 @@ impl<S: AppState> AppSettings<S> {
             main_window_attributes: self.main_window,
             renderer: None,
             game_thread: None,
-            state: Some(self.state),
         };
 
         Ok((event_loop, app))
@@ -75,6 +67,7 @@ impl<S: AppState> App<S> {
         Ok(())
     }
 
+    #[instrument(skip_all)]
     fn init(&mut self, event_loop: &ActiveEventLoop) {
         info!("Initializing render state");
 
@@ -119,9 +112,8 @@ impl<S: AppState> App<S> {
 
         trace!("Created Renderer");
 
-        let state = self.state.take().expect("app state already initialized");
         let channels = WorldChannels::new(render_state_tx, game_event_tx, pick_result_rx);
-        let game_thread = GameThread::new(state, asset_store.clone(), channels, game_event_rx);
+        let game_thread = GameThread::new(asset_store.clone(), channels, game_event_rx);
 
         if !game_thread.init() {
             error!("Couldn't initialize Game Thread");
@@ -133,6 +125,7 @@ impl<S: AppState> App<S> {
         self.game_thread = Some(game_thread);
     }
 
+    #[instrument(skip_all)]
     fn handle_events(
         renderer: &mut Renderer,
         game_thread: &GameThread<S>,
@@ -191,6 +184,7 @@ impl<S: AppState> App<S> {
         true
     }
 
+    #[instrument(skip_all)]
     fn handle_all_game_events(&mut self, event_loop: &ActiveEventLoop) -> bool {
         let Some(renderer) = self.renderer.as_mut() else {
             return true;
@@ -200,14 +194,12 @@ impl<S: AppState> App<S> {
             return true;
         };
 
-        if !Self::handle_events(renderer, game_thread, event_loop) {
-            return false;
-        }
-        true
+        Self::handle_events(renderer, game_thread, event_loop)
     }
 }
 
 impl<S: AppState> ApplicationHandler for App<S> {
+    #[instrument(skip_all)]
     fn new_events(&mut self, event_loop: &ActiveEventLoop, cause: StartCause) {
         match cause {
             StartCause::Poll => {
@@ -221,17 +213,18 @@ impl<S: AppState> ApplicationHandler for App<S> {
         }
     }
 
+    #[instrument(skip_all)]
     fn resumed(&mut self, _event_loop: &ActiveEventLoop) {
         // TODO: Reinit cache?
     }
 
+    #[instrument(skip_all)]
     fn window_event(
         &mut self,
         event_loop: &ActiveEventLoop,
         window_id: WindowId,
         event: WindowEvent,
     ) {
-        let event_start = Instant::now();
         if event_loop.exiting() {
             return;
         }
@@ -256,17 +249,20 @@ impl<S: AppState> ApplicationHandler for App<S> {
         match event {
             WindowEvent::RedrawRequested => {
                 if drives_update {
-                    renderer.handle_events();
-                    renderer.update();
+                    match game_thread.next_frame(target_id) {
+                        Ok(()) => {
+                            renderer.handle_events();
+                            renderer.update();
+                        }
+                        Err(_) => {
+                            event_loop.exit();
+                            return;
+                        }
+                    }
                 }
 
                 if !renderer.redraw(target_id) {
-                    event_loop.exit();
-                    return;
-                }
-
-                if drives_update && game_thread.next_frame(target_id).is_err() {
-                    event_loop.exit();
+                    event_loop.exit(); // TODO: Possibly just remove the window
                     return;
                 }
 
@@ -288,9 +284,10 @@ impl<S: AppState> ApplicationHandler for App<S> {
             }
         }
 
-        debug_assert!(event_start.elapsed().as_secs_f32() < 2.0);
+        // debug_assert!(event_start.elapsed().as_secs_f32() < 2.0);
     }
 
+    #[instrument(skip_all)]
     fn device_event(
         &mut self,
         event_loop: &ActiveEventLoop,

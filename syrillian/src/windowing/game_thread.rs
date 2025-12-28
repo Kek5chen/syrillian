@@ -1,9 +1,9 @@
-use crate::AppState;
 use crate::assets::AssetStore;
 use crate::world::{World, WorldChannels};
+use crate::{AppState, RenderTargetId};
 use crossbeam_channel::{Receiver, SendError, Sender, TryRecvError, unbounded};
-use log::{error, info};
 use std::sync::Arc;
+use tracing::{debug, error, info, instrument};
 use winit::dpi::PhysicalSize;
 use winit::event::{DeviceEvent, DeviceId, WindowEvent};
 
@@ -11,21 +11,6 @@ use winit::event::{DeviceEvent, DeviceId, WindowEvent};
 use std::marker::PhantomData;
 #[cfg(not(target_arch = "wasm32"))]
 use std::thread::JoinHandle;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct RenderTargetId(pub u64);
-
-impl RenderTargetId {
-    pub const PRIMARY: Self = Self(0);
-
-    pub const fn get(self) -> u64 {
-        self.0
-    }
-
-    pub const fn is_primary(self) -> bool {
-        self.get() == Self::PRIMARY.get()
-    }
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RenderEventTarget {
@@ -78,14 +63,14 @@ struct GameThreadInner<S: AppState> {
 impl<S: AppState> GameThreadInner<S> {
     #[cfg(not(target_arch = "wasm32"))]
     fn spawn(
-        state: S,
         asset_store: Arc<AssetStore>,
         channels: WorldChannels,
         render_event_rx: Receiver<RenderAppEvent>,
     ) -> JoinHandle<()> {
         std::thread::spawn(move || {
+            let state = S::default();
             Self::spawn_local(state, asset_store, channels, render_event_rx).run();
-            log::debug!("Game thread exited");
+            debug!("Game thread exited");
         })
     }
 
@@ -108,14 +93,13 @@ impl<S: AppState> GameThreadInner<S> {
 #[cfg(not(target_arch = "wasm32"))]
 impl<S: AppState> GameThread<S> {
     pub fn new(
-        state: S,
         asset_store: Arc<AssetStore>,
         channels: WorldChannels,
         game_event_rx: Receiver<GameAppEvent>,
     ) -> Self {
         let (render_event_tx, render_event_rx) = unbounded();
 
-        let thread = GameThreadInner::spawn(state, asset_store, channels, render_event_rx);
+        let thread = GameThreadInner::<S>::spawn(asset_store, channels, render_event_rx);
 
         GameThread {
             _thread: thread,
@@ -170,6 +154,7 @@ impl<S: AppState> GameThread<S> {
     }
 
     // TODO: Think about if render frame and world should be linked
+    #[instrument(skip_all)]
     pub fn next_frame(&self, target: RenderTargetId) -> Result<(), Box<SendError<RenderAppEvent>>> {
         self.render_event_tx
             .send(RenderAppEvent::StartFrame(RenderEventTarget { id: target }))

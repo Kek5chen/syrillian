@@ -90,7 +90,7 @@ impl<L: LightTypeTrait + 'static> NewComponent for LightComponent<L> {
 }
 
 impl<L: LightTypeTrait + 'static> Component for LightComponent<L> {
-    fn update(&mut self, world: &mut World) {
+    fn late_update(&mut self, world: &mut World) {
         if self.parent.transform.is_dirty() {
             self.local_proxy.position = self.parent.transform.position();
             self.local_proxy.direction = self.parent.transform.forward();

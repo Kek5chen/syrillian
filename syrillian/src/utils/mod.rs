@@ -12,4 +12,5 @@ pub mod sizes;
 pub use buffer::*;
 pub use checks::*;
 pub use color::*;
+pub use frame_counter::*;
 pub use math::*;

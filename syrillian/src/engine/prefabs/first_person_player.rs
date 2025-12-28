@@ -5,8 +5,8 @@ use crate::components::{
 };
 use crate::core::GameObjectId;
 use crate::engine::prefabs::prefab::Prefab;
-use log::warn;
 use rapier3d::geometry::SharedShape;
+use tracing::warn;
 
 pub struct FirstPersonPlayerPrefab;
 

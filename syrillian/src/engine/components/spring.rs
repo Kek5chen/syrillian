@@ -2,9 +2,9 @@ use self::SpringComponentError::*;
 use crate::World;
 use crate::components::{Component, NewComponent, RigidBodyComponent};
 use crate::core::GameObjectId;
-use log::warn;
 use rapier3d::prelude::*;
 use snafu::{Snafu, ensure};
+use tracing::warn;
 
 #[derive(Debug, Snafu)]
 #[snafu(context(suffix(Err)))]

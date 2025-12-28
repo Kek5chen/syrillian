@@ -1,9 +1,12 @@
 use crate::assets::{AssetStore, H, HMaterial, HMesh, HShader, Shader};
-use crate::components::BoneData;
-use crate::core::ObjectHash;
+use crate::components::mesh_renderer::BoneData;
 use crate::core::{BoundingSphere, ModelUniform};
+#[cfg(debug_assertions)]
+use crate::rendering::DebugRenderer;
 use crate::rendering::picking::hash_to_rgba;
-use crate::rendering::proxies::{PROXY_PRIORITY_SOLID, PROXY_PRIORITY_TRANSPARENT, SceneProxy};
+use crate::rendering::proxies::{
+    PROXY_PRIORITY_SOLID, PROXY_PRIORITY_TRANSPARENT, SceneProxy, SceneProxyBinding,
+};
 use crate::rendering::uniform::ShaderUniform;
 use crate::rendering::{
     AssetCache, GPUDrawCtx, RenderPassType, Renderer, RuntimeMesh, RuntimeShader,
@@ -14,10 +17,7 @@ use std::any::Any;
 use std::ops::Range;
 use std::sync::RwLockWriteGuard;
 use syrillian_macros::UniformIndex;
-use wgpu::{IndexFormat, RenderPass, ShaderStages};
-
-#[cfg(debug_assertions)]
-use crate::rendering::DebugRenderer;
+use wgpu::RenderPass;
 
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, UniformIndex)]
@@ -26,7 +26,7 @@ pub enum MeshUniformIndex {
     BoneData = 1,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RuntimeMeshData {
     pub mesh_data: ModelUniform,
     // TODO: Consider having a uniform like that, for every Transform by default in some way, or
@@ -94,14 +94,8 @@ impl SceneProxy for MeshSceneProxy {
         );
     }
 
-    fn render<'a>(
-        &self,
-        renderer: &Renderer,
-        data: &dyn Any,
-        ctx: &GPUDrawCtx,
-        _local_to_world: &Matrix4<f32>,
-    ) {
-        let data: &RuntimeMeshData = proxy_data!(data);
+    fn render<'a>(&self, renderer: &Renderer, ctx: &GPUDrawCtx, binding: &SceneProxyBinding) {
+        let data: &RuntimeMeshData = proxy_data!(binding.proxy_data());
 
         let Some(mesh) = renderer.cache.mesh(self.mesh) else {
             return;
@@ -111,28 +105,32 @@ impl SceneProxy for MeshSceneProxy {
         self.draw_mesh(ctx, &renderer.cache, &mesh, data, &mut pass);
 
         #[cfg(debug_assertions)]
-        if DebugRenderer::mesh_edges() {
+        if !ctx.transparency_pass && DebugRenderer::mesh_edges() {
             draw_edges(ctx, &renderer.cache, &mesh, data, &mut pass);
         }
 
         #[cfg(debug_assertions)]
-        if DebugRenderer::mesh_vertex_normals() {
+        if !ctx.transparency_pass && DebugRenderer::mesh_vertex_normals() {
             draw_vertex_normals(ctx, &renderer.cache, &mesh, data, &mut pass);
         }
     }
 
+    fn render_shadows(&self, renderer: &Renderer, ctx: &GPUDrawCtx, binding: &SceneProxyBinding) {
+        let data: &RuntimeMeshData = proxy_data!(binding.proxy_data());
+
+        let Some(mesh) = renderer.cache.mesh(self.mesh) else {
+            return;
+        };
+
+        let mut pass = ctx.pass.write().unwrap();
+        self.draw_mesh(ctx, &renderer.cache, &mesh, data, &mut pass);
+    }
+
     // TODO: Make shaders more modular so picking and (shadow) shaders can be generated from just a vertex shader
-    fn render_picking(
-        &self,
-        renderer: &Renderer,
-        data: &dyn Any,
-        ctx: &GPUDrawCtx,
-        _local_to_world: &Matrix4<f32>,
-        object_hash: ObjectHash,
-    ) {
+    fn render_picking(&self, renderer: &Renderer, ctx: &GPUDrawCtx, binding: &SceneProxyBinding) {
         debug_assert_ne!(ctx.pass_type, RenderPassType::Shadow);
 
-        let data: &RuntimeMeshData = proxy_data!(data);
+        let data: &RuntimeMeshData = proxy_data!(binding.proxy_data());
 
         let Some(mesh) = renderer.cache.mesh(self.mesh) else {
             return;
@@ -150,29 +148,16 @@ impl SceneProxy for MeshSceneProxy {
             pass.set_bind_group(model, data.uniform.bind_group(), &[]);
         }
 
-        let color = hash_to_rgba(object_hash);
-        pass.set_push_constants(ShaderStages::FRAGMENT, 0, bytemuck::bytes_of(&color));
-
-        pass.set_vertex_buffer(0, mesh.vertex_buffer().slice(..));
-        if let Some(i_buffer) = mesh.indices_buffer() {
-            pass.set_index_buffer(i_buffer.slice(..), IndexFormat::Uint32);
-        }
+        let color = hash_to_rgba(binding.object_hash);
+        pass.set_immediates(0, bytemuck::bytes_of(&color));
 
         if mesh_data.material_ranges.is_empty() {
-            if mesh_data.has_indices() {
-                pass.draw_indexed(0..mesh.indices_count(), 0, 0..1);
-            } else {
-                pass.draw(0..mesh.vertex_count(), 0..1);
-            }
+            mesh.draw_all(&mut pass);
             return;
         }
 
         for range in mesh_data.material_ranges.iter() {
-            if mesh_data.has_indices() {
-                pass.draw_indexed(range.clone(), 0, 0..1);
-            } else {
-                pass.draw(range.clone(), 0..1);
-            }
+            mesh.draw(range.clone(), &mut pass);
         }
     }
 
@@ -208,26 +193,14 @@ impl MeshSceneProxy {
             return;
         }
 
-        pass.set_vertex_buffer(0, mesh.vertex_buffer().slice(..));
-        if let Some(i_buffer) = mesh.indices_buffer() {
-            pass.set_index_buffer(i_buffer.slice(..), IndexFormat::Uint32);
-        }
-
-        self.draw_materials(
-            ctx,
-            cache,
-            mesh.has_indices(),
-            runtime,
-            pass,
-            current_shader,
-        );
+        self.draw_materials(ctx, cache, mesh, runtime, pass, current_shader);
     }
 
     fn draw_materials(
         &self,
         ctx: &GPUDrawCtx,
         cache: &AssetCache,
-        indexed: bool,
+        mesh: &RuntimeMesh,
         runtime: &RuntimeMeshData,
         pass: &mut RwLockWriteGuard<RenderPass>,
         current_shader: H<Shader>,
@@ -240,7 +213,15 @@ impl MeshSceneProxy {
                 .unwrap_or(HMaterial::FALLBACK);
             let material = cache.material(h_mat);
 
-            if ctx.pass_type == RenderPassType::Shadow && material.data.cast_shadows == 0 {
+            if ctx.pass_type == RenderPassType::Color
+                && material.data.has_transparency() ^ ctx.transparency_pass
+            {
+                continue; // either transparent in a non-transparency pass, or transparent in a non-transparency pass
+            }
+
+            if ctx.pass_type == RenderPassType::Shadow
+                && (!material.data.has_cast_shadows() || material.data.has_transparency())
+            {
                 continue;
             }
 
@@ -255,11 +236,7 @@ impl MeshSceneProxy {
                 pass.set_bind_group(idx, material.uniform.bind_group(), &[]);
             }
 
-            if indexed {
-                pass.draw_indexed(range.clone(), 0, 0..1);
-            } else {
-                pass.draw(range.clone(), 0..1);
-            }
+            mesh.draw(range.clone(), pass);
         }
     }
 
@@ -287,10 +264,9 @@ fn draw_edges(
     cache: &AssetCache,
     mesh: &RuntimeMesh,
     runtime: &RuntimeMeshData,
-    pass: &mut RwLockWriteGuard<RenderPass>,
+    pass: &mut RenderPass,
 ) {
     use nalgebra::Vector4;
-    use wgpu::ShaderStages;
 
     const COLOR: Vector4<f32> = Vector4::new(1.0, 0.0, 1.0, 1.0);
 
@@ -299,15 +275,9 @@ fn draw_edges(
         return;
     }
 
-    pass.set_vertex_buffer(0, mesh.vertex_buffer().slice(..));
-    pass.set_push_constants(ShaderStages::FRAGMENT, 0, bytemuck::bytes_of(&COLOR));
+    pass.set_immediates(0, bytemuck::bytes_of(&COLOR));
 
-    if let Some(i_buffer) = mesh.indices_buffer().as_ref() {
-        pass.set_index_buffer(i_buffer.slice(..), IndexFormat::Uint32);
-        pass.draw_indexed(0..mesh.indices_count(), 0, 0..1);
-    } else {
-        pass.draw(0..mesh.vertex_count(), 0..1);
-    }
+    mesh.draw_all(pass);
 }
 
 #[cfg(debug_assertions)]
@@ -316,19 +286,12 @@ fn draw_vertex_normals(
     cache: &AssetCache,
     mesh: &RuntimeMesh,
     runtime: &RuntimeMeshData,
-    pass: &mut RwLockWriteGuard<RenderPass>,
+    pass: &mut RenderPass,
 ) {
     let shader = cache.shader(HShader::DEBUG_VERTEX_NORMALS);
     if !runtime.activate_shader(&shader, ctx, pass) {
         return;
     }
 
-    pass.set_vertex_buffer(0, mesh.vertex_buffer().slice(..));
-
-    if let Some(i_buffer) = mesh.indices_buffer().as_ref() {
-        pass.set_index_buffer(i_buffer.slice(..), IndexFormat::Uint32);
-        pass.draw_indexed(0..2, 0, 0..mesh.indices_count());
-    } else {
-        pass.draw(0..2, 0..mesh.vertex_count());
-    }
+    mesh.draw_all_as_instances(0..2, pass);
 }

@@ -1,8 +1,8 @@
 use kira::listener::ListenerHandle;
 use kira::track::{SpatialTrackBuilder, SpatialTrackHandle};
 use kira::{AudioManager, AudioManagerSettings, DefaultBackend, Tween};
-use log::error;
 use nalgebra::{Quaternion, Vector3};
+use tracing::error;
 
 struct AudioSceneInner {
     manager: AudioManager<DefaultBackend>,

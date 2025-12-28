@@ -1,5 +1,6 @@
 use crate::World;
-use crate::components::{LightComponent, Sun};
+use crate::components::Sun;
+use crate::components::light::LightComponent;
 use crate::core::GameObjectId;
 use crate::prefabs::Prefab;
 

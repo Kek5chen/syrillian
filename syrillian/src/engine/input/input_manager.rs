@@ -1,11 +1,11 @@
 use crate::game_thread::GameAppEvent;
 use crate::input::gamepad_manager::GamePadManager;
-use crate::windowing::game_thread::RenderTargetId;
+use crate::windowing::RenderTargetId;
 use crossbeam_channel::Sender;
-use log::{info, trace};
 use nalgebra::Vector2;
 use num_traits::Zero;
 use std::collections::HashMap;
+use tracing::{info, trace};
 use winit::dpi::PhysicalPosition;
 use winit::event::{DeviceEvent, ElementState, MouseButton, MouseScrollDelta, WindowEvent};
 use winit::keyboard::{KeyCode, PhysicalKey};

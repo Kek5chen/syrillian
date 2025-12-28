@@ -5,9 +5,9 @@ use crate::core::{Bones, Vertex3D};
 use gltf::mesh;
 use gltf::{self, Node};
 use itertools::izip;
-use log::warn;
 use nalgebra::{Vector2, Vector3};
 use std::collections::HashMap;
+use tracing::warn;
 
 /// Mesh and associated material indices for each sub-mesh range.
 pub type MeshData = Option<(Mesh, Vec<u32>)>;

@@ -103,7 +103,7 @@ pub fn read_texture_rgba(
     slice.map_async(MapMode::Read, move |res| {
         let _ = tx.send(res);
     });
-    let _ = device.poll(PollType::Wait);
+    let _ = device.poll(PollType::wait_indefinitely());
 
     match rx.recv() {
         Ok(Ok(())) => {}

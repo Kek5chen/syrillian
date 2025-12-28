@@ -1,11 +1,12 @@
 use crate::assets::HTexture;
 use crate::components::TypedComponentId;
 use crate::core::ObjectHash;
-use crate::game_thread::RenderTargetId;
 use crate::rendering::lights::LightProxy;
 use crate::rendering::picking::PickRequest;
 use crate::rendering::proxies::SceneProxy;
 use crate::rendering::render_data::CameraUniform;
+use crate::rendering::strobe::StrobeFrame;
+use crate::windowing::RenderTargetId;
 use nalgebra::Affine3;
 use std::fmt::{Debug, Formatter};
 use std::path::PathBuf;
@@ -33,6 +34,7 @@ pub enum RenderMsg {
     CaptureOffscreenTexture(RenderTargetId, PathBuf),
     CapturePickingTexture(RenderTargetId, PathBuf),
     CaptureTexture(HTexture, PathBuf),
+    UpdateStrobe(StrobeFrame),
 }
 
 impl Debug for RenderMsg {
@@ -51,6 +53,7 @@ impl Debug for RenderMsg {
             RenderMsg::CaptureOffscreenTexture(_, _) => "Capture Offscreen Texture",
             RenderMsg::CapturePickingTexture(_, _) => "Capture Picking Texture",
             RenderMsg::CaptureTexture(_, _) => "Capture Texture",
+            RenderMsg::UpdateStrobe(_) => "Update Strobe Draw List",
         };
 
         write!(f, "{name}")

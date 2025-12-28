@@ -1,11 +1,12 @@
+use crate::AppSettings;
 use crate::world::World;
-use crate::{AppRuntime, AppSettings};
 use std::error::Error;
+use std::marker::PhantomData;
 use winit::dpi::{PhysicalSize, Size};
 use winit::window::WindowAttributes;
 
 #[allow(unused)]
-pub trait AppState: Sized + Send + 'static {
+pub trait AppState: Sized + Default + 'static {
     fn init(&mut self, world: &mut World) -> Result<(), Box<dyn Error>> {
         Ok(())
     }
@@ -23,17 +24,23 @@ pub trait AppState: Sized + Send + 'static {
     }
 }
 
+pub trait AppRuntime: AppState {
+    fn configure(title: &str, width: u32, height: u32) -> AppSettings<Self>;
+
+    fn default_config() -> AppSettings<Self>;
+}
+
 impl<S: AppState> AppRuntime for S {
-    fn configure(self, title: &str, width: u32, height: u32) -> AppSettings<Self> {
+    fn configure(title: &str, width: u32, height: u32) -> AppSettings<Self> {
         AppSettings {
             main_window: WindowAttributes::default()
                 .with_inner_size(Size::Physical(PhysicalSize { width, height }))
                 .with_title(title),
-            state: self,
+            _state_type: PhantomData,
         }
     }
 
-    fn default_config(self) -> AppSettings<Self> {
+    fn default_config() -> AppSettings<Self> {
         AppSettings {
             main_window: WindowAttributes::default()
                 .with_inner_size(Size::Physical(PhysicalSize {
@@ -41,7 +48,7 @@ impl<S: AppState> AppRuntime for S {
                     height: 600,
                 }))
                 .with_title("Syrillian Window"),
-            state: self,
+            _state_type: PhantomData,
         }
     }
 }

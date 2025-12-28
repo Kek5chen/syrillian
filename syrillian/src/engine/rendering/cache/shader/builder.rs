@@ -1,4 +1,4 @@
-use crate::assets::{HBGL, Shader};
+use crate::assets::{HBGL, Shader, ShaderType};
 use crate::core::Vertex3D;
 use wgpu::{
     BlendState, ColorTargetState, ColorWrites, CompareFunction, DepthBiasState, DepthStencilState,
@@ -113,7 +113,7 @@ impl<'a> RenderPipelineBuilder<'a> {
                 compilation_options: PipelineCompilationOptions::default(),
                 targets: self.color_target,
             }),
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         }
     }
@@ -151,7 +151,7 @@ impl<'a> RenderPipelineBuilder<'a> {
             depth_stencil: Some(SHADOW_DEPTH_STENCIL),
             multisample: MultisampleState::default(),
             fragment,
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         })
     }
@@ -167,7 +167,7 @@ impl<'a> RenderPipelineBuilder<'a> {
         let is_post_process = shader.is_post_process();
         let is_custom = shader.is_custom();
         let has_shadow_transparency = shader.has_shadow_transparency();
-        let has_depth = shader.depth_enabled();
+        let has_depth = shader.is_depth_enabled();
         let color_target = shader.color_target();
 
         debug_assert!(
@@ -175,16 +175,16 @@ impl<'a> RenderPipelineBuilder<'a> {
             "Cannot render shadow transparency while relying on shadows for rendering"
         );
 
-        let label = match shader {
-            Shader::Default { .. } => format!("{name} Pipeline"),
-            Shader::PostProcess { .. } => format!("{name} Post Process Pipeline"),
-            Shader::Custom { .. } => format!("{name} Custom Pipeline"),
+        let label = match shader.stage() {
+            ShaderType::Default => format!("{name} Pipeline"),
+            ShaderType::PostProcessing => format!("{name} Post Process Pipeline"),
+            ShaderType::Custom => format!("{name} Custom Pipeline"),
         };
 
-        let vertex_buffers = match shader {
-            Shader::Custom { vertex_buffers, .. } => *vertex_buffers,
-            Shader::Default { .. } => &DEFAULT_VBL,
-            Shader::PostProcess { .. } => &[],
+        let vertex_buffers = match shader.stage() {
+            ShaderType::Default => &DEFAULT_VBL,
+            ShaderType::Custom => shader.vertex_buffers(),
+            ShaderType::PostProcessing => &[],
         };
 
         RenderPipelineBuilder {

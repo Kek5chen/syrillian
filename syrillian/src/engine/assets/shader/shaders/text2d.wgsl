@@ -1,4 +1,3 @@
-#use model
 #use material
 
 struct GlyphIn {
@@ -18,7 +17,7 @@ struct PushConstants {
     color: vec3<f32>,
 }
 
-var<push_constant> pc: PushConstants;
+var<immediate> pc: PushConstants;
 
 @vertex
 fn text_2d_vs_main(in: GlyphIn) -> VOut {
@@ -26,7 +25,7 @@ fn text_2d_vs_main(in: GlyphIn) -> VOut {
     let screen_size = vec2<f32>(system.screen);
     let pos_em = vec2(in.pos_em.x, -in.pos_em.y);
     let px = pc.text_pos + pos_em * pc.em_scale;
-    let vpos = model.transform * vec4(px, 0.0, 1.0);
+    let vpos = vec4(px, 0.0, 1.0);
     let ndc = vec2( (vpos.x / screen_size.x) * 2.0 - 1.0,
                     1.0 - (vpos.y / screen_size.y) * 2.0);
     out.position = vec4(ndc, 0.0, 1.0);

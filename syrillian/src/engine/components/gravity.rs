@@ -4,16 +4,16 @@ use crate::World;
 use crate::components::{Component, NewComponent};
 use crate::core::GameObjectId;
 
-pub struct GravityComp {
+pub struct GravityComponent {
     pub acceleration_per_sec: f32,
     pub velocity: f32,
     pub max_acceleration: f32,
     parent: GameObjectId,
 }
 
-impl NewComponent for GravityComp {
+impl NewComponent for GravityComponent {
     fn new(parent: GameObjectId) -> Self {
-        GravityComp {
+        GravityComponent {
             acceleration_per_sec: 9.80665,
             velocity: 0.0,
             max_acceleration: 100.0,
@@ -22,7 +22,7 @@ impl NewComponent for GravityComp {
     }
 }
 
-impl Component for GravityComp {
+impl Component for GravityComponent {
     fn update(&mut self, world: &mut World) {
         let delta_time = world.delta_time().as_secs_f32();
 

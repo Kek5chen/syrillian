@@ -147,7 +147,7 @@ fn calculate_attenuation(distance: f32, radius: f32) -> f32 {
 // ----------- Shadows ---------------
 
 fn shadow_visibility_spot(in_pos: vec3<f32>, N: vec3<f32>, L: vec3<f32>, light: Light) -> f32 {
-    if (material.cast_shadows == 0u || light.shadow_map_id == 0xffffffffu) { return 1.0; }
+    if (!mat_has_cast_shadows(material) || light.shadow_map_id == 0xffffffffu) { return 1.0; }
 
     let world_pos_bias = in_pos + N * 0.002;
     let uvz = spot_shadow_uvz(light, world_pos_bias);
@@ -157,8 +157,8 @@ fn shadow_visibility_spot(in_pos: vec3<f32>, N: vec3<f32>, L: vec3<f32>, light: 
 
     let slope = 1.0 - max(dot(N, L), 0.0);
     let bias  = 0.0001 * slope;
-    let layer = f32(light.shadow_map_id);
-    return pcf_3x3(shadow_maps, shadow_sampler, vec4<f32>(uvz.xy, uvz.z - bias, layer));
+    let layer = i32(light.shadow_map_id);
+    return pcf_3x3(shadow_maps, shadow_sampler, uvz.xy, uvz.z - bias, layer);
 }
 
 fn point_face_axes(dir: vec3<f32>) -> CubeFaceAxes {
@@ -250,7 +250,6 @@ fn sample_point_face(
     light: Light,
     face: u32,
     world_pos_bias: vec3<f32>,
-    base_layer: f32,
     bias: f32
 ) -> vec2<f32> {
     let uvz = point_shadow_uvz_axes(light, cube_face_axes_from_index(face), world_pos_bias);
@@ -259,8 +258,8 @@ fn sample_point_face(
         return vec2<f32>(0.0);
     }
 
-    let layer = base_layer + f32(face);
-    let samp = pcf_3x3(shadow_maps, shadow_sampler, vec4<f32>(uvz.xy, uvz.z - bias, layer));
+    let layer = i32(light.shadow_map_id) + i32(face);
+    let samp = pcf_3x3(shadow_maps, shadow_sampler, uvz.xy, uvz.z - bias, layer);
     return vec2<f32>(samp, 1.0);
 }
 
@@ -270,7 +269,6 @@ fn axis_shadow_contrib(
     weight: f32,
     light: Light,
     world_pos_bias: vec3<f32>,
-    base_layer: f32,
     bias: f32
 ) -> vec2<f32> {
     if (weight <= 1e-4) {
@@ -278,12 +276,12 @@ fn axis_shadow_contrib(
     }
 
     let face = axis_face_index(axis, dir_component >= 0.0);
-    let samp = sample_point_face(light, face, world_pos_bias, base_layer, bias);
+    let samp = sample_point_face(light, face, world_pos_bias, bias);
     return vec2<f32>(samp.x, samp.y) * weight;
 }
 
 fn shadow_visibility_point(in_pos: vec3<f32>, N: vec3<f32>, L: vec3<f32>, light: Light) -> f32 {
-    if (material.cast_shadows == 0u || light.shadow_map_id == 0xffffffffu) { return 1.0; }
+    if (!mat_has_cast_shadows(material) || light.shadow_map_id == 0xffffffffu) { return 1.0; }
 
     let dir_unbiased = in_pos - light.position;
     let dist_sq = dot(dir_unbiased, dir_unbiased);
@@ -294,11 +292,10 @@ fn shadow_visibility_point(in_pos: vec3<f32>, N: vec3<f32>, L: vec3<f32>, light:
     let world_pos_bias = in_pos + N * 0.002;
     let slope = 1.0 - max(dot(N, L), 0.0);
     let bias  = 0.0003 * slope;
-    let base_layer = f32(light.shadow_map_id);
 
-    let contrib_x = axis_shadow_contrib(0u, ndir.x, abs_dir.x, light, world_pos_bias, base_layer, bias);
-    let contrib_y = axis_shadow_contrib(1u, ndir.y, abs_dir.y, light, world_pos_bias, base_layer, bias);
-    let contrib_z = axis_shadow_contrib(2u, ndir.z, abs_dir.z, light, world_pos_bias, base_layer, bias);
+    let contrib_x = axis_shadow_contrib(0u, ndir.x, abs_dir.x, light, world_pos_bias, bias);
+    let contrib_y = axis_shadow_contrib(1u, ndir.y, abs_dir.y, light, world_pos_bias, bias);
+    let contrib_z = axis_shadow_contrib(2u, ndir.z, abs_dir.z, light, world_pos_bias, bias);
 
     let total_weight = contrib_x.y + contrib_y.y + contrib_z.y;
     if (total_weight <= 1e-5) {
@@ -372,21 +369,24 @@ fn eval_sun(
 fn fs_main_3d(in: FInput) -> @location(0) vec4<f32> {
     // Base color (linear)
     var base_rgba: vec4<f32>;
-    if material.use_diffuse_texture != 0u {
+    if mat_has_texture_diffuse(material) {
         base_rgba = textureSample(t_diffuse, s_diffuse, in.uv);
+        if mat_is_grayscale_diffuse(material) {
+            return vec4(vec3(base_rgba.r), base_rgba.g);
+        }
     } else {
         base_rgba = vec4<f32>(material.diffuse, 1.0);
     }
 
     // Alpha test
-    // if (base_rgba.a < 0.01) { discard; }
+    if (base_rgba.a < 0.01) { discard; }
 
     let base = saturate3(base_rgba.rgb);
 
-    let metallic  = clamp(material.metallic, 0.0, 1.0);
+    let metallic = clamp(material.metallic, 0.0, 1.0);
 
     var roughness: f32;
-    if material.use_roughness_texture != 0u {
+    if mat_has_texture_roughness(material) {
         roughness = textureSample(t_roughness, s_roughness, in.uv).g;
     } else {
         roughness = clamp(material.roughness, 0.045, 1.0);
@@ -396,14 +396,14 @@ fn fs_main_3d(in: FInput) -> @location(0) vec4<f32> {
 
     // World normal
     var N: vec3<f32>;
-    if material.use_normal_texture != 0u {
+    if mat_has_texture_normal(material) {
         N = normal_from_map(t_normal, s_normal, in.uv, in.normal, in.tangent, in.bitangent);
     } else {
         N = safe_normalize(in.normal);
     }
     let V = safe_normalize(camera.position - in.position);   // to viewer
 
-    if material.lit != 0u {
+    if mat_is_lit(material) {
         // start with a dim ambient term (energy‑aware)
         Lo *= (AMBIENT_STRENGTH * (1.0 - 0.04)); // tiny spec energy loss
     }
@@ -479,9 +479,8 @@ fn spot_shadow_uvz(light: Light, world_pos: vec3<f32>) -> vec3<f32> {
 
 fn pcf_3x3(depthTex: texture_depth_2d_array,
            cmpSampler: sampler_comparison,
-           uvzLayer: vec4<f32>) -> f32
+           uv: vec2<f32>, depth_ref: f32, layer: i32) -> f32
 {
-    let layer = u32(uvzLayer.w + 0.5);
     let dims  = vec2<f32>(textureDimensions(depthTex, 0));
     let texel = 1.0 / dims;
     let guard = texel * 0.5;
@@ -491,8 +490,8 @@ fn pcf_3x3(depthTex: texture_depth_2d_array,
     for (var dy = -1; dy <= 1; dy++) {
         for (var dx = -1; dx <= 1; dx++) {
             let ofs = vec2<f32>(f32(dx), f32(dy)) * texel;
-            let sample_uv = clamp(uvzLayer.xy + ofs, guard, guard_max);
-            sum += textureSampleCompare(depthTex, cmpSampler, sample_uv, layer, uvzLayer.z);
+            let sample_uv = clamp(uv + ofs, guard, guard_max);
+            sum += textureSampleCompare(depthTex, cmpSampler, sample_uv, layer, depth_ref);
         }
     }
     return sum / 9.0;

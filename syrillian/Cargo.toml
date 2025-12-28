@@ -17,20 +17,21 @@ readme = "../README.md"
 
 
 [dependencies]
-wgpu = { version = "25.0", default-features = false, features = ["wgsl"] }
+wgpu = { version = "28.0", default-features = false, features = ["wgsl"] }
+naga = { version = "28.0", features = ["stderr"] }
 winit = { version = "0.30" }
 bytemuck = "1.24"
-log = "0.4"
+tracing = "0.1"
 nalgebra = { version = "0.34", features = ["bytemuck", "mint"] }
 num-traits = "0.2"
 itertools = "0.14"
 image = "0.25"
-rapier3d = "0.30"
+rapier3d = "0.31"
 futures = "0.3"
 static_assertions = "1.1"
 snafu = "0.8"
 smallvec = "1.15"
-gltf = { version = "1.4", features = ["KHR_materials_unlit", "KHR_lights_punctual", "KHR_materials_pbrSpecularGlossiness", "extras"] }
+gltf = { version = "1.4", features = ["KHR_materials_unlit", "KHR_lights_punctual", "KHR_materials_pbrSpecularGlossiness", "KHR_texture_transform", "extras"] }
 obj = "0.10"
 syrillian_macros.workspace = true
 syrillian_utils.workspace = true
@@ -38,7 +39,7 @@ dashmap = "6.1"
 bon = "3.8"
 const_format = "0.2"
 gilrs = "0.11"
-uuid = { version = "1.18", features = ["v4"] }
+uuid = { version = "1.19", features = ["v4"] }
 fontdb = "0.23"
 fdsm = "0.8"
 fdsm-ttf-parser = "0.2"
@@ -47,11 +48,13 @@ ttf-parser = "0.25"
 delegate = "0.13"
 slotmap = "1.0"
 num_enum = "0.7"
-kira = { version = "0.10", default-features = false, features = ["flac", "mp3", "ogg", "wav"] }
+kira = { version = "0.11", default-features = false, features = ["flac", "mp3", "ogg", "wav"] }
 once_cell = "1.21"
 web-time = "1.0"
 serde_json = "1.0"
 crossbeam-channel = "0.5"
+more-asserts = "0.3"
+bitflags = { version = "2.10", features = ["bytemuck"] }
 
 [build-dependencies]
 chrono = "0.4"
@@ -60,6 +63,9 @@ chrono = "0.4"
 chrono = "0.4"
 env_logger = { version = "0.11", features = ["auto-color"] }
 notify = "8.2"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-log = "0.2"
+tracing-chrome = "0.7"
 
 
 
@@ -70,27 +76,28 @@ notify = "8.2"
 
 
 [target.'cfg(target_os = "macos")'.dependencies]
-wgpu = { version = "25.0", default-features = false, features = ["metal"] }
+wgpu = { version = "28.0", default-features = false, features = ["metal"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 winit = { version = "0.30", features = ["wayland", "x11"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
-wgpu = { version = "25.0", default-features = false, features = ["dx12"] }
+wgpu = { version = "28.0", default-features = false, features = ["dx12"] }
 
 
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-wgpu = { version = "25.0", default-features = false, features = ["vulkan-portability", "vulkan"] }
+wgpu = { version = "28.0", default-features = false, features = ["vulkan-portability", "vulkan"] }
 tokio = { version = "1.47", features = ["rt"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-uuid = { version = "1.18", features = ["js"] }
-wgpu = { version = "25.0", default-features = false, features = ["webgpu", "naga-ir", "webgl", "metal"] }
+uuid = { version = "1.19", features = ["js"] }
+wgpu = { version = "28.0", default-features = false, features = ["webgpu", "naga-ir", "webgl", "metal"] }
 web-sys = { version = "0.3", features = ["Document", "HtmlCollection"] }
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 wasm-bindgen-test = "0.3"
+
 
 
 #################################################
@@ -101,5 +108,5 @@ wasm-bindgen-test = "0.3"
 
 [features]
 default = ["derive", "audio"]
-derive = ["syrillian_macros/derive_env_logger"]
+derive = ["syrillian_macros/derive_tracing_subscriber"]
 audio = ["kira/cpal"]

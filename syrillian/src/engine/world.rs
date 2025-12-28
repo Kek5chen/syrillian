@@ -15,19 +15,21 @@ use crate::game_thread::GameAppEvent;
 use crate::input::InputManager;
 use crate::physics::PhysicsManager;
 use crate::prefabs::CameraPrefab;
-use crate::rendering::CPUDrawCtx;
 use crate::rendering::message::RenderMsg;
 use crate::rendering::picking::PickRequest;
 use crate::rendering::picking::PickResult;
-use crate::windowing::game_thread::RenderTargetId;
-use log::info;
+use crate::rendering::strobe::StrobeFrame;
+use crate::rendering::{CPUDrawCtx, UiContext};
+use crate::windowing::RenderTargetId;
 use nalgebra::Matrix4;
-use slotmap::{HopSlotMap, Key};
+use slotmap::{Key, SlotMap};
 use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
+use std::mem;
 use std::mem::swap;
 use std::path::PathBuf;
 use std::sync::Arc;
+use tracing::info;
 use web_time::{Duration, Instant};
 
 use crossbeam_channel::unbounded;
@@ -115,8 +117,7 @@ impl WorldChannels {
     pub fn active_camera_for(&self, target: RenderTargetId) -> CWeak<CameraComponent> {
         self.targets
             .get(&target)
-            .map(|t| t.active_camera)
-            .unwrap_or_else(CWeak::null)
+            .map_or_else(CWeak::null, |t| t.active_camera)
     }
 
     pub fn set_viewport_size(&mut self, target: RenderTargetId, size: PhysicalSize<u32>) {
@@ -155,7 +156,7 @@ impl WorldChannels {
 /// on different threads simultaneously.
 pub struct World {
     /// Collection of all game objects indexed by their unique ID
-    pub objects: HopSlotMap<GameObjectId, Box<GameObject>>,
+    pub objects: SlotMap<GameObjectId, Box<GameObject>>,
     /// Collection of all components indexed by their unique ID
     pub components: ComponentStorage,
     /// Root-level game objects that have no parent
@@ -192,13 +193,14 @@ pub struct World {
     requested_shutdown: bool,
     pub(crate) channels: WorldChannels,
     thread_binding: Option<WorldBinding>,
+    pub strobe: StrobeFrame,
 }
 
 impl World {
     /// Create a new, empty, clean-slate world with default data.
     fn empty(channels: WorldChannels, assets: Arc<AssetStore>) -> Box<World> {
         Box::new(World {
-            objects: HopSlotMap::with_key(),
+            objects: SlotMap::with_key(),
             components: ComponentStorage::default(),
             children: vec![],
             object_ref_counts: HashMap::new(),
@@ -219,6 +221,7 @@ impl World {
             requested_shutdown: false,
             channels,
             thread_binding: None,
+            strobe: StrobeFrame::default(),
         })
     }
 
@@ -404,7 +407,7 @@ impl World {
 
         let mut seed = id.as_ffi();
         loop {
-            let mut hasher = DefaultHasher::new();
+            let mut hasher = DefaultHasher::default();
             hasher.write_u64(seed);
             let candidate = (hasher.finish() & 0xffff_ffff) as ObjectHash;
             let hash = if candidate == 0 { 1 } else { candidate };
@@ -431,7 +434,7 @@ impl World {
             parent: None,
             owning_world: self,
             transform: Transform::new(GameObjectId::null()),
-            components: HashSet::new(),
+            components: Vec::new(),
             custom_properties: HashMap::new(),
             event_mask: Cell::new(EventType::empty()),
             hash: 0,
@@ -485,18 +488,23 @@ impl World {
         self.channels.set_active_camera(target, camera.downgrade());
     }
 
-    fn active_camera_for_target(&self, target: RenderTargetId) -> CWeak<CameraComponent> {
+    fn active_camera_for_target(&self, target: RenderTargetId) -> Option<CWeak<CameraComponent>> {
         let target_cam = self.channels.active_camera_for(target);
         if target_cam.exists(self) {
-            target_cam
+            Some(target_cam)
+        } else if target == RenderTargetId::PRIMARY {
+            Some(self.main_active_camera)
         } else {
-            self.main_active_camera
+            None
         }
     }
 
     pub fn set_viewport_size(&mut self, target: RenderTargetId, size: PhysicalSize<u32>) {
         self.channels.set_viewport_size(target, size);
-        if let Some(mut cam) = self.active_camera_for_target(target).upgrade(self) {
+        if let Some(mut cam) = self
+            .active_camera_for_target(target)
+            .and_then(|c| c.upgrade(self))
+        {
             cam.resize(size.width as f32, size.height as f32);
         }
     }
@@ -510,7 +518,7 @@ impl World {
     }
 
     pub fn create_window_with_size(&mut self, size: PhysicalSize<u32>) -> RenderTargetId {
-        let target_id = self.channels.add_window(self.main_active_camera, size);
+        let target_id = self.channels.add_window(CWeak::null(), size);
         let _ = self
             .channels
             .game_event_tx
@@ -547,7 +555,7 @@ impl World {
                 continue;
             }
 
-            let components: Vec<_> = obj.components.iter().cloned().collect();
+            let components = obj.components.clone();
             let world = self as *mut World;
 
             for mut comp in components {
@@ -649,7 +657,16 @@ impl World {
     /// If you're using the App runtime, this will be handled for you. Only call this function
     /// if you are trying to use a detached world context.
     pub fn post_update(&mut self) {
+        let world = self as *mut World;
         self.execute_component_func(Component::post_update);
+
+        for mut comp in self.components.iter_refs() {
+            let ctx = UiContext::new(comp.ctx.parent.hash, comp.ctx.tid);
+            unsafe {
+                comp.on_gui(&mut *world, ctx);
+            }
+        }
+
         self.sync_fresh_components();
         self.sync_removed_components();
 
@@ -666,7 +683,6 @@ impl World {
                 ));
             }
         }
-        let world = self as *mut World;
         for (ctid, comp) in self.components.iter_mut() {
             let ctx = CPUDrawCtx::new(ctid, &mut command_batch);
             unsafe {
@@ -675,15 +691,25 @@ impl World {
         }
 
         for target_id in self.channels.targets.keys().copied() {
-            if let Some(mut camera) = self.active_camera_for_target(target_id).upgrade(self) {
+            if let Some(mut camera) = self
+                .active_camera_for_target(target_id)
+                .and_then(|c| c.upgrade(self))
+            {
                 Self::push_camera_updates(target_id, &mut command_batch, &mut camera);
             }
         }
+
+        self.strobe.sort();
 
         self.channels
             .render_tx
             .send(RenderMsg::CommandBatch(command_batch))
             .unwrap();
+
+        let _ = self
+            .channels
+            .render_tx
+            .send(RenderMsg::UpdateStrobe(mem::take(&mut self.strobe)));
     }
 
     fn push_camera_updates(
@@ -829,7 +855,7 @@ impl World {
             Self::find_components_of_children(collection, *child);
         }
 
-        collection.extend(obj.get_components::<C>());
+        collection.extend(obj.iter_components::<C>());
     }
 
     /// Find all objects that contain a property with the given key
@@ -966,7 +992,7 @@ impl World {
         for id in ids {
             if let Some(obj) = self.objects.get_mut(id) {
                 obj.mark_dead();
-                let comps: Vec<_> = obj.components.drain().collect();
+                let comps: Vec<_> = obj.components.drain(..).collect();
                 obj.children.clear();
                 obj.parent = None;
 

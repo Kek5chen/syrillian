@@ -1,10 +1,11 @@
 use crate::World;
-use crate::components::{Component, Image, ImageScalingMode, NewComponent, Text2D};
+use crate::components::{Component, Image, NewComponent, Text2D};
 use crate::core::GameObjectId;
-use crate::windowing::game_thread::RenderTargetId;
+use crate::rendering::strobe::ImageScalingMode;
+use crate::windowing::RenderTargetId;
 use nalgebra::Vector2;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct UiRectLayout {
     pub top_left_px: Vector2<f32>,
     pub size_px: Vector2<f32>,
@@ -118,36 +119,42 @@ impl UiRect {
         })
     }
 
-    pub fn apply_to_components(&mut self, _world: &mut World, layout: UiRectLayout) {
-        if let Some(mut text) = self.parent.get_component::<Text2D>() {
-            text.set_position_vec(layout.top_left_px);
-            text.set_draw_order(layout.draw_order);
-        }
+    pub fn apply_to_components(&mut self, _world: &mut World, layout: &mut UiRectLayout) {
+        for component in self.parent.iter_dyn_components() {
+            if let Some(mut image) = component.as_a::<Image>() {
+                let screen_h = layout.screen.y.max(1.0);
 
-        if let Some(mut image) = self.parent.get_component::<Image>() {
-            let screen_h = layout.screen.y.max(1.0);
+                let left = layout.top_left_px.x.max(0.0).floor();
+                let right = (layout.top_left_px.x + layout.size_px.x).max(0.0).ceil();
 
-            let left = layout.top_left_px.x.max(0.0).floor() as u32;
-            let right = (layout.top_left_px.x + layout.size_px.x).max(0.0).ceil() as u32;
+                let bottom = (screen_h - (layout.top_left_px.y + layout.size_px.y))
+                    .max(0.0)
+                    .floor();
+                let top = (screen_h - layout.top_left_px.y).max(0.0).ceil();
 
-            let bottom = (screen_h - (layout.top_left_px.y + layout.size_px.y))
-                .max(0.0)
-                .floor() as u32;
-            let top = (screen_h - layout.top_left_px.y).max(0.0).ceil() as u32;
+                if top > bottom && right > left {
+                    image.set_scaling_mode(ImageScalingMode::Absolute {
+                        left,
+                        right,
+                        top,
+                        bottom,
+                    });
+                }
 
-            if top > bottom && right > left {
-                image.set_scaling_mode(ImageScalingMode::Absolute {
-                    left,
-                    right,
-                    top,
-                    bottom,
-                });
+                image.set_draw_order(layout.draw_order);
+
+                let translation =
+                    nalgebra::Translation3::new(0.0, 0.0, layout.depth).to_homogeneous();
+                image.set_translation(translation);
+
+                layout.draw_order += 1;
+            } else if let Some(mut text) = component.as_a::<Text2D>() {
+                text.set_position_vec(layout.top_left_px);
+                text.set_draw_order(layout.draw_order);
+                text.set_render_target(layout.target);
+
+                layout.draw_order += 1;
             }
-
-            image.set_draw_order(layout.draw_order);
-
-            let translation = nalgebra::Translation3::new(0.0, 0.0, layout.depth).to_homogeneous();
-            image.set_translation(translation);
         }
     }
 }
@@ -163,49 +170,26 @@ impl NewComponent for UiRect {
                 width: 100.0,
                 height: 100.0,
             },
-            depth: 0.0,
+            depth: 0.5,
             render_target: RenderTargetId::PRIMARY,
         }
     }
 }
 
-impl Component for UiRect {
-    fn update(&mut self, world: &mut World) {
-        if !self.parent.exists() {
-            return;
-        }
-
-        let Some(layout) = self.layout(world) else {
-            return;
-        };
-
-        self.apply_to_components(world, layout);
-    }
-}
+impl Component for UiRect {}
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::engine::rendering::proxies::PROXY_PRIORITY_2D;
-    use crate::engine::rendering::proxies::image::ImageSceneProxy;
-    use crate::windowing::game_thread::RenderTargetId;
+    use crate::windowing::RenderTargetId;
     use nalgebra::{Translation3, Vector2};
     use slotmap::Key;
-    use std::any::Any;
     use winit::dpi::PhysicalSize;
 
     fn world_with_viewport() -> Box<World> {
         let (mut world, ..) = World::fresh();
         world.set_viewport_size(RenderTargetId::PRIMARY, PhysicalSize::new(800, 600));
         world
-    }
-
-    fn as_image_proxy(
-        proxy: &mut dyn crate::rendering::proxies::SceneProxy,
-    ) -> &mut ImageSceneProxy {
-        (proxy as &mut dyn Any)
-            .downcast_mut::<ImageSceneProxy>()
-            .expect("image proxy")
     }
 
     #[test]
@@ -249,40 +233,33 @@ mod tests {
         });
         rect.set_depth(0.25);
 
-        let mut image = obj.add_component::<Image>();
-        let mut text = obj.add_component::<Text2D>();
+        let image = obj.add_component::<Image>();
+        let text = obj.add_component::<Text2D>();
+        let image2 = obj.add_component::<Image>();
 
-        let layout = rect.layout(&world).expect("viewport configured");
+        let mut layout = rect.layout(&world).expect("viewport configured");
 
-        rect.apply_to_components(&mut world, layout);
+        rect.apply_to_components(&mut world, &mut layout);
+        assert_eq!(layout.draw_order, 3);
 
-        let mut image_proxy_box = image
-            .create_render_proxy(&world)
-            .expect("image proxy should be created");
-        let image_proxy = as_image_proxy(&mut *image_proxy_box);
-
-        match image_proxy.scaling {
+        match image.scaling_mode() {
             ImageScalingMode::Absolute {
                 left,
                 right,
                 top,
                 bottom,
             } => {
-                assert_eq!((left, right, top, bottom), (12, 162, 582, 507));
+                assert_eq!((left, right, top, bottom), (12.0, 162.0, 582.0, 507.0));
             }
             _ => panic!("expected absolute scaling"),
         }
-        assert_eq!(image_proxy.draw_order, 0);
+        assert_eq!(image.draw_order(), 0);
+        assert_eq!(text.draw_order(), 1);
+        assert_eq!(image2.draw_order(), 2);
         assert_eq!(
-            image_proxy.translation,
+            image.translation(),
             Translation3::new(0.0, 0.0, 0.25).to_homogeneous()
         );
-
-        let text_priority = text
-            .create_render_proxy(&world)
-            .expect("text proxy")
-            .priority(world.assets.as_ref());
-        assert_eq!(text_priority, PROXY_PRIORITY_2D);
     }
 
     #[test]
@@ -301,7 +278,7 @@ mod tests {
             bottom: 0.2,
         });
 
-        let layout = UiRectLayout {
+        let mut layout = UiRectLayout {
             top_left_px: Vector2::new(10.0, 20.0),
             size_px: Vector2::zeros(),
             screen: Vector2::new(100.0, 100.0),
@@ -311,14 +288,10 @@ mod tests {
         };
 
         let before = image.scaling_mode();
-        rect.apply_to_components(&mut world, layout);
+        rect.apply_to_components(&mut world, &mut layout);
+        assert_eq!(layout.draw_order, 4);
         assert_eq!(image.scaling_mode(), before);
-
-        let mut proxy = image
-            .create_render_proxy(&world)
-            .expect("image proxy should exist");
-        let proxy = as_image_proxy(&mut *proxy);
-        assert_eq!(proxy.draw_order, 3);
-        assert!((proxy.translation[(2, 3)] - 0.5).abs() < 1e-6);
+        assert_eq!(image.draw_order(), 3);
+        assert!((image.translation()[(2, 3)] - 0.5).abs() < 1e-6);
     }
 }

@@ -1,16 +1,19 @@
 use crate::assets::{AssetStore, HFont, HShader};
-use crate::components::BoneData;
-use crate::core::{ModelUniform, ObjectHash};
+use crate::components::mesh_renderer::BoneData;
+use crate::core::ModelUniform;
 #[cfg(debug_assertions)]
 use crate::rendering::DebugRenderer;
-use crate::rendering::glyph::{GlyphRenderData, TextAlignment, generate_glyph_geometry_stream};
+use crate::rendering::glyph::{GlyphRenderData, generate_glyph_geometry_stream};
 use crate::rendering::picking::hash_to_rgba;
 use crate::rendering::proxies::mesh_proxy::MeshUniformIndex;
-use crate::rendering::proxies::{PROXY_PRIORITY_2D, PROXY_PRIORITY_TRANSPARENT, SceneProxy};
+use crate::rendering::proxies::{PROXY_PRIORITY_TRANSPARENT, SceneProxy, SceneProxyBinding};
+use crate::rendering::strobe::TextAlignment;
 use crate::rendering::uniform::ShaderUniform;
 use crate::rendering::{AssetCache, CPUDrawCtx, GPUDrawCtx, RenderPassType, Renderer};
 use crate::utils::hsv_to_rgb;
+use crate::windowing::RenderTargetId;
 use crate::{ensure_aligned, must_pipeline, proxy_data, proxy_data_mut, try_activate_shader};
+use delegate::delegate;
 use etagere::euclid::approxeq::ApproxEq;
 use nalgebra::{Matrix4, Vector2, Vector3};
 use std::any::Any;
@@ -19,25 +22,25 @@ use std::marker::PhantomData;
 use std::sync::RwLock;
 use syrillian_utils::debug_panic;
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
-use wgpu::{Buffer, BufferUsages, RenderPass, ShaderStages};
+use wgpu::{Buffer, BufferUsages, RenderPass};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TextRenderData {
-    uniform: ShaderUniform<MeshUniformIndex>,
-    glyph_vbo: Buffer,
+    pub uniform: ShaderUniform<MeshUniformIndex>,
+    pub glyph_vbo: Buffer,
 }
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct TextPushConstants {
-    position: Vector2<f32>,
-    em_scale: f32,
-    msdf_range_px: f32,
-    color: Vector3<f32>,
-    padding: u32,
+pub struct TextImmediates {
+    pub position: Vector2<f32>,
+    pub em_scale: f32,
+    pub msdf_range_px: f32,
+    pub color: Vector3<f32>,
+    pub padding: u32,
 }
 
-ensure_aligned!(TextPushConstants { position, color }, align <= 16 * 2 => size);
+ensure_aligned!(TextImmediates { position, color }, align <= 16 * 2 => size);
 
 #[derive(Debug, Copy, Clone)]
 pub struct ThreeD;
@@ -64,13 +67,15 @@ pub struct TextProxy<const D: u8, DIM: TextDim<D>> {
     font: HFont,
     letter_spacing_em: f32,
 
-    pc: TextPushConstants,
+    pc: TextImmediates,
     rainbow_mode: bool,
     constants_dirty: bool,
     translation: ModelUniform,
 
     draw_order: u32,
     order_dirty: bool,
+
+    render_target: RenderTargetId,
 
     _dim: PhantomData<DIM>,
 }
@@ -87,7 +92,7 @@ impl<const D: u8, DIM: TextDim<D>> TextProxy<D, DIM> {
             font,
             letter_spacing_em: 0.0,
 
-            pc: TextPushConstants {
+            pc: TextImmediates {
                 em_scale,
                 position: Vector2::zeros(),
                 color: Vector3::new(1., 1., 1.),
@@ -101,6 +106,8 @@ impl<const D: u8, DIM: TextDim<D>> TextProxy<D, DIM> {
             draw_order: 0,
             order_dirty: false,
 
+            render_target: RenderTargetId::PRIMARY,
+
             _dim: PhantomData,
         }
     }
@@ -113,8 +120,40 @@ impl<const D: u8, DIM: TextDim<D>> TextProxy<D, DIM> {
         self.order_dirty = true;
     }
 
-    pub fn size(&self) -> f32 {
-        self.pc.em_scale
+    pub fn set_render_target(&mut self, target: RenderTargetId) {
+        if self.render_target == target {
+            return;
+        }
+        self.render_target = target;
+        self.constants_dirty = true;
+    }
+
+    delegate! {
+        to self {
+            #[field]
+            pub fn draw_order(&self) -> u32;
+            #[field]
+            pub fn render_target(&self) -> RenderTargetId;
+            #[field(&)]
+            pub fn text(&self) -> &str;
+            #[field]
+            pub fn font(&self) -> HFont;
+            #[field]
+            pub fn alignment(&self) -> TextAlignment;
+            #[field(letter_spacing_em)]
+            pub fn letter_spacing(&self) -> f32;
+            #[field]
+            pub fn rainbow_mode(&self) -> bool;
+        }
+
+        to self.pc {
+            #[field(em_scale)]
+            pub fn size(&self) -> f32;
+            #[field]
+            pub fn color(&self) -> Vector3<f32>;
+            #[field]
+            pub fn position(&self) -> Vector2<f32>;
+        }
     }
 
     pub fn update_game_thread(&mut self, mut ctx: CPUDrawCtx) {
@@ -216,10 +255,6 @@ impl<const D: u8, DIM: TextDim<D>> TextProxy<D, DIM> {
     }
 
     pub fn render(&self, renderer: &Renderer, data: &TextRenderData, ctx: &GPUDrawCtx) {
-        if DIM::shader() != HShader::TEXT_3D && ctx.pass_type == RenderPassType::Shadow {
-            return;
-        }
-
         if data.glyph_vbo.size() == 0 || self.text.is_empty() {
             return;
         }
@@ -238,11 +273,7 @@ impl<const D: u8, DIM: TextDim<D>> TextProxy<D, DIM> {
 
         pass.set_pipeline(pipeline);
         pass.set_vertex_buffer(0, data.glyph_vbo.slice(..));
-        pass.set_push_constants(
-            ShaderStages::VERTEX_FRAGMENT,
-            0,
-            bytemuck::bytes_of(&self.pc),
-        );
+        pass.set_immediates(0, bytemuck::bytes_of(&self.pc));
         pass.set_bind_group(groups.render, ctx.render_bind_group, &[]);
         if let Some(idx) = groups.model {
             pass.set_bind_group(idx, data.uniform.bind_group(), &[]);
@@ -278,11 +309,7 @@ impl<const D: u8, DIM: TextDim<D>> TextProxy<D, DIM> {
             pass.set_bind_group(idx, uniform.bind_group(), &[]);
         }
 
-        pass.set_push_constants(
-            ShaderStages::VERTEX_FRAGMENT,
-            0,
-            bytemuck::bytes_of(&self.pc),
-        );
+        pass.set_immediates(0, bytemuck::bytes_of(&self.pc));
 
         pass.draw(0..self.glyph_data.len() as u32 * 6, 0..1);
     }
@@ -404,28 +431,21 @@ impl<const D: u8, DIM: TextDim<D>> SceneProxy for TextProxy<D, DIM> {
         self.update_render_thread(renderer, data, local_to_world);
     }
 
-    fn render<'a>(
-        &self,
-        renderer: &Renderer,
-        data: &dyn Any,
-        ctx: &GPUDrawCtx,
-        _local_to_world: &Matrix4<f32>,
-    ) {
-        let data: &TextRenderData = proxy_data!(data);
+    fn render<'a>(&self, renderer: &Renderer, ctx: &GPUDrawCtx, binding: &SceneProxyBinding) {
+        let data: &TextRenderData = proxy_data!(binding.proxy_data());
         self.render(renderer, data, ctx);
     }
 
-    fn render_picking(
-        &self,
-        renderer: &Renderer,
-        data: &dyn Any,
-        ctx: &GPUDrawCtx,
-        _local_to_world: &Matrix4<f32>,
-        object_hash: ObjectHash,
-    ) {
+    fn render_shadows(&self, renderer: &Renderer, ctx: &GPUDrawCtx, binding: &SceneProxyBinding) {
+        if D == 3 {
+            SceneProxy::render(self, renderer, ctx, binding);
+        }
+    }
+
+    fn render_picking(&self, renderer: &Renderer, ctx: &GPUDrawCtx, binding: &SceneProxyBinding) {
         debug_assert_ne!(ctx.pass_type, RenderPassType::Shadow);
 
-        let data: &TextRenderData = proxy_data!(data);
+        let data: &TextRenderData = proxy_data!(binding.proxy_data());
         if data.glyph_vbo.size() == 0 || self.text.is_empty() {
             return;
         }
@@ -452,18 +472,18 @@ impl<const D: u8, DIM: TextDim<D>> SceneProxy for TextProxy<D, DIM> {
             pass.set_bind_group(material_id, material.uniform.bind_group(), &[]);
         }
 
-        let color = hash_to_rgba(object_hash);
+        let color = hash_to_rgba(binding.object_hash);
         let mut pc = self.pc;
         pc.color = Vector3::new(color[0], color[1], color[2]);
 
-        pass.set_push_constants(ShaderStages::VERTEX_FRAGMENT, 0, bytemuck::bytes_of(&pc));
+        pass.set_immediates(0, bytemuck::bytes_of(&pc));
         pass.set_vertex_buffer(0, data.glyph_vbo.slice(..));
         pass.draw(0..self.glyph_data.len() as u32 * 6, 0..1);
     }
 
     fn priority(&self, _store: &AssetStore) -> u32 {
         match D {
-            2 => PROXY_PRIORITY_2D.saturating_add(self.draw_order),
+            2 => self.draw_order,
             _ => PROXY_PRIORITY_TRANSPARENT,
         }
     }

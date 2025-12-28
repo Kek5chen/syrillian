@@ -1,7 +1,7 @@
 use crate::World;
 use crate::core::GameObjectId;
 use nalgebra::Vector3;
-use rapier3d::parry::query::DefaultQueryDispatcher;
+use rapier3d::parry::query::{DefaultQueryDispatcher, ShapeCastOptions};
 use rapier3d::prelude::*;
 use web_time::{Duration, Instant};
 
@@ -86,6 +86,30 @@ impl PhysicsManager {
         let object = GameObjectId::from_ffi(object_id);
 
         object.exists().then_some((distance, object))
+    }
+
+    pub fn cast_sphere(
+        &self,
+        radius: f32,
+        max_toi: f32,
+        shape_pos: &Isometry<f32>,
+        dir: &Vector<f32>,
+        filter: QueryFilter,
+    ) -> Option<(ShapeCastHit, GameObjectId)> {
+        let qp = self.broad_phase.as_query_pipeline(
+            &DefaultQueryDispatcher,
+            &self.rigid_body_set,
+            &self.collider_set,
+            filter,
+        );
+        let shape = Ball::new(radius);
+        let options = ShapeCastOptions::with_max_time_of_impact(max_toi);
+        let (collider, hit) = qp.cast_shape(shape_pos, dir, &shape, options)?;
+
+        let object_id = self.collider_set.get(collider)?.user_data as u64;
+        let object = GameObjectId::from_ffi(object_id);
+
+        object.exists().then_some((hit, object))
     }
 
     pub fn cursor_ray(&self, world: &World) -> Option<Ray> {

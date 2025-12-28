@@ -7,7 +7,6 @@
 use gilrs::Button;
 use kira::effect::reverb::ReverbBuilder;
 use kira::track::SpatialTrackBuilder;
-use log::{LevelFilter, info};
 use nalgebra::UnitQuaternion;
 use rapier3d::parry::query::Ray;
 use rapier3d::prelude::QueryFilter;
@@ -22,16 +21,17 @@ use syrillian::components::{
     SpringComponent, Text3D,
 };
 use syrillian::core::{GameObjectExt, GameObjectId, GameObjectRef};
-use syrillian::game_thread::RenderTargetId;
-use syrillian::prefabs::CubePrefab;
-use syrillian::prefabs::first_person_player::FirstPersonPlayerPrefab;
-use syrillian::prefabs::prefab::Prefab;
+use syrillian::prefabs::{CubePrefab, FirstPersonPlayerPrefab, Prefab};
 #[cfg(debug_assertions)]
 use syrillian::rendering::DebugRenderer;
-use syrillian::rendering::glyph::TextAlignment;
 use syrillian::rendering::lights::Light;
-use syrillian::utils::frame_counter::FrameCounter;
+use syrillian::strobe::TextAlignment;
+use syrillian::utils::FrameCounter;
 use syrillian::{AppRuntime, AppState, World};
+use tracing::{error, info};
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::{EnvFilter, Layer};
 use winit::event::MouseButton;
 use winit::keyboard::KeyCode;
 
@@ -60,7 +60,6 @@ struct MyMain {
     sound_cube_emitter: CRef<AudioEmitter>,
     sound_cube2_emitter: CRef<AudioEmitter>,
     viewport_camera: Option<CRef<CameraComponent>>,
-    viewport_window: RenderTargetId,
 }
 
 impl Default for MyMain {
@@ -78,7 +77,6 @@ impl Default for MyMain {
                 sound_cube_emitter: CRef::null(),
                 sound_cube2_emitter: CRef::null(),
                 viewport_camera: None,
-                viewport_window: RenderTargetId::PRIMARY,
             }
         }
     }
@@ -104,11 +102,9 @@ impl AppState for MyMain {
         self.player = player;
         self.player_rb = player_rb;
 
-        self.viewport_window = world.create_window();
-
         let camera = self.spawn_viewport_camera(world);
         self.viewport_camera = Some(camera.clone());
-        world.set_active_camera_for_target(self.viewport_window, camera);
+        // world.set_active_camera_for_target(RenderTargetId::PRIMARY, camera);
 
         world.print_objects();
 
@@ -117,8 +113,7 @@ impl AppState for MyMain {
 
     fn update(&mut self, world: &mut World) -> Result<(), Box<dyn Error>> {
         self.frame_counter.new_frame_from_world(world);
-        world.set_window_title(RenderTargetId::PRIMARY, self.format_title(false));
-        world.set_window_title(self.viewport_window, self.format_title(true));
+        world.set_default_window_title(self.format_title(false));
 
         self.update_world_text(world);
         self.update_audio_controls(world);
@@ -534,15 +529,16 @@ impl MyMain {
 }
 
 fn main() {
-    let _ = env_logger::builder()
-        .filter_level(LevelFilter::Info)
-        .parse_default_env()
-        .try_init();
+    // let (chrome_layer, _guard) = tracing_chrome::ChromeLayerBuilder::new().build();
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::fmt::layer().with_filter(EnvFilter::from_default_env()))
+        //     .with(chrome_layer)
+        .init();
 
-    let app = MyMain::default().configure("MyMain", 1280, 720);
+    let app = MyMain::configure("MyMain", 1280, 720);
 
     if let Err(e) = app.run() {
-        syrillian::log::error!("{e}");
+        error!("{e}");
     }
 }
 

@@ -1,7 +1,7 @@
 //! Built-in components that can be attached to [`GameObject`](crate::core::GameObject).
 //!
 //! Components implement behavior ranging from camera control to physics. If it's dynamic,
-//! it's probably a component. (Only Rendering is done in [`Drawable`](crate::drawables::Drawable)s)
+//! it's probably a component.
 //!
 //! To make a component:
 //! ```rust
@@ -38,6 +38,7 @@
 
 pub mod animation;
 pub mod audio;
+pub mod button;
 pub mod camera;
 pub mod collider;
 pub mod fp_camera;
@@ -59,33 +60,34 @@ pub mod ui_rect;
 #[cfg(debug_assertions)]
 pub mod camera_debug;
 
-pub use animation::*;
-pub use camera::*;
-pub use collider::*;
-pub use fp_camera::*;
-pub use fp_movement::*;
-pub use freecam::*;
-pub use gravity::*;
-pub use image::*;
-pub use light::*;
-pub use mesh_renderer::*;
-pub use panel::*;
-pub use rigid_body::*;
-pub use rope::*;
-pub use rotate::*;
-pub use skeletal::*;
-pub use spring::*;
-pub use text::*;
-pub use ui_rect::*;
+pub use animation::AnimationComponent;
+pub use button::Button;
+pub use camera::CameraComponent;
+pub use collider::Collider3D;
+pub use fp_camera::FirstPersonCameraController;
+pub use fp_movement::FirstPersonMovementController;
+pub use freecam::FreecamController;
+pub use gravity::GravityComponent;
+pub use image::Image;
+pub use light::{PointLightComponent, SpotLightComponent, Sun, SunLightComponent};
+pub use mesh_renderer::MeshRenderer;
+pub use panel::Panel;
+pub use rigid_body::RigidBodyComponent;
+pub use rope::RopeComponent;
+pub use rotate::RotateComponent;
+pub use skeletal::SkeletalComponent;
+pub use spring::SpringComponent;
+pub use text::{Text2D, Text3D};
+pub use ui_rect::UiRect;
 
 #[cfg(debug_assertions)]
 pub use camera_debug::*;
 
 use crate::World;
 use crate::core::GameObjectId;
-use crate::rendering::CPUDrawCtx;
 use crate::rendering::lights::LightProxy;
 use crate::rendering::proxies::SceneProxy;
+use crate::rendering::{CPUDrawCtx, UiContext};
 use delegate::delegate;
 use slotmap::{Key, new_key_type};
 use std::any::{Any, TypeId};
@@ -95,7 +97,8 @@ use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
 use std::mem;
 use std::ops::{Deref, DerefMut};
-use std::sync::{Arc, OnceLock};
+use std::rc::Rc;
+use std::sync::Arc;
 
 new_key_type! { pub struct ComponentId; }
 
@@ -124,8 +127,8 @@ impl ComponentContext {
 }
 
 pub struct CRef<C: Component + ?Sized> {
-    pub(crate) data: Option<Arc<C>>,
-    pub(crate) ctx: Arc<ComponentContext>,
+    pub(crate) data: Option<Rc<C>>,
+    pub(crate) ctx: Rc<ComponentContext>,
 }
 
 impl<C: Component + ?Sized> Clone for CRef<C> {
@@ -157,14 +160,12 @@ impl<C: Component + ?Sized> Hash for CRef<C> {
     }
 }
 
-static NULL_CTX: OnceLock<Arc<ComponentContext>> = OnceLock::new();
-
 #[allow(unused)]
 impl<C: Component> CRef<C> {
-    pub(crate) fn new(comp: Arc<C>, tid: TypedComponentId, parent: GameObjectId) -> Self {
+    pub(crate) fn new(comp: Rc<C>, tid: TypedComponentId, parent: GameObjectId) -> Self {
         CRef {
             data: Some(comp),
-            ctx: Arc::new(ComponentContext::new(tid, parent)),
+            ctx: Rc::new(ComponentContext::new(tid, parent)),
         }
     }
 
@@ -176,10 +177,10 @@ impl<C: Component> CRef<C> {
         self.into()
     }
 
-    pub fn into_dyn(self) -> CRef<dyn Component> {
+    pub fn as_dyn(&self) -> CRef<dyn Component> {
         unsafe {
             CRef {
-                data: Some(self.data.as_ref().unwrap_unchecked().clone() as Arc<dyn Component>),
+                data: Some(self.data.as_ref().unwrap_unchecked().clone() as Rc<dyn Component>),
                 ctx: self.ctx.clone(),
             }
         }
@@ -196,9 +197,7 @@ impl<C: Component> CRef<C> {
     pub unsafe fn null() -> CRef<C> {
         CRef {
             data: None,
-            ctx: NULL_CTX
-                .get_or_init(|| Arc::new(unsafe { ComponentContext::null() }))
-                .clone(),
+            ctx: Rc::new(unsafe { ComponentContext::null() }),
         }
     }
 }
@@ -223,7 +222,7 @@ impl CRef<dyn Component> {
             return None;
         }
         let downcasted =
-            Arc::downcast::<C>(unsafe { self.data.as_ref().unwrap_unchecked() }.clone()).ok()?;
+            Rc::downcast::<C>(unsafe { self.data.as_ref().unwrap_unchecked() }.clone()).ok()?;
         Some(CRef {
             data: Some(downcasted),
             ctx: self.ctx.clone(),
@@ -377,7 +376,7 @@ impl TypedComponentId {
 /// }
 ///```
 #[allow(unused)]
-pub trait Component: Any + Send + Sync {
+pub trait Component: Any {
     // Gets called when the game object is created directly after new
     fn init(&mut self, world: &mut World) {}
 
@@ -407,6 +406,8 @@ pub trait Component: Any + Send + Sync {
     fn update_proxy(&mut self, world: &World, draw_ctx: CPUDrawCtx) {}
 
     fn on_click(&mut self, _world: &mut World) {}
+
+    fn on_gui(&mut self, world: &mut World, ctx: UiContext) {}
 
     // Gets called when the component is about to be deleted
     fn delete(&mut self, world: &mut World) {}

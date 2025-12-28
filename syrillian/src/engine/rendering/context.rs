@@ -1,13 +1,15 @@
 use crate::components::TypedComponentId;
+use crate::core::ObjectHash;
 use crate::rendering::lights::LightProxy;
 use crate::rendering::message::RenderMsg;
 use crate::rendering::proxies::SceneProxy;
+use crate::strobe::{CacheId, UiDraw, UiImageDraw, UiTextDraw};
+use crate::{RenderTargetId, World};
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::sync::RwLock;
-use wgpu::{BindGroup, RenderPass, SurfaceTexture, TextureView};
+use wgpu::{BindGroup, RenderPass, TextureView};
 
 pub struct FrameCtx {
-    pub output: SurfaceTexture,
-    pub color_view: TextureView,
     pub depth_view: TextureView,
 }
 
@@ -27,6 +29,7 @@ pub struct GPUDrawCtx<'a> {
     pub render_bind_group: &'a BindGroup,
     pub light_bind_group: &'a BindGroup,
     pub shadow_bind_group: &'a BindGroup,
+    pub transparency_pass: bool,
 }
 
 pub struct CPUDrawCtx<'a> {
@@ -60,5 +63,36 @@ impl<'a> CPUDrawCtx<'a> {
     pub fn enable_proxy(&mut self) {
         let msg = RenderMsg::ProxyState(self.current_cid, true);
         self.batch.push(msg);
+    }
+}
+
+pub struct UiContext {
+    current_id: CacheId,
+}
+
+impl UiContext {
+    pub(crate) fn new(object_hash: ObjectHash, component_id: TypedComponentId) -> UiContext {
+        let mut hasher = DefaultHasher::default();
+        object_hash.hash(&mut hasher);
+        component_id.0.hash(&mut hasher);
+        component_id.1.hash(&mut hasher);
+
+        UiContext {
+            current_id: hasher.finish(),
+        }
+    }
+
+    pub fn text(&self, world: &mut World, target: RenderTargetId, text: UiTextDraw) {
+        world
+            .strobe
+            .draws
+            .push(UiDraw::text(self.current_id, target, Box::new(text)));
+    }
+
+    pub fn image(&self, world: &mut World, target: RenderTargetId, image: UiImageDraw) {
+        world
+            .strobe
+            .draws
+            .push(UiDraw::image(self.current_id, target, Box::new(image)));
     }
 }

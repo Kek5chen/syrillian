@@ -4,7 +4,6 @@
 //! - Use L to toggle / switch to the next debug rendering mode
 
 use crossbeam_channel::{Receiver, TryRecvError, unbounded};
-use log::{debug, error, info};
 use notify::{Config, Event, RecommendedWatcher, RecursiveMode, Watcher};
 use slotmap::Key;
 use std::error::Error;
@@ -16,6 +15,7 @@ use syrillian::prefabs::CubePrefab;
 use syrillian::utils::validate_wgsl_source;
 use syrillian::{AppState, World};
 use syrillian_macros::SyrillianApp;
+use tracing::{debug, error, info};
 use web_time::Instant;
 
 #[cfg(debug_assertions)]

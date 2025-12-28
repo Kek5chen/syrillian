@@ -1,5 +1,5 @@
-use crate::assets::{BindGroupMap, PipelineStage, Shader, ShaderCode};
-use log::warn;
+use crate::assets::{BindGroupMap, Shader, ShaderCode, ShaderType};
+use tracing::warn;
 
 const POST_PROCESS_HEADER: &str = include_str!("shaders/groups/post_process.wgsl");
 const DEFAULT_HEADER: &str = include_str!("shaders/groups/basic.wgsl");
@@ -25,10 +25,13 @@ impl<'a> ShaderGen<'a> {
         let code = shader.code();
 
         match shader.stage() {
-            PipelineStage::Default => {
-                generate_default(code, shader.is_custom(), shader.depth_enabled(), self.map)
-            }
-            PipelineStage::PostProcess => generate_post_process(code, self.map),
+            ShaderType::Default | ShaderType::Custom => generate_default(
+                code,
+                shader.is_custom(),
+                shader.is_depth_enabled(),
+                self.map,
+            ),
+            ShaderType::PostProcessing => generate_post_process(code, self.map),
         }
     }
 }

@@ -19,7 +19,7 @@ struct PushConstants {
     _padding: u32,
 }
 
-var<push_constant> pc: PushConstants;
+var<immediate> pc: PushConstants;
 
 @vertex
 fn vs_main(in: GlyphIn) -> VOut {

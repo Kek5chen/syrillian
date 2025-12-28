@@ -9,9 +9,9 @@ use snafu::{ResultExt, Snafu, ensure};
 use std::mem;
 use std::sync::Arc;
 use wgpu::{
-    Adapter, CreateSurfaceError, Device, DeviceDescriptor, Features, Instance, InstanceDescriptor,
-    Limits, MemoryHints, PowerPreference, Queue, RequestAdapterOptions, RequestDeviceError,
-    Surface, SurfaceConfiguration, TextureFormat,
+    Adapter, CreateSurfaceError, Device, DeviceDescriptor, ExperimentalFeatures, Features,
+    Instance, InstanceDescriptor, Limits, MemoryHints, PowerPreference, Queue,
+    RequestAdapterOptions, RequestDeviceError, Surface, SurfaceConfiguration, TextureFormat,
 };
 use winit::dpi::PhysicalSize;
 use winit::window::Window;
@@ -73,13 +73,14 @@ impl State {
                 label: Some("Renderer Hardware"),
                 required_features: Features::default()
                     | Features::POLYGON_MODE_LINE
-                    | Features::PUSH_CONSTANTS
+                    | Features::IMMEDIATES
                     | Features::ADDRESS_MODE_CLAMP_TO_BORDER,
                 required_limits: Limits {
                     max_bind_groups: 6,
-                    max_push_constant_size: 128,
+                    max_immediate_size: 128,
                     ..Limits::default()
                 },
+                experimental_features: ExperimentalFeatures::disabled(),
                 memory_hints: MemoryHints::default(),
                 trace: Self::trace_mode(),
             })
@@ -150,7 +151,7 @@ impl State {
         let instance = Self::setup_instance();
         let surface = instance.create_surface(window).context(CreateSurfaceErr)?;
         // SAFETY: The surface stores the window handle internally and the caller owns the window.
-        let surface = unsafe { mem::transmute::<Surface<'_>, wgpu::Surface<'_>>(surface) };
+        let surface = unsafe { mem::transmute::<Surface<'_>, Surface<'static>>(surface) };
         let adapter = block_on(Self::setup_adapter(&instance, Some(&surface)));
         let (device, queue) = block_on(Self::get_device_and_queue(&adapter))?;
         let caps = surface.get_capabilities(&adapter);

@@ -1,20 +1,21 @@
 use crate::components::{CRef, Component, ComponentId, TypedComponentId};
 use crate::core::GameObjectId;
-use log::trace;
-use slotmap::HopSlotMap;
-use slotmap::hop::Values;
+use slotmap::SlotMap;
+use slotmap::basic::Values;
 use std::any::{Any, TypeId};
 use std::borrow::Borrow;
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::rc::Rc;
+use tracing::trace;
 
 #[allow(unused)]
-pub(crate) trait HopSlotMapUntyped<K>
+pub(crate) trait SlotMapUntyped<K>
 where
-    K: slotmap::Key + Send + 'static,
+    K: slotmap::Key + 'static,
 {
     fn as_dyn(&self) -> &dyn Any;
     fn as_dyn_mut(&mut self) -> &mut dyn Any;
+    fn iter_refs<'a>(&'a self) -> Box<(dyn Iterator<Item = CRef<dyn Component>> + 'a)>;
     fn iter_comps<'a>(&'a self) -> Box<dyn Iterator<Item = &'a dyn Component> + 'a>;
     fn iter_comps_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item = &'a mut dyn Component> + 'a>;
     fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = (K, &'a dyn Component)> + 'a>;
@@ -24,9 +25,9 @@ where
     fn remove(&mut self, key: K) -> Option<CRef<dyn Component>>;
 }
 
-impl<K, V> HopSlotMapUntyped<K> for HopSlotMap<K, CRef<V>>
+impl<K, V> SlotMapUntyped<K> for SlotMap<K, CRef<V>>
 where
-    K: slotmap::Key + Send + 'static,
+    K: slotmap::Key + 'static,
     V: Component,
 {
     fn as_dyn(&self) -> &dyn Any {
@@ -35,6 +36,10 @@ where
 
     fn as_dyn_mut(&mut self) -> &mut dyn Any {
         self
+    }
+
+    fn iter_refs<'a>(&'a self) -> Box<dyn Iterator<Item = CRef<dyn Component>> + 'a> {
+        Box::new(self.values().map(|v| v.as_dyn()))
     }
 
     fn iter_comps<'a>(&'a self) -> Box<dyn Iterator<Item = &'a dyn Component> + 'a> {
@@ -57,59 +62,57 @@ where
     }
 
     fn get(&self, key: K) -> Option<CRef<dyn Component>> {
-        self.get(key).map(|v| v.clone().into_dyn())
+        self.get(key).map(|v| v.as_dyn())
     }
 
     fn get_mut(&mut self, key: K) -> Option<CRef<dyn Component>> {
-        self.get_mut(key).map(|v| v.clone().into_dyn())
+        self.get_mut(key).map(|v| v.as_dyn())
     }
 
     fn remove(&mut self, key: K) -> Option<CRef<dyn Component>> {
-        self.remove(key).map(|v| v.into_dyn())
+        self.remove(key).map(|v| v.as_dyn())
     }
 }
 
 #[derive(Default)]
 pub struct ComponentStorage {
-    inner: HashMap<TypeId, Box<dyn HopSlotMapUntyped<ComponentId>>>,
+    inner: HashMap<TypeId, Box<dyn SlotMapUntyped<ComponentId>>>,
     len: usize,
     pub(crate) fresh: Vec<TypedComponentId>,
     pub(crate) removed: Vec<TypedComponentId>,
 }
 
 impl ComponentStorage {
-    pub(crate) fn _get_from_id(&self, tid: TypeId) -> Option<&dyn HopSlotMapUntyped<ComponentId>> {
+    pub(crate) fn _get_from_id(&self, tid: TypeId) -> Option<&dyn SlotMapUntyped<ComponentId>> {
         Some(self.inner.get(&tid)?.as_ref())
     }
 
     pub(crate) fn _get_mut_from_id(
         &mut self,
         tid: TypeId,
-    ) -> Option<&mut dyn HopSlotMapUntyped<ComponentId>> {
+    ) -> Option<&mut dyn SlotMapUntyped<ComponentId>> {
         Some(self.inner.get_mut(&tid)?.as_mut())
     }
 
-    pub(crate) fn _get<C: Component>(&self) -> Option<&HopSlotMap<ComponentId, CRef<C>>> {
+    pub(crate) fn _get<C: Component>(&self) -> Option<&SlotMap<ComponentId, CRef<C>>> {
         let tid = TypeId::of::<C>();
 
         let typed = self
             ._get_from_id(tid)?
             .as_dyn()
-            .downcast_ref::<HopSlotMap<ComponentId, CRef<C>>>()
+            .downcast_ref::<SlotMap<ComponentId, CRef<C>>>()
             .expect("Type ID was checked");
 
         Some(typed)
     }
 
-    pub(crate) fn _get_mut<C: Component>(
-        &mut self,
-    ) -> Option<&mut HopSlotMap<ComponentId, CRef<C>>> {
+    pub(crate) fn _get_mut<C: Component>(&mut self) -> Option<&mut SlotMap<ComponentId, CRef<C>>> {
         let tid = TypeId::of::<C>();
 
         let typed = self
             ._get_mut_from_id(tid)?
             .as_dyn_mut()
-            .downcast_mut::<HopSlotMap<ComponentId, CRef<C>>>()
+            .downcast_mut::<SlotMap<ComponentId, CRef<C>>>()
             .expect("Type ID was checked");
 
         Some(typed)
@@ -117,11 +120,11 @@ impl ComponentStorage {
 
     pub(crate) fn _get_or_insert_mut<C: Component>(
         &mut self,
-    ) -> &mut HopSlotMap<ComponentId, CRef<C>> {
+    ) -> &mut SlotMap<ComponentId, CRef<C>> {
         let tid = TypeId::of::<C>();
         self.inner
             .entry(tid)
-            .or_insert_with(|| Box::new(HopSlotMap::<ComponentId, CRef<C>>::with_key()))
+            .or_insert_with(|| Box::new(SlotMap::<ComponentId, CRef<C>>::with_key()))
             .as_dyn_mut()
             .downcast_mut()
             .expect("Type ID was checked")
@@ -157,6 +160,10 @@ impl ComponentStorage {
         })
     }
 
+    pub fn iter_refs(&self) -> impl Iterator<Item = CRef<dyn Component>> {
+        self.inner.values().flat_map(|store| store.iter_refs())
+    }
+
     pub fn values(&self) -> impl Iterator<Item = &dyn Component> {
         self.inner.values().flat_map(|store| store.iter_comps())
     }
@@ -168,7 +175,7 @@ impl ComponentStorage {
     }
 
     pub(crate) fn add<C: Component>(&mut self, component: C, parent: GameObjectId) -> CRef<C> {
-        let comp = Arc::new(component);
+        let comp = Rc::new(component);
 
         let store = self._get_or_insert_mut();
         let id = store.insert_with_key(|id| {

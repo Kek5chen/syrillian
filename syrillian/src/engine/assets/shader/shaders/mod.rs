@@ -1,3 +1,5 @@
+use crate::assets::ShaderType;
+
 macro_rules! test_shader {
     ($fn_name:ident, $name:literal => $path:literal) => {
         #[test]
@@ -34,21 +36,15 @@ macro_rules! test_custom_shader {
         #[test]
         fn $fn_name() {
             use crate::assets::Shader;
-            use crate::assets::shader::{PolygonMode, PrimitiveTopology, ShaderCode};
+            use crate::assets::shader::ShaderCode;
             use crate::utils::validate_wgsl_source;
 
-            let shader = Shader::Custom {
-                name: $name.to_owned(),
-                code: ShaderCode::Full(include_str!($path).to_string()),
-                topology: PrimitiveTopology::TriangleList,
-                polygon_mode: PolygonMode::Line,
-                vertex_buffers: &[],
-                push_constant_ranges: &[],
-                shadow_transparency: false,
-                depth_enabled: true,
-                color_target: crate::rendering::DEFAULT_COLOR_TARGET,
-            }
-            .gen_code();
+            let shader = Shader::builder()
+                .shader_type(ShaderType::Custom)
+                .name($name)
+                .code(ShaderCode::Full(include_str!($path).to_string()))
+                .build()
+                .gen_code();
 
             validate_wgsl_source(&shader)
                 .inspect_err(|e| e.emit_to_stderr_with_path(&shader, $path))
@@ -61,6 +57,12 @@ macro_rules! test_custom_shader {
 test_shader!(shader_2d, "Shader 2D" => "shader2d.wgsl");
 test_shader!(shader_3d, "Shader 3D" => "shader3d.wgsl");
 test_shader!(fallback_shader3d, "Fallback Shader 3D" => "fallback_shader3d.wgsl");
+test_custom_shader!(picking_text_2d, "Text 2D Picking Shader" => "picking_text2d.wgsl");
+test_custom_shader!(picking_text_3d, "Text 3D Picking Shader" => "picking_text3d.wgsl");
+test_custom_shader!(picking_mesh, "Mesh Picking Shader" => "picking_mesh.wgsl");
+test_custom_shader!(picking_ui, "UI Picking Shader" => "picking_ui.wgsl");
+test_custom_shader!(text2d, "Text 2D Shader" => "text2d.wgsl");
+test_custom_shader!(text3d, "Text 3D Shader" => "text3d.wgsl");
 
 // Debug shaders
 test_custom_shader!(debug_edges, "Debug Edges Shader" => "debug/edges.wgsl");

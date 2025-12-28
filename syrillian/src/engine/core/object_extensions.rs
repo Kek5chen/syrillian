@@ -1,6 +1,6 @@
+use crate::components::light::{LightComponent, LightTypeTrait};
 use crate::components::{
-    Collider3D, LightComponent, LightTypeTrait, NewComponent, RigidBodyComponent, RopeComponent,
-    RotateComponent,
+    Collider3D, NewComponent, RigidBodyComponent, RopeComponent, RotateComponent,
 };
 use crate::core::{GameObject, GameObjectId};
 use crate::rendering::lights::Light;

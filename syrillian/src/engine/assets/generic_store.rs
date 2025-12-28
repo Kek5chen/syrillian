@@ -4,7 +4,6 @@ use dashmap::DashMap;
 use dashmap::iter::{Iter, IterMut};
 use dashmap::mapref::one::Ref as MapRef;
 use dashmap::mapref::one::RefMut as MapRefMut;
-use log::{trace, warn};
 #[cfg(debug_assertions)]
 use std::backtrace::Backtrace;
 use std::fmt::{Debug, Display, Formatter};
@@ -13,6 +12,7 @@ use std::ops::{Deref, DerefMut};
 use std::sync::RwLock;
 #[cfg(debug_assertions)]
 use std::time::Duration;
+use tracing::{trace, warn};
 #[cfg(debug_assertions)]
 use web_time::Instant;
 
@@ -59,11 +59,11 @@ impl<'a, T: StoreType> Drop for Ref<'a, T> {
     fn drop(&mut self) {
         if self.1.elapsed() > Duration::from_secs_f32(1.0 / 60.0) {
             warn!(
-                "Access to a {:?} Asset Store Object took {}s",
+                "Access to a {:?} Asset Store Object took {}s\n{}",
                 T::name(),
-                self.1.elapsed().as_secs_f32()
+                self.1.elapsed().as_secs_f32(),
+                Backtrace::capture()
             );
-            println!("{}", Backtrace::capture());
         }
     }
 }
@@ -73,11 +73,11 @@ impl<'a, T: StoreType> Drop for RefMut<'a, T> {
     fn drop(&mut self) {
         if self.1.elapsed() > Duration::from_secs(1) {
             warn!(
-                "Mutable Access to a {:?} Asset Store Object took {}s",
+                "Mutable Access to a {:?} Asset Store Object took {}s\n{}",
                 T::name(),
-                self.1.elapsed().as_secs_f32()
+                self.1.elapsed().as_secs_f32(),
+                Backtrace::capture()
             );
-            println!("{}", Backtrace::capture());
         }
     }
 }

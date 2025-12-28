@@ -10,6 +10,7 @@ pub struct GpuTexture {
     pub sampler: Sampler,
     pub size: Extent3d,
     pub format: TextureFormat,
+    pub has_transparency: bool,
 }
 
 impl CacheType for CpuTexture {
@@ -17,8 +18,6 @@ impl CacheType for CpuTexture {
 
     fn upload(self, device: &Device, queue: &Queue, _cache: &AssetCache) -> Self::Hot {
         let desc = self.desc();
-        let size = desc.size;
-        let format = desc.format;
 
         let texture = match &self.data {
             None => device.create_texture(&self.desc()),
@@ -34,8 +33,9 @@ impl CacheType for CpuTexture {
             texture,
             view,
             sampler,
-            size,
-            format,
+            size: desc.size,
+            format: desc.format,
+            has_transparency: self.has_transparency,
         }
     }
 }

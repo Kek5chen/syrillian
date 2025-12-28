@@ -3,9 +3,10 @@ use crate::engine::assets::{HTexture, Material};
 use crate::engine::rendering::cache::{AssetCache, CacheType};
 use crate::engine::rendering::uniform::ShaderUniform;
 use crate::ensure_aligned;
+use bitflags::bitflags;
 use nalgebra::Vector3;
 use syrillian_macros::UniformIndex;
-use wgpu::{Device, Queue};
+use wgpu::{Device, Queue, TextureFormat};
 
 #[repr(u8)]
 #[derive(Debug, Copy, Clone, UniformIndex)]
@@ -19,6 +20,20 @@ pub(crate) enum MaterialUniformIndex {
     RoughnessSampler = 6,
 }
 
+bitflags! {
+    #[repr(C)]
+    #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+    pub struct MaterialParams: u32 {
+        const use_diffuse_texture   = 1;
+        const use_normal_texture    = 1 << 1;
+        const use_roughness_texture = 1 << 2;
+        const lit                   = 1 << 3;
+        const cast_shadows          = 1 << 4;
+        const grayscale_diffuse     = 1 << 5;
+        const has_transparency      = 1 << 6;
+    }
+}
+
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct MaterialUniform {
@@ -26,15 +41,11 @@ pub struct MaterialUniform {
     pub roughness: f32,
     pub metallic: f32,
     pub alpha: f32,
-    pub lit: u32,          // bool
-    pub cast_shadows: u32, // bool
-    pub use_diffuse_texture: u32,
-    pub use_normal_texture: u32,
-    pub use_roughness_texture: u32,
+    pub params: MaterialParams,
     pub _padding: u32,
 }
 
-ensure_aligned!(MaterialUniform { diffuse }, align <= 16 * 3 => size);
+ensure_aligned!(MaterialUniform { diffuse }, align <= 16 * 2 => size);
 
 #[allow(dead_code)]
 #[derive(Debug)]
@@ -55,21 +66,43 @@ impl CacheType for Material {
     type Hot = RuntimeMaterial;
 
     fn upload(self, device: &Device, _queue: &Queue, cache: &AssetCache) -> Self::Hot {
+        let mut params = MaterialParams::empty();
+        if self.diffuse_texture.is_some() {
+            params |= MaterialParams::use_diffuse_texture;
+        }
+        if self.normal_texture.is_some() {
+            params |= MaterialParams::use_normal_texture;
+        }
+        if self.roughness_texture.is_some() {
+            params |= MaterialParams::use_roughness_texture;
+        }
+
+        let diffuse = cache.texture_opt(self.diffuse_texture, HTexture::FALLBACK_DIFFUSE);
+
+        let is_grayscale = diffuse.format == TextureFormat::Rg8Unorm;
+        if is_grayscale {
+            params |= MaterialParams::grayscale_diffuse;
+        }
+        if !is_grayscale && self.lit {
+            params |= MaterialParams::lit;
+        }
+        if !is_grayscale && self.cast_shadows {
+            params |= MaterialParams::cast_shadows;
+        }
+        if is_grayscale || self.has_transparency || diffuse.has_transparency {
+            params |= MaterialParams::has_transparency;
+        }
+
         let data = MaterialUniform {
             diffuse: self.color,
             roughness: self.roughness,
             metallic: self.metallic,
             alpha: self.alpha,
-            lit: self.lit as u32,
-            cast_shadows: self.cast_shadows as u32,
-            use_diffuse_texture: self.diffuse_texture.is_some() as u32,
-            use_normal_texture: self.normal_texture.is_some() as u32,
-            use_roughness_texture: self.roughness_texture.is_some() as u32,
+            params,
             _padding: 0x0,
         };
 
         let mat_bgl = cache.bgl_material();
-        let diffuse = cache.texture_opt(self.diffuse_texture, HTexture::FALLBACK_DIFFUSE);
         let normal = cache.texture_opt(self.normal_texture, HTexture::FALLBACK_NORMAL);
         let roughness = cache.texture_opt(self.roughness_texture, HTexture::FALLBACK_ROUGHNESS);
 
@@ -89,5 +122,31 @@ impl CacheType for Material {
             uniform,
             shader: self.shader,
         }
+    }
+}
+
+impl MaterialUniform {
+    pub fn has_diffuse_texture(&self) -> bool {
+        self.params.contains(MaterialParams::use_diffuse_texture)
+    }
+
+    pub fn has_normal_texture(&self) -> bool {
+        self.params.contains(MaterialParams::use_normal_texture)
+    }
+
+    pub fn has_roughness_texture(&self) -> bool {
+        self.params.contains(MaterialParams::use_roughness_texture)
+    }
+
+    pub fn is_lit(&self) -> bool {
+        self.params.contains(MaterialParams::lit)
+    }
+
+    pub fn has_cast_shadows(&self) -> bool {
+        self.params.contains(MaterialParams::cast_shadows)
+    }
+
+    pub fn has_transparency(&self) -> bool {
+        self.params.contains(MaterialParams::has_transparency) || self.alpha < 1.0
     }
 }

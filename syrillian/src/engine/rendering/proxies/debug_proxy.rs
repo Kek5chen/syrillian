@@ -1,17 +1,17 @@
 use crate::assets::{AssetStore, HMesh, HShader};
-use crate::components::BoneData;
+use crate::components::mesh_renderer::BoneData;
 use crate::core::ModelUniform;
 use crate::rendering::proxies::mesh_proxy::{MeshUniformIndex, RuntimeMeshData};
-use crate::rendering::proxies::{PROXY_PRIORITY_SOLID, SceneProxy};
+use crate::rendering::proxies::{PROXY_PRIORITY_SOLID, SceneProxy, SceneProxyBinding};
 use crate::rendering::uniform::ShaderUniform;
 use crate::rendering::{AssetCache, GPUDrawCtx, Renderer};
 use crate::{must_pipeline, proxy_data, proxy_data_mut, try_activate_shader};
-use log::warn;
 use nalgebra::{Matrix4, Point3, Vector4};
 use std::any::Any;
 use syrillian_utils::debug_panic;
+use tracing::warn;
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
-use wgpu::{Buffer, BufferUsages, Device, IndexFormat, Queue, ShaderStages};
+use wgpu::{Buffer, BufferUsages, Device, Queue};
 
 #[derive(Debug)]
 pub(crate) struct GPUDebugProxyData {
@@ -23,8 +23,8 @@ pub(crate) struct GPUDebugProxyData {
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct DebugLine {
     pub start: Point3<f32>,
-    pub end: Point3<f32>,
     pub start_color: Vector4<f32>,
+    pub end: Point3<f32>,
     pub end_color: Vector4<f32>,
 }
 
@@ -70,14 +70,8 @@ impl SceneProxy for DebugSceneProxy {
         );
     }
 
-    fn render(
-        &self,
-        renderer: &Renderer,
-        data: &dyn Any,
-        ctx: &GPUDrawCtx,
-        _local_to_world: &Matrix4<f32>,
-    ) {
-        let data = proxy_data!(data);
+    fn render(&self, renderer: &Renderer, ctx: &GPUDrawCtx, binding: &SceneProxyBinding) {
+        let data = proxy_data!(binding.proxy_data());
         let cache = &renderer.cache;
         self.render_lines(data, cache, ctx);
         self.render_meshes(data, cache, ctx)
@@ -184,7 +178,8 @@ impl DebugSceneProxy {
         try_activate_shader!(shader, &mut pass, ctx => return);
 
         pass.set_vertex_buffer(0, line_buffer.slice(..));
-        pass.draw(0..2, 0..self.lines.len() as u32);
+        let vertices = self.lines.len() as u32 * 2;
+        pass.draw(0..vertices, 0..1);
     }
 
     fn render_meshes(&self, data: &GPUDebugProxyData, cache: &AssetCache, ctx: &GPUDrawCtx) {
@@ -210,19 +205,13 @@ impl DebugSceneProxy {
             let mut pass = ctx.pass.write().unwrap();
 
             pass.set_pipeline(pipeline);
-            pass.set_push_constants(ShaderStages::FRAGMENT, 0, bytemuck::bytes_of(&self.color));
+            pass.set_immediates(0, bytemuck::bytes_of(&self.color));
             pass.set_bind_group(groups.render, ctx.render_bind_group, &[]);
             if let Some(idx) = groups.model {
                 pass.set_bind_group(idx, data.uniform.bind_group(), &[]);
             }
 
-            pass.set_vertex_buffer(0, runtime_mesh.vertex_buffer().slice(..));
-            if let Some(idx_buf) = &runtime_mesh.indices_buffer() {
-                pass.set_index_buffer(idx_buf.slice(..), IndexFormat::Uint32);
-                pass.draw_indexed(0..runtime_mesh.indices_count(), 0, 0..1);
-            } else {
-                pass.draw(0..runtime_mesh.vertex_count(), 0..1);
-            }
+            runtime_mesh.draw_all(&mut pass);
         }
     }
 }

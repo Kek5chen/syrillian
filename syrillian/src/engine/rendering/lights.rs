@@ -43,7 +43,7 @@ impl LightProxy {
     }
 }
 
-ensure_aligned!(LightProxy { position, up, color, color, view_mat }, align <= 16 * 9 => size);
+ensure_aligned!(LightProxy { position, up, direction, color, view_mat }, align <= 16 * 9 => size);
 
 pub trait Light: Component {
     fn light_type(&self) -> LightType;
