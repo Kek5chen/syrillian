@@ -152,8 +152,8 @@ pub fn generate_glyph_geometry_stream(
         units_per_em,
         letter_spacing_em,
     );
-    align_lines(&mut quads, alignment, &row_data);
     normalize_top_left_origin(&mut quads);
+    align_lines(&mut quads, alignment, &row_data);
 
     quads
 }

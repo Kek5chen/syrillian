@@ -1,8 +1,8 @@
 use itertools::iproduct;
 use nalgebra::Vector3;
 use std::error::Error;
-use syrillian::assets::{Material, Mesh, StoreType, Texture};
 use syrillian::components::{FreecamController, MeshRenderer};
+use syrillian::assets::{Material, StoreType};
 use syrillian::prefabs::SunPrefab;
 use syrillian::{AppState, World};
 use syrillian_macros::SyrillianApp;
