@@ -324,7 +324,7 @@ fn load_node_light(node: Node, mut obj: GameObjectId) {
                 d.outer_angle = outer_cone_angle;
                 d.range = range;
                 d.radius = 0.05;
-                d.intensity = intensity;
+                d.intensity = intensity / 100.0;
             }
             Kind::Point => {
                 let mut point = obj.add_component::<PointLightComponent>();

@@ -379,7 +379,7 @@ fn fs_main_3d(in: FInput) -> @location(0) vec4<f32> {
     }
 
     // Alpha test
-    // if (base_rgba.a < 0.01) { discard; }
+    if (base_rgba.a < 0.01) { discard; }
 
     let base = saturate3(base_rgba.rgb);
 

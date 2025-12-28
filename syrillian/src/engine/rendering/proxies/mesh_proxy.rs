@@ -219,7 +219,9 @@ impl MeshSceneProxy {
                 continue; // either transparent in a non-transparency pass, or transparent in a non-transparency pass
             }
 
-            if ctx.pass_type == RenderPassType::Shadow && !material.data.has_cast_shadows() {
+            if ctx.pass_type == RenderPassType::Shadow
+                && (!material.data.has_cast_shadows() || material.data.has_transparency())
+            {
                 continue;
             }
 
