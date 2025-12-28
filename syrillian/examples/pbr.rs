@@ -1,8 +1,8 @@
 use itertools::iproduct;
 use nalgebra::Vector3;
 use std::error::Error;
-use syrillian::components::{FreecamController, MeshRenderer};
 use syrillian::assets::{Material, StoreType};
+use syrillian::components::{FreecamController, MeshRenderer};
 use syrillian::prefabs::SunPrefab;
 use syrillian::{AppState, World};
 use syrillian_macros::SyrillianApp;
@@ -41,9 +41,8 @@ impl AppState for PBR {
 
         world.spawn(&SunPrefab);
 
-        if cfg!(debug_assertions) {
-            syrillian::rendering::DebugRenderer::off()
-        }
+        #[cfg(debug_assertions)]
+        syrillian::rendering::DebugRenderer::off();
 
         Ok(())
     }

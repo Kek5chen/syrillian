@@ -5,7 +5,6 @@ use crate::utils::FloatMathExt;
 use crate::windowing::RenderTargetId;
 use nalgebra::{Matrix4, Perspective3, Point3, Vector2, Vector4};
 use rapier3d::geometry::Ray;
-use tracing::warn;
 
 pub struct CameraComponent {
     pub projection: Perspective3<f32>,
@@ -135,7 +134,7 @@ impl CameraComponent {
         use crate::components::CameraDebug;
 
         let Some(mut debug) = self.parent.get_component::<CameraDebug>() else {
-            warn!("No camera debug drawable found!");
+            tracing::warn!("No camera debug drawable found!");
             return;
         };
 
