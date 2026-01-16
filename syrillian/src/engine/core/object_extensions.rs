@@ -1,11 +1,13 @@
-use crate::components::light::{LightComponent, LightTypeTrait};
-use crate::components::{
-    Collider3D, NewComponent, RigidBodyComponent, RopeComponent, RotateComponent,
+use crate::components::joints::{
+    Fixed, JointComponent, JointTypeTrait, Prismatic, Revolute, Rope, Spring,
 };
+use crate::components::light::{LightComponent, LightTypeTrait};
+use crate::components::{Collider3D, NewComponent, RigidBodyComponent, RotateComponent};
 use crate::core::{GameObject, GameObjectId};
 use crate::rendering::lights::Light;
-use nalgebra::Vector3;
+use nalgebra::{Point3, Unit, Vector3};
 use rapier3d::dynamics::RigidBody;
+use rapier3d::math::Isometry;
 use rapier3d::prelude::Collider;
 use std::ops::{Deref, DerefMut};
 
@@ -32,7 +34,7 @@ pub struct GOLightExt<'a, L: LightTypeTrait + 'static>(
     &'a mut GameObject,
 );
 pub struct GORotateExt<'a>(&'a mut RotateComponent, &'a mut GameObject);
-pub struct GORopeExt<'a>(&'a mut RopeComponent, &'a mut GameObject);
+pub struct GOJointExt<'a, T: JointTypeTrait>(&'a mut JointComponent<T>, &'a mut GameObject);
 
 impl GameObjectExt for GameObject {
     #[inline]
@@ -256,24 +258,16 @@ impl DerefMut for GORotateExt<'_> {
     }
 }
 
-impl<'a> GOComponentExt<'a> for RopeComponent {
-    type Outer = GORopeExt<'a>;
+impl<'a, T: JointTypeTrait> GOComponentExt<'a> for JointComponent<T> {
+    type Outer = GOJointExt<'a, T>;
 
     #[inline]
     fn build_component(&'a mut self, obj: &'a mut GameObject) -> Self::Outer {
-        GORopeExt(self, obj)
+        GOJointExt(self, obj)
     }
 }
 
-impl GORopeExt<'_> {
-    #[inline]
-    pub fn connect_to(&mut self, other: GameObjectId) -> &mut Self {
-        self.0.connect_to(other);
-        self
-    }
-}
-
-impl Deref for GORopeExt<'_> {
+impl<T: JointTypeTrait> Deref for GOJointExt<'_, T> {
     type Target = GameObject;
 
     #[inline]
@@ -282,9 +276,135 @@ impl Deref for GORopeExt<'_> {
     }
 }
 
-impl DerefMut for GORopeExt<'_> {
+impl<T: JointTypeTrait> DerefMut for GOJointExt<'_, T> {
     #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.1
+    }
+}
+
+impl<T: JointTypeTrait> GOJointExt<'_, T> {
+    #[inline]
+    pub fn connect_to(self, other: GameObjectId) -> Self {
+        self.0.connect_to(other);
+        self
+    }
+
+    #[inline]
+    pub fn anchor1(self, point: Point3<f32>) -> Self {
+        self.0.set_anchor1(point);
+        self
+    }
+
+    #[inline]
+    pub fn anchor2(self, point: Point3<f32>) -> Self {
+        self.0.set_anchor2(point);
+        self
+    }
+
+    #[inline]
+    pub fn break_force(self, force: f32) -> Self {
+        self.0.set_break_force(Some(force));
+        self
+    }
+
+    #[inline]
+    pub fn break_torque(self, torque: f32) -> Self {
+        self.0.set_break_torque(Some(torque));
+        self
+    }
+
+    #[inline]
+    pub fn breakable(self, force: f32, torque: f32) -> Self {
+        self.0.make_breakable(force, torque);
+        self
+    }
+}
+
+impl GOJointExt<'_, Fixed> {
+    #[inline]
+    pub fn frame1(self, frame: Isometry<f32>) -> Self {
+        self.0.set_frame1(frame);
+        self
+    }
+
+    #[inline]
+    pub fn frame2(self, frame: Isometry<f32>) -> Self {
+        self.0.set_frame2(frame);
+        self
+    }
+}
+
+impl GOJointExt<'_, Revolute> {
+    #[inline]
+    pub fn axis(self, axis: Unit<Vector3<f32>>) -> Self {
+        self.0.set_axis(axis);
+        self
+    }
+
+    #[inline]
+    pub fn limits(self, min: f32, max: f32) -> Self {
+        self.0.set_limits(min, max);
+        self
+    }
+
+    #[inline]
+    pub fn limits_deg(self, min: f32, max: f32) -> Self {
+        self.0.set_limits_deg(min, max);
+        self
+    }
+}
+
+impl GOJointExt<'_, Prismatic> {
+    #[inline]
+    pub fn axis(self, axis: Unit<Vector3<f32>>) -> Self {
+        self.0.set_axis(axis);
+        self
+    }
+
+    #[inline]
+    pub fn limits(self, min: f32, max: f32) -> Self {
+        self.0.set_limits(min, max);
+        self
+    }
+}
+
+impl GOJointExt<'_, Rope> {
+    #[inline]
+    pub fn max_distance(self, distance: f32) -> Self {
+        self.0.set_max_distance(distance);
+        self
+    }
+
+    #[inline]
+    pub fn length(self, distance: f32) -> Self {
+        self.0.set_max_distance(distance);
+        self
+    }
+}
+
+impl GOJointExt<'_, Spring> {
+    #[inline]
+    pub fn rest_length(self, length: f32) -> Self {
+        self.0.set_rest_length(length);
+        self
+    }
+
+    #[inline]
+    pub fn stiffness(self, length: f32) -> Self {
+        self.0.set_stiffness(length);
+        self
+    }
+
+    #[inline]
+    pub fn damping(self, damping: f32) -> Self {
+        self.0.set_damping(damping);
+        self
+    }
+
+    #[inline]
+    pub fn configure(self, rest_length: f32, stiffness: f32, damping: f32) -> Self {
+        self.0.configure(rest_length, stiffness, damping);
+        self
     }
 }

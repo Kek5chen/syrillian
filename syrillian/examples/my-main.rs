@@ -17,8 +17,7 @@ use syrillian::assets::{Material, Shader};
 use syrillian::components::audio::AudioEmitter;
 use syrillian::components::{
     CRef, CameraComponent, Collider3D, FirstPersonCameraController, FreecamController,
-    PointLightComponent, RigidBodyComponent, RopeComponent, RotateComponent, SpotLightComponent,
-    SpringComponent, Text3D,
+    PointLightComponent, RigidBodyComponent, RotateComponent, SpotLightComponent, Text3D,
 };
 use syrillian::core::{GameObjectExt, GameObjectId, GameObjectRef};
 use syrillian::prefabs::{CubePrefab, FirstPersonPlayerPrefab, Prefab};
@@ -180,7 +179,6 @@ impl MyMain {
 
         let mut rotating_cube = world.spawn(&cube_accent);
         let mut floating_cube = world.spawn(&cube_accent);
-        let mut rope_cube = world.spawn(&cube_accent);
         let mut big_cube_left = world.spawn(&cube_primary);
         let mut big_cube_right = world.spawn(&cube_glass);
 
@@ -204,15 +202,6 @@ impl MyMain {
             .gravity_scale(0.0)
             .angular_damping(0.5)
             .linear_damping(0.5);
-
-        rope_cube
-            .at(5.0, 3.9, -20.0)
-            .build_component::<PointLightComponent>()
-            .build_component::<Collider3D>()
-            .build_component::<RigidBodyComponent>()
-            .enable_ccd()
-            .build_component::<RopeComponent>()
-            .connect_to(floating_cube);
 
         big_cube_left.at(100.0, 10.0, 200.0).scale(100.);
         big_cube_right.at(-100.0, 10.0, 200.0).scale(100.);
@@ -291,10 +280,6 @@ impl MyMain {
             .build_component::<RigidBodyComponent>()
             .enable_ccd()
             .id;
-
-        let mut spring = spring_bottom.add_component::<SpringComponent>();
-        spring.connect_to(spring_top);
-        spring.set_rest_length(10.);
     }
 
     // fn cleanup_color_pads(world: &mut World) {

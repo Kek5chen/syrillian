@@ -51,10 +51,8 @@ pub mod light;
 pub mod mesh_renderer;
 pub mod panel;
 pub mod rigid_body;
-pub mod rope;
 pub mod rotate;
 pub mod skeletal;
-pub mod spring;
 pub mod text;
 pub mod ui_rect;
 
@@ -74,10 +72,8 @@ pub use light::{PointLightComponent, SpotLightComponent, Sun, SunLightComponent}
 pub use mesh_renderer::MeshRenderer;
 pub use panel::Panel;
 pub use rigid_body::RigidBodyComponent;
-pub use rope::RopeComponent;
 pub use rotate::RotateComponent;
 pub use skeletal::SkeletalComponent;
-pub use spring::SpringComponent;
 pub use text::{Text2D, Text3D};
 pub use ui_rect::UiRect;
 
